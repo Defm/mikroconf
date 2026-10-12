@@ -1,0 +1,39 @@
+
+:local sysname [/system identity get name];
+:local scriptname "doHeatFlag";
+:global globalScriptBeforeRun;
+$globalScriptBeforeRun $scriptname;
+
+:global globalNoteMe;
+
+:local maxTemp;
+:local currentTemp [/system/health get [find name=cpu-temperature] value];
+
+:set maxTemp 68;
+
+#
+
+:if ($currentTemp > $maxTemp) do= {
+
+:local inf "$scriptname on $sysname: system overheat at $currentTemp C"  
+
+$globalNoteMe value=$inf
+
+:global globalTgMessage;
+$globalTgMessage value=$inf;
+
+
+/beep length=.1
+ :delay 250ms
+ /beep length=.1
+ :delay 800ms
+ /beep length=.1
+ :delay 250ms
+ /beep length=.1
+ :delay 800ms
+
+
+};
+
+
+

@@ -1,0 +1,482 @@
+name: QA
+run-name: QA • scope=${{ inputs.test_scope }} • db=${{ inputs.db_source }} • ${{ github.ref_name }}
+
+# Dispatchable / callable rehearsal of the release-locked quality gates (issue #40,
+# B-0014 Option B). Roughly 7 VALIDATION.md invariants are provable ONLY inside
+# release.yml today — V-tool-shapes, V-tool-budget, V-retrieval-floor, V-retrieval-self,
+# V-db-min-content, V-db-meta, V-docusaurus-docs-count — because that pipeline live-fetches
+# manual.mikrotik.com, pushes multi-arch OCI images, and publishes an immutable npm package.
+# There is no way to ask "would the release quality gates pass on this branch?" without
+# publishing. qa.yml runs those same checks against a freshly built (local-build) or the
+# published DB, on any ref, with NO npm publish / OCI push / GitHub Release. It is the
+# vehicle for rehearsing release-pipeline changes (e.g. PR #41's hardware-overlay extraction
+# + the hardware_catalog/device_aliases content floors) without cutting a release.
+#
+# Scope boundaries (no duplication): fast typecheck/lint/unit + the device-map drift gate
+# already run on every PR in test.yml; security scanning is codeql.yml. As of Phase B
+# (#42) this workflow is the SINGLE definition of the release-locked gates: release.yml's
+# `qa` job calls it via `uses: ./.github/workflows/qa.yml` with db_source=artifact,
+# validating the exact DB its `build` job extracted before its `publish` job ships it.
+# There is no longer an inline copy of these gates (or the DB-content floors) in
+# release.yml to drift from.
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: Which gate(s) to run
+        type: choice
+        options:
+          - all
+          - contract
+          - eval-golden
+          - eval-self
+          - db-content
+          - db-meta
+          - docusaurus-count
+          - device-map
+        default: all
+      db_source:
+        description: >
+          DB to test against. local-build runs the real extraction pipeline (live
+          manual.mikrotik.com fetch, minutes) — the path that rehearses release.yml's
+          build + content floors. published downloads the latest GitHub Release DB.
+        type: choice
+        options:
+          - local-build
+          - published
+        default: local-build
+      full_versions:
+        description: local-build only — extract all RouterOS versions (make extract-full) vs single primary (make extract)
+        type: boolean
+        default: false
+      eval_self_blocking:
+        description: Treat the self-supervised eval as a hard gate (default non-blocking, parity with release.yml's continue-on-error)
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      test_scope:
+        type: string
+        default: all
+      db_source:
+        # Adds a third source over the dispatch menu: `artifact` — download a DB
+        # a preceding job in the SAME run uploaded (release.yml's Phase B `build`
+        # job hands its freshly extracted DB here so the gates validate the exact
+        # artifact that gets published, without a second extraction). No dispatch
+        # dropdown entry for it: a manual rehearsal has no upstream artifact.
+        type: string
+        default: local-build
+      artifact_name:
+        description: db_source=artifact only — name of the workflow artifact holding ros-help.db
+        type: string
+        default: ros-help-db
+      # Intentional asymmetry vs. workflow_dispatch (default false): a manual
+      # rehearsal wants the faster single-version build, but a workflow_call
+      # (release preflight, Phase B) defaults to true to match release.yml's own
+      # full_versions default — so a caller that omits the input rehearses the
+      # full-version extraction the release actually ships, not a lighter variant.
+      full_versions:
+        type: boolean
+        default: true
+      eval_self_blocking:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# A newer dispatch of the same ref cancels a stale in-progress run; a workflow_call
+# (release preflight, Phase B) gets a run-id-unique group so it never cancels — or gets
+# cancelled by — a concurrent manual rehearsal.
+concurrency:
+  group: qa-${{ github.event_name == 'workflow_call' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+
+jobs:
+  qa:
+    name: QA • ${{ inputs.test_scope }} • ${{ inputs.db_source }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # workflow_call inputs are free-form strings, so a typo (e.g. test_scope:
+      # db_content with an underscore) would otherwise skip every gated step and
+      # still finish green. Reject anything outside the allowlist — and the one
+      # valid-but-empty combination (docusaurus-count needs the local-build cache)
+      # — up front, so a bad invocation fails loudly instead of vacuously passing.
+      # Inputs arrive via env, never interpolated into the shell (injection guard).
+      - name: Validate inputs
+        env:
+          TEST_SCOPE: ${{ inputs.test_scope }}
+          DB_SOURCE: ${{ inputs.db_source }}
+        run: |
+          set -euo pipefail
+          case "$TEST_SCOPE" in
+            all|contract|eval-golden|eval-self|db-content|db-meta|docusaurus-count|device-map) ;;
+            *) echo "::error::Unknown test_scope '$TEST_SCOPE' — allowed: all, contract, eval-golden, eval-self, db-content, db-meta, docusaurus-count, device-map"; exit 1 ;;
+          esac
+          case "$DB_SOURCE" in
+            local-build|published|artifact) ;;
+            *) echo "::error::Unknown db_source '$DB_SOURCE' — allowed: local-build, published, artifact"; exit 1 ;;
+          esac
+          if [ "$TEST_SCOPE" = "docusaurus-count" ] && [ "$DB_SOURCE" = "published" ]; then
+            echo "::error::test_scope=docusaurus-count requires db_source=local-build — it re-checks the freshly fetched manual/pages/ cache, which a published DB has no equivalent of."
+            exit 1
+          fi
+          echo "✓ inputs valid: test_scope=$TEST_SCOPE db_source=$DB_SOURCE"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      # ── Fast-fail trio ──
+      # release.yml's rationale: fail a dumb typecheck/lint/unit regression in ~30s,
+      # before the minutes-long local-build extraction. Biome-only lint here (matches
+      # release.yml's fast-fail); the cspell/markdownlint layer already gates PRs via
+      # `make lint` in test.yml. These run against the fixture / in-memory DB and MUST
+      # execute before any on-disk DB is acquired, or query.test.ts's :memory: wipe
+      # guard trips.
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Run tests (fixture DB)
+        run: bun test
+
+      # ── Acquire the DB the gates run against ──
+      # Ordered AFTER the fixture-DB tests above. local-build reuses the Makefile
+      # pipeline (extract-devices → extract-hardware-catalog → …, plus the committed
+      # video/dude caches) so the DB matches what release.yml builds; published pulls
+      # the latest GitHub Release artifact.
+
+      - name: Build DB (local-build)
+        if: inputs.db_source == 'local-build'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Inputs arrive via env (never interpolated into the shell) so a
+          # workflow_call caller can't inject through them — matches release.yml's
+          # template-injection discipline.
+          FULL_VERSIONS: ${{ inputs.full_versions }}
+        run: |
+          set -euo pipefail
+          if [ "$FULL_VERSIONS" = "true" ]; then
+            make extract-full
+          else
+            make extract
+          fi
+          # release.yml imports video transcripts from the committed cache as a
+          # separate step (videos aren't in `make extract`); mirror it so the
+          # contract/eval gates see the same DB shape a release ships.
+          make extract-videos-from-cache
+          # Stamp db_meta provenance so the db-content / db-meta gates have real
+          # values to assert on (release_tag/built_at/source_commit/schema_version).
+          bun run scripts/stamp-db-meta.ts \
+            --release-tag "qa-${GITHUB_SHA}" \
+            --source-commit "${GITHUB_SHA}"
+
+      - name: Download published DB
+        if: inputs.db_source == 'published'
+        run: |
+          set -euo pipefail
+          # Same artifact users get from `bunx @tikoci/rosetta` — the latest
+          # non-prerelease Release. Landed at repo root so eval/contract resolve it
+          # via paths.ts dev-mode. NOTE: the published DB may predate a floor's
+          # introduction (e.g. today's latest predates the hardware overlay), so
+          # db-content is deliberately NOT part of an `all` run on this source — see
+          # the db-content step's `if`.
+          curl -fSL --max-time 600 -o ros-help.db.gz \
+            https://github.com/tikoci/rosetta/releases/latest/download/ros-help.db.gz
+          gunzip -f ros-help.db.gz
+          ls -lh ros-help.db
+
+      # workflow_call only (release.yml Phase B): the caller's `build` job extracted
+      # + stamped the DB and uploaded it as an artifact; download the SAME artifact so
+      # the gates below validate exactly what will be published — no second extraction,
+      # no drift between the gated DB and the shipped DB. Lands at repo root so
+      # eval/contract resolve it via paths.ts dev-mode, same as the other two sources.
+      - name: Download build artifact (artifact)
+        if: inputs.db_source == 'artifact'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: .
+
+      - name: Show artifact DB (artifact)
+        if: inputs.db_source == 'artifact'
+        run: ls -lh ros-help.db
+
+      # ── Gates (each guarded by test_scope; db_source applicability noted inline) ──
+
+      # V-db-min-content — the single definition of the release DB-content floors,
+      # INCLUDING the hardware-overlay floors PR #41 added (hardware_catalog ≥ 200,
+      # device_aliases ≥ 600). Phase B (#42): release.yml calls this workflow with
+      # db_source=artifact, so this step IS the release's content gate against the
+      # exact DB about to be published — not a copy of it. Runs under `all` for a
+      # built DB (local-build rehearsal OR the release artifact); an explicit
+      # test_scope: db-content still runs it on published, where it will honestly
+      # fail on any floor a pre-built published DB predates.
+      - name: Validate DB has expected content (db-content)
+        if: inputs.test_scope == 'db-content' || (inputs.test_scope == 'all' && (inputs.db_source == 'local-build' || inputs.db_source == 'artifact'))
+        run: |
+          set -euo pipefail
+          PAGES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM pages")
+          COMMANDS=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM commands WHERE type='cmd'")
+          DEVICES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM devices")
+          PROPERTIES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM properties")
+          PAGE_TABLES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM page_tables" 2>/dev/null || echo 0)
+          PAGE_TABLE_DATA_ROWS=$(sqlite3 ros-help.db "SELECT COALESCE(SUM(data_row_count), 0) FROM page_tables" 2>/dev/null || echo 0)
+          TABLE_PROPERTIES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM properties WHERE source_table_row_id IS NOT NULL" 2>/dev/null || echo 0)
+          HARDWARE_CATALOG=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM hardware_catalog" 2>/dev/null || echo 0)
+          DEVICE_ALIASES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM device_aliases" 2>/dev/null || echo 0)
+          CLIREF_ENTRIES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM cliref_entries" 2>/dev/null || echo 0)
+          CLIREF_FIELDS=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM cliref_fields" 2>/dev/null || echo 0)
+          CLIREF_FLAGS=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM cliref_flags" 2>/dev/null || echo 0)
+          CLIREF_LINKS=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM cliref_entry_schema_links" 2>/dev/null || echo 0)
+          # The crosswalk only exists when the command tree was built (full-versions path).
+          # A single-version local-build (make extract) has no schema_nodes and runs no
+          # link-cliref, so the link floor + drift gate below are skipped for that DB.
+          SCHEMA_CMD_NODES=$(sqlite3 ros-help.db "SELECT COUNT(*) FROM schema_nodes WHERE type IN ('dir','cmd')" 2>/dev/null || echo 0)
+          CMD_VERSIONS=$(sqlite3 ros-help.db "SELECT COUNT(DISTINCT ros_version) FROM command_versions" 2>/dev/null || echo 0)
+          EXPECTED_VERSIONS=$(sqlite3 ros-help.db "SELECT value FROM db_meta WHERE key = 'command_versions_expected'" 2>/dev/null || echo "")
+          echo "✓ DB: $PAGES pages, $COMMANDS commands, $DEVICES devices, $PROPERTIES properties ($TABLE_PROPERTIES table-linked), $PAGE_TABLES page_tables ($PAGE_TABLE_DATA_ROWS data rows), $HARDWARE_CATALOG hardware_catalog, $DEVICE_ALIASES device_aliases, $CLIREF_ENTRIES cliref_entries ($CLIREF_FIELDS fields, $CLIREF_FLAGS flags, $CLIREF_LINKS links)"
+          fail=0
+          if [ "${PAGES:-0}" -lt 200 ]; then
+            echo "::error::DB has only ${PAGES} pages — expected ≥200 (Docusaurus /docs export is ~365)."
+            fail=1
+          fi
+          if [ "${COMMANDS:-0}" -lt 1000 ]; then
+            echo "::error::DB has only ${COMMANDS} commands — expected ≥1000."
+            fail=1
+          fi
+          if [ "${DEVICES:-0}" -lt 100 ]; then
+            echo "::error::DB has only ${DEVICES} devices — expected ≥100 (current matrix is 144)."
+            fail=1
+          fi
+          if [ "${PROPERTIES:-0}" -lt 1000 ]; then
+            echo "::error::DB has only ${PROPERTIES} properties — expected ≥1000 (Docusaurus export is ~4,509)."
+            fail=1
+          fi
+          # Generic table floors (#92/#139): MikroTik keeps moving inline property-reference
+          # sections into /docs/cli-reference/ (September 2026: 718 tables / 7,109 data rows /
+          # 3,357 linked property rows; October 2026, after 26 more pages — DNS, NTP, user,
+          # services, packet-sniffer, cloud, … — lost their tables: 661 / 6,764 / 2,745).
+          # These floors retain roughly 9-11% headroom while proving the prose parser,
+          # normalized storage, and property provenance all reached the artifact. CLI-Reference
+          # has separate floors and exact discovery/link integrity gates below.
+          if [ "${PAGE_TABLES:-0}" -lt 600 ]; then
+            echo "::error::DB has only ${PAGE_TABLES} page_tables rows — expected ≥600."
+            fail=1
+          fi
+          if [ "${PAGE_TABLE_DATA_ROWS:-0}" -lt 6100 ]; then
+            echo "::error::DB has only ${PAGE_TABLE_DATA_ROWS} generic table data rows — expected ≥6100."
+            fail=1
+          fi
+          if [ "${TABLE_PROPERTIES:-0}" -lt 2450 ]; then
+            echo "::error::DB has only ${TABLE_PROPERTIES} properties linked to source table rows — expected ≥2450."
+            fail=1
+          fi
+          # Hardware overlay floors (B-0017/B-0018, PR #41 / issue #38): the tables
+          # exist at db.ts init, so a pipeline that skipped extract-hardware-catalog
+          # would ship them empty. Floors sit well below the observed size (~255 / ~772)
+          # so they assert "the overlay ran," not an exact count.
+          if [ "${HARDWARE_CATALOG:-0}" -lt 200 ]; then
+            echo "::error::DB has only ${HARDWARE_CATALOG} hardware_catalog rows — expected ≥200. Did extract-hardware-catalog run after extract-devices?"
+            fail=1
+          fi
+          if [ "${DEVICE_ALIASES:-0}" -lt 600 ]; then
+            echo "::error::DB has only ${DEVICE_ALIASES} device_aliases rows — expected ≥600. Did extract-hardware-catalog run after extract-devices?"
+            fail=1
+          fi
+          # CLI-Reference overlay floors (#124/#127): the cliref_* tables exist at db.ts
+          # init, so a pipeline that skipped extract-cliref / link-cliref would ship them
+          # empty. Floors sit well below the observed size (~1,077 entries / 10,938 fields
+          # / 976 flags / 967 links, #137) so they assert "the overlay + crosswalk ran," not
+          # an exact count (the exact/alias/manual-only split is pinned separately by
+          # link-cliref --check, and discovery completeness by V-cliref-discovery).
+          if [ "${CLIREF_ENTRIES:-0}" -lt 900 ]; then
+            echo "::error::DB has only ${CLIREF_ENTRIES} cliref_entries — expected ≥900. Did extract-cliref run?"
+            fail=1
+          fi
+          if [ "${CLIREF_FIELDS:-0}" -lt 8000 ]; then
+            echo "::error::DB has only ${CLIREF_FIELDS} cliref_fields — expected ≥8000. Did extract-cliref run?"
+            fail=1
+          fi
+          if [ "${CLIREF_FLAGS:-0}" -lt 800 ]; then
+            echo "::error::DB has only ${CLIREF_FLAGS} cliref_flags — expected ≥800 (observed ~976). Did extract-cliref run?"
+            fail=1
+          fi
+          if [ "${SCHEMA_CMD_NODES:-0}" -gt 0 ] && [ "${CLIREF_LINKS:-0}" -lt 800 ]; then
+            echo "::error::DB has only ${CLIREF_LINKS} cliref_entry_schema_links — expected ≥800. Did link-cliref run after schema_nodes was populated?"
+            fail=1
+          fi
+          # Version coverage (#178): next.116 shipped with 66 of 67 versions because one
+          # child extraction failed, and no aggregate floor moves for a single version.
+          # extract-all-versions stamps how many versions restraml listed; every one of
+          # them must still have command_versions rows in the DB about to ship. Full-versions
+          # builds only — a single-version build has no schema_nodes and runs no
+          # extract-all-versions.
+          if [ "${SCHEMA_CMD_NODES:-0}" -gt 0 ]; then
+            if [ -z "$EXPECTED_VERSIONS" ]; then
+              echo "::error::db_meta has no command_versions_expected — did extract-all-versions finish?"
+              fail=1
+            elif [ "${CMD_VERSIONS:-0}" -lt "$EXPECTED_VERSIONS" ]; then
+              echo "::error::command_versions covers ${CMD_VERSIONS} versions — restraml listed ${EXPECTED_VERSIONS}. A version's command data is missing."
+              fail=1
+            else
+              echo "✓ command_versions covers ${CMD_VERSIONS}/${EXPECTED_VERSIONS} versions"
+            fi
+          fi
+          if [ "$fail" = "1" ]; then exit 1; fi
+          echo "✓ DB content validation passed"
+
+      # V-cliref-link-drift — the entry→inspect crosswalk (exact/alias/manual-only) must
+      # match the committed cli-reference-links.tsv, and every alias must name a known
+      # internal segment. Re-links the built DB and byte-compares. Same source gate as the
+      # release build (which populated the links) — rehearsable here against the artifact.
+      - name: CLI-Reference link drift (db-content)
+        if: inputs.test_scope == 'db-content' || (inputs.test_scope == 'all' && (inputs.db_source == 'local-build' || inputs.db_source == 'artifact'))
+        run: |
+          set -euo pipefail
+          # The crosswalk only exists on the full-versions path (see the floor step). Skip
+          # the byte-compare for a single-version local-build that built no schema_nodes.
+          if [ "$(sqlite3 ros-help.db "SELECT COUNT(*) FROM schema_nodes WHERE type IN ('dir','cmd')")" -gt 0 ]; then
+            make link-cliref-check
+          else
+            echo "schema_nodes has no command tree (single-version build) — skipping V-cliref-link-drift."
+          fi
+
+      # V-cliref-db-integrity — structural + semantic invariants on the full overlay
+      # (integrity/FK/orphans/enums/uniqueness + settable-only field view).
+      - name: CLI-Reference DB integrity (db-content)
+        if: inputs.test_scope == 'db-content' || (inputs.test_scope == 'all' && (inputs.db_source == 'local-build' || inputs.db_source == 'artifact'))
+        run: make cliref-db-check
+
+      # V-tool-shapes / V-tool-budget / V-explain-grounding — MCP contract Blocks B/C/D
+      # against the real DB.
+      - name: MCP contract tests (contract)
+        if: inputs.test_scope == 'contract' || inputs.test_scope == 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## MCP contract test (real DB)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          ROSETTA_REAL_DB_TESTS=1 bun test src/mcp-contract.test.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::MCP contract tests (real DB) failed (exit $status) — see the step summary."
+          fi
+          exit "$status"
+
+      # V-retrieval-floor — 20-query golden set; blocking (>2pp regression fails).
+      - name: Retrieval eval — golden (eval-golden)
+        if: inputs.test_scope == 'eval-golden' || inputs.test_scope == 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Retrieval eval — golden (Phase 0)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          bun run src/eval/retrieval.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Golden retrieval eval failed (exit $status) — recall@10 or classifier accuracy likely regressed >2pp vs. baseline (or the eval errored)."
+          fi
+          exit "$status"
+
+      # V-retrieval-self — self-supervised eval. Non-blocking by default (parity with
+      # release.yml); eval_self_blocking=true flips it to a hard gate for an on-demand
+      # blocking rehearsal. See VALIDATION.md for the promotion path.
+      - name: Retrieval eval — self-supervised (eval-self)
+        if: inputs.test_scope == 'eval-self' || inputs.test_scope == 'all'
+        continue-on-error: ${{ !inputs.eval_self_blocking }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Retrieval eval — self-supervised (Phase 1)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Mode: ${{ inputs.eval_self_blocking && 'blocking (hard gate)' || 'non-blocking' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          bun run src/eval/self-supervised.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -eq 0 ]; then
+            echo "Result: ✅ pass" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Result: ⚠️ regression (exit $status)" >> "$GITHUB_STEP_SUMMARY"
+            exit "$status"
+          fi
+
+      # B-0025 census — which store answers property lookups, and how much of the CLI Reference
+      # carries descriptions, per top-level menu. Report-only: the trend shows when MikroTik moves
+      # the next set of manual tables (the gates on its consequences are MCP contract Block D).
+      - name: Property-source census (db-content, report-only)
+        if: inputs.test_scope == 'db-content' || (inputs.test_scope == 'all' && (inputs.db_source == 'local-build' || inputs.db_source == 'artifact'))
+        continue-on-error: true
+        run: bun run src/eval/property-sources.ts | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # V-docusaurus-docs-count — extracted /docs page count vs the scoped llms.txt.
+      # local-build only: needs the manual/pages/ cache the local-build fetch wrote.
+      - name: Docusaurus docs-count (docusaurus-count)
+        if: (inputs.test_scope == 'docusaurus-count' || inputs.test_scope == 'all') && inputs.db_source == 'local-build'
+        run: bun run src/extract-docusaurus.ts --from-cache --check-counts --strict
+
+      # V-device-map-drift — coherence of the committed device→URL artifacts. No DB.
+      # (Also runs on every PR in test.yml; included here so an `all` rehearsal is complete.)
+      - name: Device map drift gate (device-map)
+        if: inputs.test_scope == 'device-map' || inputs.test_scope == 'all'
+        run: make device-map-check
+
+      # V-db-meta — provenance stamping is present and complete.
+      - name: DB provenance (db-meta)
+        if: inputs.test_scope == 'db-meta' || inputs.test_scope == 'all'
+        run: |
+          set -euo pipefail
+          missing=0
+          for key in release_tag built_at source_commit schema_version; do
+            val=$(sqlite3 ros-help.db "SELECT value FROM db_meta WHERE key='$key'" 2>/dev/null || echo "")
+            if [ -z "$val" ]; then
+              echo "::error::db_meta is missing key '$key'"
+              missing=1
+            else
+              echo "✓ db_meta.$key = $val"
+            fi
+          done
+          if [ "$missing" = "1" ]; then exit 1; fi
+          echo "✓ db_meta provenance complete"
+
+      # Rehearsal summary — what ran, against which DB.
+      - name: QA summary
+        if: always()
+        # Inputs + the (user-controllable) ref name arrive via env, never
+        # interpolated into the shell — template-injection guard.
+        env:
+          SCOPE: ${{ inputs.test_scope }}
+          DB_SOURCE: ${{ inputs.db_source }}
+          FULL_VERSIONS: ${{ inputs.full_versions }}
+          EVAL_SELF_BLOCKING: ${{ inputs.eval_self_blocking }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          {
+            echo "## QA rehearsal"
+            echo ""
+            echo "| field | value |"
+            echo "|-------|-------|"
+            echo "| scope | \`${SCOPE}\` |"
+            echo "| db_source | \`${DB_SOURCE}\` |"
+            echo "| full_versions | \`${FULL_VERSIONS}\` |"
+            echo "| eval_self_blocking | \`${EVAL_SELF_BLOCKING}\` |"
+            echo "| ref | \`${REF_NAME}\` |"
+            echo ""
+            echo "No npm publish, OCI push, or GitHub Release was performed — this is a gate rehearsal only."
+          } >> "$GITHUB_STEP_SUMMARY"

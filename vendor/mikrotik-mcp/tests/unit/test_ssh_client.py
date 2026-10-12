@@ -1,0 +1,371 @@
+import io
+
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# _decode_output: encoding fallback (issue #58)
+# ---------------------------------------------------------------------------
+
+class TestDecodeOutput:
+    """Unit tests for MikroTikSSHClient._decode_output."""
+
+    def setup_method(self):
+        from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+        self.decode = MikroTikSSHClient._decode_output
+
+    def test_empty_bytes_returns_empty_string(self):
+        assert self.decode(b"") == ""
+
+    def test_pure_ascii_decoded_correctly(self):
+        assert self.decode(b"hello world") == "hello world"
+
+    def test_valid_utf8_decoded_correctly(self):
+        # UTF-8 encoded euro sign and em-dash
+        data = "€—".encode("utf-8")
+        assert self.decode(data) == "€—"
+
+    def test_cp1252_swedish_chars_decoded_correctly(self):
+        # Swedish å ä ö — encoded as CP1252 / Latin-1 overlapping bytes
+        # CP1252: å=0xE5, ä=0xE4, ö=0xF6
+        data = "från Gör om ö".encode("cp1252")
+        result = self.decode(data)
+        assert "å" in result or "\xe5" in result  # å
+        assert "ö" in result or "\xf6" in result  # ö
+
+    def test_latin1_only_bytes_decoded_without_error(self):
+        # Bytes that are valid latin-1 but not valid UTF-8 or CP1252
+        # 0x9D is undefined in CP1252 but valid latin-1
+        data = bytes([0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x9D])
+        result = self.decode(data)
+        assert isinstance(result, str)
+        assert result.startswith("Hello")
+
+    def test_cp1252_nat_rule_comment_does_not_raise(self):
+        # Simulated RouterOS NAT print output with a Swedish comment
+        # b"\xf6" = ö in cp1252
+        raw = b"chain=srcnat action=masquerade comment=\"\xf6ppet n\xe4t\""
+        result = self.decode(raw)
+        assert isinstance(result, str)
+        assert "ppet" in result  # partial match regardless of exact char
+
+    def test_swedish_bytes_reported_in_issue_do_not_raise(self):
+        # Exact bytes mentioned in the issue: 0xf6 (ö) and 0xe5 (å)
+        raw = bytes([0xF6, 0x20, 0xE5])
+        result = self.decode(raw)
+        assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# execute_command with non-ASCII stdout/stderr
+# ---------------------------------------------------------------------------
+
+def test_execute_command_handles_cp1252_stdout(monkeypatch):
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    # Simulate RouterOS returning CP1252-encoded bytes on stdout
+    cp1252_bytes = "comment=\"från\"".encode("cp1252")
+
+    class DummySSH:
+        def load_host_keys(self, _): pass
+        def set_missing_host_key_policy(self, _): pass
+        def connect(self, **kwargs): pass
+        def exec_command(self, command):
+            return (None, io.BytesIO(cp1252_bytes), io.BytesIO(b""))
+        def close(self): pass
+
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: DummySSH())
+
+    monkeypatch.setattr(mod.os.path, "isfile", lambda _: True)
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename=None,
+                               known_hosts_path="/keys/known_hosts")
+    assert client.connect() is True
+    result = client.execute_command("/ip firewall nat print")
+    assert isinstance(result, str)
+    assert "comment=" in result
+
+
+def test_execute_command_handles_cp1252_stderr(monkeypatch):
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    # Non-ASCII bytes on stderr, empty stdout → should return decoded stderr
+    cp1252_err = "failure: ej till\xe5ten".encode("cp1252")
+
+    class DummySSH:
+        def load_host_keys(self, _): pass
+        def set_missing_host_key_policy(self, _): pass
+        def connect(self, **kwargs): pass
+        def exec_command(self, command):
+            return (None, io.BytesIO(b""), io.BytesIO(cp1252_err))
+        def close(self): pass
+
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: DummySSH())
+
+    monkeypatch.setattr(mod.os.path, "isfile", lambda _: True)
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename=None,
+                               known_hosts_path="/keys/known_hosts")
+    assert client.connect() is True
+    result = client.execute_command("/ip firewall nat print")
+    assert isinstance(result, str)
+    assert "failure" in result
+
+
+def test_ssh_client_requires_connect_for_execute():
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename=None, port=22)
+    with pytest.raises(Exception, match="Not connected"):
+        client.execute_command("/system identity print")
+
+
+def test_ssh_client_connect_and_execute(monkeypatch):
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    state = {"connect_kwargs": None, "closed": 0}
+
+    class DummySSH:
+        def load_host_keys(self, _):
+            pass
+
+        def set_missing_host_key_policy(self, _policy):
+            pass
+
+        def connect(self, **kwargs):
+            state["connect_kwargs"] = kwargs
+
+        def exec_command(self, command: str):
+            assert command == "/system identity print"
+            return (None, io.BytesIO(b"out"), io.BytesIO(b""))
+
+        def close(self):
+            state["closed"] += 1
+
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: DummySSH())
+    monkeypatch.setattr(mod.os.path, "isfile", lambda _: True)
+
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename="k",
+                               port=2222, known_hosts_path="/keys/known_hosts")
+    assert client.connect() is True
+    assert state["connect_kwargs"]["hostname"] == "h"
+    assert state["connect_kwargs"]["port"] == 2222
+    assert state["connect_kwargs"]["username"] == "u"
+    assert state["connect_kwargs"]["password"] == "p"
+    assert state["connect_kwargs"]["key_filename"] == "k"
+
+    assert client.execute_command("/system identity print") == "out"
+    client.disconnect()
+    assert state["closed"] == 1
+
+
+def test_failed_connect_closes_the_half_open_client(monkeypatch):
+    """A rejected login must not leave paramiko's transport running."""
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    state = {"closed": 0}
+
+    class RejectingSSH:
+        def load_host_keys(self, _):
+            pass
+
+        def set_missing_host_key_policy(self, _policy):
+            pass
+
+        def connect(self, **kwargs):
+            raise mod.paramiko.AuthenticationException("bad password")
+
+        def close(self):
+            state["closed"] += 1
+
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: RejectingSSH())
+    monkeypatch.setattr(mod.os.path, "isfile", lambda _: True)
+
+    client = MikroTikSSHClient(host="h", username="u", password="wrong", key_filename=None,
+                               known_hosts_path="/keys/known_hosts")
+    assert client.connect() is False
+    assert state["closed"] == 1
+    # and the object reports itself as unusable rather than half-connected
+    assert client.client is None
+    with pytest.raises(Exception, match="Not connected"):
+        client.execute_command("/system identity print")
+
+
+def test_connect_fails_closed_without_known_hosts(monkeypatch):
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    created = []
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: created.append(True))
+
+    client = MikroTikSSHClient(
+        host="h", username="u", password="p", key_filename=None
+    )
+    assert client.connect() is False
+    assert created == [], "SSH must not start without an explicit trust store"
+
+
+def test_connect_loads_known_hosts_and_rejects_unknown_host(monkeypatch, tmp_path):
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    known_hosts = tmp_path / "known_hosts"
+    known_hosts.write_text("", encoding="utf-8")
+    state = {"loaded": None, "policy": None, "closed": 0}
+
+    class UnknownHostSSH:
+        def load_host_keys(self, path):
+            state["loaded"] = path
+
+        def set_missing_host_key_policy(self, policy):
+            state["policy"] = policy
+
+        def connect(self, **kwargs):
+            assert isinstance(state["policy"], mod.paramiko.RejectPolicy)
+            raise mod.paramiko.SSHException(
+                f"Server {kwargs['hostname']} not found in known_hosts"
+            )
+
+        def _log(self, *_args):
+            pass
+
+        def close(self):
+            state["closed"] += 1
+
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: UnknownHostSSH())
+
+    client = MikroTikSSHClient(
+        host="untrusted", username="u", password="p", key_filename=None,
+        known_hosts_path=str(known_hosts),
+    )
+    assert client.connect() is False
+    assert state["loaded"] == str(known_hosts)
+    assert isinstance(state["policy"], mod.paramiko.RejectPolicy)
+    assert state["closed"] == 1
+
+
+def test_ssh_client_returns_stderr_when_no_stdout(monkeypatch):
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    class DummySSH:
+        def load_host_keys(self, _):
+            pass
+
+        def set_missing_host_key_policy(self, _policy):
+            pass
+
+        def connect(self, **kwargs):
+            pass
+
+        def exec_command(self, command: str):
+            return (None, io.BytesIO(b""), io.BytesIO(b"failure: nope"))
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: DummySSH())
+    monkeypatch.setattr(mod.os.path, "isfile", lambda _: True)
+
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename=None,
+                               port=22, known_hosts_path="/keys/known_hosts")
+    assert client.connect() is True
+    assert client.execute_command("/x") == "failure: nope"
+
+
+# ---------------------------------------------------------------------------
+# SFTP file transfer: download_file / upload_file
+# ---------------------------------------------------------------------------
+
+def _connect_client_with_sftp(monkeypatch, sftp):
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+    import mcp_mikrotik.mikrotik_ssh_client as mod
+
+    class DummySSH:
+        def load_host_keys(self, _):
+            pass
+
+        def set_missing_host_key_policy(self, _policy):
+            pass
+
+        def connect(self, **kwargs):
+            pass
+
+        def open_sftp(self):
+            return sftp
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(mod.paramiko, "SSHClient", lambda: DummySSH())
+    monkeypatch.setattr(mod.os.path, "isfile", lambda _: True)
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename=None,
+                               known_hosts_path="/keys/known_hosts")
+    assert client.connect() is True
+    return client
+
+
+def test_ssh_client_download_file_via_sftp(monkeypatch):
+    class DummySFTP:
+        def __init__(self, payload):
+            self.payload = payload
+            self.closed = False
+            self.requested = None
+
+        def getfo(self, remotepath, fileobj):
+            self.requested = remotepath
+            fileobj.write(self.payload)
+
+        def close(self):
+            self.closed = True
+
+    # Binary payload that is NOT valid UTF-8 — proves raw bytes survive intact.
+    sftp = DummySFTP(b"\x00\x01\x02backup\xff")
+    client = _connect_client_with_sftp(monkeypatch, sftp)
+
+    data = client.download_file("backup_123.backup")
+    assert data == b"\x00\x01\x02backup\xff"
+    assert sftp.requested == "backup_123.backup"
+    assert sftp.closed is True
+
+
+def test_ssh_client_upload_file_via_sftp(monkeypatch):
+    captured = {}
+
+    class DummySFTP:
+        def __init__(self):
+            self.closed = False
+
+        def putfo(self, fileobj, remotepath):
+            captured["remotepath"] = remotepath
+            captured["data"] = fileobj.read()
+
+        def close(self):
+            self.closed = True
+
+    sftp = DummySFTP()
+    client = _connect_client_with_sftp(monkeypatch, sftp)
+
+    client.upload_file("restore.rsc", b"/system identity\n")
+    assert captured["remotepath"] == "restore.rsc"
+    assert captured["data"] == b"/system identity\n"
+    assert sftp.closed is True
+
+
+def test_ssh_client_download_requires_connect():
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename=None, port=22)
+    with pytest.raises(Exception, match="Not connected"):
+        client.download_file("x.backup")
+
+
+def test_ssh_client_upload_requires_connect():
+    from mcp_mikrotik.mikrotik_ssh_client import MikroTikSSHClient
+
+    client = MikroTikSSHClient(host="h", username="u", password="p", key_filename=None, port=22)
+    with pytest.raises(Exception, match="Not connected"):
+        client.upload_file("x.rsc", b"data")
+

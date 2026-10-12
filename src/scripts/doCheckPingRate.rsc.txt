@@ -1,0 +1,49 @@
+
+:global globalScriptBeforeRun;
+$globalScriptBeforeRun "doCheckPingRate";
+
+:global globalNoteMe;
+:local state;
+
+#Mikrotik Ping more than 25ms to send mail
+
+:local host  [:resolve "ya.ru"];
+:local ms 20;
+
+:set state ("Checking ping rate $host");
+$globalNoteMe value=$state;
+
+:local avgRttA value=0;
+:local avgRttB value=0;
+:local numPing value=6;
+:local toPingIP1 value=8.8.8.8;
+:local toPingIP2 value=$host;
+
+:for tmpA from=1 to=$numPing step=1 do={
+ /tool flood-ping count=1 size=38 address=$toPingIP1 do={
+  :set avgRttA ($"avg-rtt" + $avgRttA);
+ }
+ /tool flood-ping count=1 size=38 address=$toPingIP2 do={
+  :set avgRttB ($"avg-rtt" + $avgRttB);
+ }
+ /delay delay-time=1;
+}
+
+:set state ("Ping Average for 8.8.8.8: ".[:tostr ($avgRttA / $numPing )]."ms");
+$globalNoteMe value=$state;
+
+:set state ("Ping Average for $host: ".[:tostr ($avgRttB / $numPing )]."ms");
+$globalNoteMe value=$state;
+
+:local rate ($avgRttB / $numPing );
+
+:if ($rate >= $ms) do={
+
+    :set state "Yandex latency is too high ($rate ms, over $ms ms)";
+    $globalNoteMe value=$state;
+    :log warning $state;
+
+    :global globalTgMessage;
+    $globalTgMessage value=$state;
+
+}

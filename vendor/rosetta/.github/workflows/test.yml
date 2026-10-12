@@ -1,0 +1,128 @@
+name: Test
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # security-events read is needed for the AI findings probe (and for the
+  # standard CodeQL alerts API). It costs nothing to grant on a read-only token.
+  security-events: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Validate MCP registry metadata
+        run: ./mcp-publisher validate server.json
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Type check
+        run: bun run typecheck
+
+      # Fetch the latest published DB into runner temp so the dedicated stdio
+      # integration test can exercise the same artifact users get from
+      # `bunx @tikoci/rosetta` without leaving ros-help.db in the repo root,
+      # which would pollute the main `bun test` suite's DB-wipe guards.
+      - name: Download latest ros-help.db for integration test
+        run: |
+          set -euo pipefail
+          curl -fSL --max-time 600 \
+            -o "$RUNNER_TEMP/ros-help.db.gz" \
+            https://github.com/tikoci/rosetta/releases/latest/download/ros-help.db.gz
+          gunzip -f "$RUNNER_TEMP/ros-help.db.gz"
+          ls -lh "$RUNNER_TEMP/ros-help.db"
+
+      - name: Run stdio MCP integration test
+        env:
+          TEST_DB_PATH: ${{ runner.temp }}/ros-help.db
+        run: bun test src/mcp-stdio-client.test.ts
+
+      - name: Run tests
+        run: bun test
+
+      # Drift gate over the *committed* hardware-overlay artifacts (device-map.tsv,
+      # hardware-unmatched.tsv, device-exceptions.toml, the two assessment JSONs):
+      # fails if a device stops auto-resolving without a curated exception, an
+      # exception goes stale, or a committed TSV drifts from freshly-computed output.
+      # No network — validates coherence of what's committed only.
+      #
+      # Non-goal (deliberate): `make assess-hardware` / `make assess-www` are the
+      # LIVE-FETCH refresh tools (they re-scrape manual.mikrotik.com / mikrotik.com)
+      # and stay MANUAL/local — see B-0018 "How to audit". CI never re-fetches; it
+      # only proves the committed snapshot is internally consistent.
+      - name: Device map drift gate
+        run: make device-map-check
+
+      - name: Lint
+        run: make lint
+
+      - name: AI findings probe (forward-compat)
+        # GitHub's "Code Quality > AI findings" tab is in preview and is not
+        # reachable via REST/GraphQL or the public webpage without auth
+        # (probed 2026-04-26, all candidate paths 404). This step polls a
+        # handful of plausible endpoints; today it's a no-op that prints a
+        # notice. Once GitHub ships a real API and one of these returns 200,
+        # the step starts surfacing the count + first lines as a CI notice —
+        # without ever blocking a PR. Promote to a failure (`exit 1`) only
+        # when the findings have stabilized and the team agrees they're a PR
+        # gate.
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          paths=(
+            "repos/${REPO}/code-quality/findings"
+            "repos/${REPO}/code-quality/alerts"
+            "repos/${REPO}/code-scanning/ai-alerts"
+            "repos/${REPO}/security/quality"
+            "repos/${REPO}/security/ai-findings"
+          )
+          found=""
+          for p in "${paths[@]}"; do
+            status=$(gh api -i "$p" 2>/dev/null | head -1 | awk '{print $2}' || true)
+            if [ -n "$status" ] && [ "$status" != "404" ] && [ "$status" != "410" ]; then
+              found="$p (HTTP $status)"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "::notice title=AI findings API::Not yet exposed via REST. Check https://github.com/${REPO}/security/quality/ai-findings in a browser (requires auth). (Probed: ${paths[*]})"
+            exit 0
+          fi
+          echo "::warning title=AI findings API now available::Endpoint ${found} responded — promote this step from probe to gate."
+          gh api "${found%% *}" || true
+
+  # DB ownership + collection depends on OS file-locking and delete semantics
+  # (#151): macOS rejects reads after unlink; Windows delete-while-open
+  # semantics must be proven here before any release can publish the protocol.
+  db-lifecycle:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Run DB lifecycle and install tests
+        run: bun test src/db-lifecycle.test.ts src/install.test.ts

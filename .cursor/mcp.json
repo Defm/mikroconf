@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "rosetta": {
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/bun",
+      "args": [
+        "run",
+        "${workspaceFolder}/vendor/rosetta/src/mcp.ts"
+      ],
+      "env": {
+        "DB_PATH": "${workspaceFolder}/.cache/rosetta/ros-help.db",
+        "ROSETTA_OFFLINE": "1"
+      }
+    },
+    "mikrotik-readonly": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/vendor/mikrotik-mcp/.venv/bin/mcp-server-mikrotik-hardened",
+      "args": [],
+      "env": {
+        "MIKROTIK_INVENTORY_FILE": "${userHome}/.config/mikrobackups/inventory.yml",
+        "MIKROTIK_KNOWN_HOSTS_PATH": "${userHome}/.ssh/mikrobackups/known_hosts"
+      }
+    }
+  }
+}

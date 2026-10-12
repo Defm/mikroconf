@@ -1,0 +1,316 @@
+{
+  "_doc": "Curated golden-query set for the rosetta retrieval surfaces. See src/eval/retrieval.ts for the runner. Each entry asserts what an agent SHOULD see when it asks this question. `expected_rosetta_ids` lists page rosetta-ids (see src/rosetta-id.ts) that are acceptable as a 'correct' top-N hit (any match counts) — NOT the numeric `pages.id`, which is a fresh rowid re-minted on every extract-docusaurus.ts run and is not a stable identity. `expected_classified` asserts the regex classifier's detection. SURFACES (`surface` field, default 'search'): 'search' exercises routeros_search/searchAll — the entry point most exposed to the Confluence→Docusaurus corpus swap — and carries the durable recall/MRR/classifier GATE (V-retrieval-floor). 'property'/'changelog'/'video' dispatch to the dedicated tools (lookupProperty/searchChangelogs/searchVideos) and feed a SEPARATE informational `surface_matrix` (per-surface hit@5) kept out of the search aggregates so those stay sensitive; surface regressions warn (per-query 'was passing, now misses') and are triaged into the Bug Ledger, not auto-gated — this is a starting coverage board to grow over time (issue #53). Keep this set small and high-signal. Add entries when you fix (or want to pin) a real behavior, not speculatively. Queries that legitimately fail today (e.g. #26 ranking regressions, or the firewall-filter property-link gap BL-1) stay pointed at the CORRECT answer and fail loudly — never loosen a fixture to make the board green.",
+  "_thresholds": {
+    "_doc": "Absolute floors on the SEARCH-surface aggregate only (27 search queries as of #53; property/changelog/video are tracked in surface_matrix, not here). Floors are set with ~1-query headroom above observed current-corpus metrics (recall@5 92.6%, recall@3 92.6%, mrr 88.3%, classifier 100%) so they tolerate the 2 known-failing #26 ranking queries plus a little noise, and catch a systemic collapse. The TIGHT forward guard is the 2pp per-metric regression check in retrieval.ts vs baseline.json — that is what catches any single new miss (a 3rd search failure drops recall@5 ~3.7pp and trips it). Over 24 queries a '2-failure tolerance' meant recall@5≈0.92; recomputed for 27 search queries these floors keep that same 2-to-3-failure spirit rather than the pre-#53 0.85/0.70/0.65, which had drifted loose (would have tolerated 4 failures).",
+    "recall_at_5": 0.88,
+    "recall_at_3": 0.82,
+    "mrr": 0.75,
+    "classifier_accuracy": 0.90
+  },
+  "queries": [
+    {
+      "id": "nl-dhcp-server",
+      "query": "how do I set up a DHCP server",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/network-management/dhcp/server", "docs/network-management/dhcp"],
+      "notes": "Bread-and-butter NL question. Upstream split the single DHCP page (2026-10); dhcp/server is the direct answer, the dhcp index stays acceptable."
+    },
+    {
+      "id": "nl-firewall-filter",
+      "query": "block traffic from a specific IP address",
+      "shape": "nl-question",
+      "expected_rosetta_ids": [
+        "docs/firewall-and-quality-of-service/firewall/filter",
+        "docs/firewall-and-quality-of-service/firewall/address-lists",
+        "docs/firewall-and-quality-of-service/firewall/common-firewall-matchers-and-actions",
+        "docs/firewall-and-quality-of-service/firewall/nat",
+        "docs/firewall-and-quality-of-service/firewall/mangle"
+      ],
+      "match_mode": "any",
+      "notes": "KNOWN REGRESSION, tracked by T-0038: the real Filter page currently ranks 6th of 10, beaten by incidental short unrelated pages (BM25 length bias and/or AND-fallback fragility — see T-0038). Left pointed at the correct pages deliberately, not loosened, so this keeps failing visibly until fixed."
+    },
+    {
+      "id": "nl-bridge-vlan",
+      "query": "bridge vlan filtering on a switch",
+      "shape": "nl-question",
+      "expected_rosetta_ids": [
+        "docs/bridging-and-switching/user-guides/bridge-vlan-table",
+        "docs/bridging-and-switching/user-guides/basic-vlan-switching",
+        "docs/bridging-and-switching/vlan",
+        "docs/wireless/abgn/vlans-on-wireless",
+        "docs/bridging-and-switching/user-guides/wireless-vlan-trunk"
+      ],
+      "match_mode": "any",
+      "notes": "Any bridging/VLAN case-study page satisfies."
+    },
+    {
+      "id": "nl-wireguard",
+      "query": "configure wireguard peer with preshared key",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/virtual-private-networks/wireguard"]
+    },
+    {
+      "id": "nl-container",
+      "query": "run a docker container on RouterOS",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/containers"],
+      "expected_topics_any": ["container"]
+    },
+    {
+      "id": "nl-bgp",
+      "query": "establish a BGP peer with my upstream",
+      "shape": "nl-question",
+      "expected_rosetta_ids": [
+        "docs/user-guides/routing-and-networking-protocols/unicast/bgp",
+        "docs/user-guides/routing-and-networking-protocols/unicast/bgp/understanding-bgp",
+        "docs/user-guides/routing-and-networking-protocols/unicast/bgp/peering-sessions"
+      ],
+      "match_mode": "any",
+      "notes": "KNOWN REGRESSION, tracked by T-0038: the AND-query candidate pool is only 2 pages (VRF, DHCP), neither BGP-related — the real BGP pages never enter the candidate set. Left pointed at the correct pages deliberately, not loosened, so this keeps failing visibly until fixed."
+    },
+    {
+      "id": "nl-ospf",
+      "query": "ospf area type stub",
+      "shape": "nl-question",
+      "expected_rosetta_ids": [
+        "docs/user-guides/routing-and-networking-protocols/unicast/ospf",
+        "docs/user-guides/routing-and-networking-protocols/unicast/ospf/areas-and-virtual-links"
+      ],
+      "match_mode": "any"
+    },
+    {
+      "id": "nl-scheduler",
+      "query": "run a script every hour",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/system-information-and-utilities/scheduler"]
+    },
+    {
+      "id": "nl-routerboot",
+      "query": "reset device to factory defaults from routerboot",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/getting-started/installation-and-upgrade/routerboot"]
+    },
+    {
+      "id": "nl-capsman",
+      "query": "centrally manage wifi access points",
+      "shape": "nl-question",
+      "expected_rosetta_ids": [
+        "docs/wireless/wifi/capsman",
+        "docs/wireless/abgn/capsman",
+        "docs/wireless/abgn/capsman/capsman-with-vlans"
+      ],
+      "match_mode": "any",
+      "notes": "WiFi CAPsMAN page, the classic CAPsMAN page, or a CAPsMAN case study all reasonably answer."
+    },
+    {
+      "id": "nl-ipsec",
+      "query": "site-to-site IPsec tunnel between two routers",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/virtual-private-networks/ipsec"]
+    },
+    {
+      "id": "nl-vlan",
+      "query": "tag vlan on an ethernet interface",
+      "shape": "nl-question",
+      "expected_rosetta_ids": [
+        "docs/bridging-and-switching/user-guides/basic-vlan-switching",
+        "docs/bridging-and-switching/vlan",
+        "docs/bridging-and-switching/user-guides/bridge-vlan-table"
+      ],
+      "match_mode": "any",
+      "notes": "Any switch/VLAN/bridge page satisfies."
+    },
+    {
+      "id": "cmd-path-firewall-filter",
+      "query": "/ip/firewall/filter",
+      "shape": "command-path",
+      "expected_classified": { "command_path": "/ip/firewall/filter" },
+      "expected_related": ["command_node"],
+      "requires_commands_min": 1000,
+      "notes": "Classifier MUST detect the path; command_node check skipped on slim DBs."
+    },
+    {
+      "id": "cmd-path-routing-bgp",
+      "query": "/routing/bgp",
+      "shape": "command-path",
+      "expected_classified": { "command_path": "/routing/bgp" },
+      "expected_related": ["command_node"],
+      "requires_commands_min": 1000
+    },
+    {
+      "id": "cmd-path-container",
+      "query": "/container",
+      "shape": "command-path",
+      "expected_classified": { "command_path": "/container" },
+      "expected_related": ["command_node"],
+      "requires_commands_min": 1000
+    },
+    {
+      "id": "cmd-path-nl-not-a-path",
+      "query": "port forward to an internal server",
+      "shape": "nl-question",
+      "expected_classified": { "command_path": null },
+      "notes": "BL-4/#59: NL prose beginning with the top-level word 'port' must NOT classify as a command path /port/forward/... . Classifier-only anchor (null = must be absent); retrieving the NAT page for verbose NL is the separate #26 FTS-candidate-pool weakness, not this bug."
+    },
+    {
+      "id": "version-7-22-1",
+      "query": "what changed in 7.22.1",
+      "shape": "version-question",
+      "expected_classified": { "version": "7.22.1" },
+      "expected_related": ["changelogs"],
+      "notes": "Classifier captures the patch version when present; exact patch versions must stay exact."
+    },
+    {
+      "id": "version-7-22",
+      "query": "what changed in 7.22",
+      "shape": "version-question",
+      "expected_classified": { "version": "7.22" },
+      "expected_related": ["changelogs"],
+      "notes": "Major.minor version questions should surface changelogs even when the DB stores only patch-version rows."
+    },
+    {
+      "id": "device-ccr2216",
+      "query": "CCR2216 specs",
+      "shape": "device",
+      "expected_classified": { "device": "CCR2216" },
+      "expected_related": ["devices"]
+    },
+    {
+      "id": "device-hap-ax3",
+      "query": "hAP ax3 wifi performance",
+      "shape": "device",
+      "expected_classified": { "device": "hAP" },
+      "expected_related": ["devices"],
+      "notes": "Classifier currently detects 'hAP' (the family) not 'hAP ax3' (the specific model). Tightening to 'hAP ax3' is a known classifier improvement — see Device AKA backlog item."
+    },
+    {
+      "id": "device-code-rb750gr3",
+      "query": "RB750Gr3",
+      "shape": "device",
+      "expected_classified": { "device": "RB750Gr3" },
+      "expected_related": ["devices"],
+      "notes": "#49: a bare product code resolves to its canonical device (hEX) — related.devices must surface."
+    },
+    {
+      "id": "device-alias-cap-ac",
+      "query": "cap_ac",
+      "shape": "device",
+      "expected_related": ["devices"],
+      "notes": "#49: lowercase www/hardware slug the device regexes miss — the searchAll whole-input alias probe resolves it to cAP ac. No expected_classified (classifier intentionally stays pure/regex; resolution is the alias probe's job)."
+    },
+    {
+      "id": "device-family-chateau",
+      "query": "chateau lte12",
+      "shape": "device",
+      "expected_classified": { "device": "chateau" },
+      "expected_related": ["devices"],
+      "notes": "#49: 'Chateau' family pattern added to the classifier (regexes previously missed it); searchDevices disambiguates the specific model."
+    },
+    {
+      "id": "topic-firewall-classify",
+      "query": "firewall mangle action mark-connection",
+      "shape": "topic-multi",
+      "expected_topics_any": ["firewall"],
+      "notes": "Multi-word firewall query. Top-3 should be firewall-related (any of mangle/filter/raw/nat pages)."
+    },
+    {
+      "id": "ambiguous-disabled",
+      "query": "what does the disabled property do",
+      "shape": "ambiguous",
+      "expected_topics_any": [],
+      "notes": "Ambiguous — 'disabled' exists on dozens of pages. Classifier doesn't currently detect 'disabled' as a property name (no strong signal). Tracked as classifier improvement opportunity. This entry currently passes as a no-op; tighten when classifier learns common property names."
+    },
+
+    {
+      "id": "nl-pppoe",
+      "query": "set up a pppoe client",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/virtual-private-networks/pppoe"],
+      "expected_topics_any": ["pppoe"],
+      "notes": "#53: +nl. Bread-and-butter connectivity question the Confluence corpus handled well; the PPPoE page must rank #1 on the Docusaurus corpus."
+    },
+    {
+      "id": "nl-dns",
+      "query": "configure a dns server",
+      "shape": "nl-question",
+      "expected_rosetta_ids": ["docs/network-management/dns"],
+      "expected_topics_any": ["dns"],
+      "notes": "#53: +nl. Core service page; guards against a DNS-page ranking regression from the corpus swap."
+    },
+    {
+      "id": "prop-search-mtu",
+      "query": "mtu",
+      "shape": "nl-question",
+      "surface": "search",
+      "expected_rosetta_ids": ["docs/hardware/mtu-in-routeros"],
+      "expected_classified": { "property": "mtu" },
+      "expected_related": ["properties"],
+      "notes": "#53: +property (free-form, SEARCH surface — the sensitive entry point). A bare property name must (a) be detected by classifier.property, (b) populate related.properties, (c) rank the MTU concept page top. Exercises routeros_search's property-awareness end to end."
+    },
+    {
+      "id": "prop-wireguard-listen-port",
+      "query": "wireguard listen-port property",
+      "shape": "property",
+      "surface": "property",
+      "expected_property": { "path": "/interface/wireguard", "name": "listen-port", "page": "docs/cli-reference/interface/wireguard/wireguard" },
+      "notes": "#53: +property (exact path+name direct lookup via routeros_lookup_property). Anchors that the direct property surface works at all. Until October 2026 this resolved to the WireGuard manual page at `medium` (a bare property table that never names /interface/wireguard, B-0024 step 4). MikroTik then moved that table to the CLI Reference, so the prose row is gone and the answer is the CLI-Reference fallback at `high` (#169)."
+    },
+    {
+      "id": "prop-vxlan-vni",
+      "query": "vxlan vni property",
+      "shape": "property",
+      "surface": "property",
+      "expected_property": { "path": "/interface/vxlan", "name": "vni", "page": "docs/bridging-and-switching/vxlan" },
+      "notes": "#53: +property (exact path+name direct lookup). VXLAN vni resolves HIGH to the VXLAN page — its section names /interface/vxlan outright. Second clean anchor for the direct property surface."
+    },
+    {
+      "id": "prop-firewall-filter-action",
+      "query": "firewall filter action property",
+      "shape": "property",
+      "surface": "property",
+      "expected_property": { "path": "/ip/firewall/filter", "name": "action" },
+      "notes": "#53: +property. KNOWN-FAILING, intentionally not loosened (Bug Ledger BL-1). `action` exists as a property on the Filter page and `/ip/firewall/filter` exists as a command path, but they are NOT linked, so lookupProperty returns no high-confidence row — nothing ties any candidate section to the menu. Documents the command-path→page linkage gap on a core menu (same footprint as #26's firewall-filter ranking miss). Fixing the link belongs to a follow-up, not #53; this anchor keeps the gap visible and will flip green when it's fixed. Flipped green 2026-10 (B-0025) without loosening: the top row is now the exact `/ip/firewall/filter` CLI-Reference definition at `high`, which outranks the medium bridge-firewall rows. The manual link itself is still unfixed (#58), so this now proves the answer, not the link."
+    },
+    {
+      "id": "changelog-cve",
+      "query": "CVE",
+      "shape": "changelog",
+      "surface": "changelog",
+      "expected_changelog_contains": "CVE",
+      "notes": "#53: +changelog (fixed-CVE style, direct routeros_search_changelogs). Must surface a CVE-tagged fix (e.g. v7.6 IRC NAT helper CVE-2022-2663)."
+    },
+    {
+      "id": "changelog-rose-storage",
+      "query": "rose-storage package",
+      "shape": "changelog",
+      "surface": "changelog",
+      "expected_changelog_contains": "rose-storage",
+      "notes": "#53: +changelog (feature-introduced). Must surface the v7.8 rose-storage package addition."
+    },
+    {
+      "id": "changelog-wireguard-7-4",
+      "query": "wireguard",
+      "shape": "changelog",
+      "surface": "changelog",
+      "expected_version": "7.4",
+      "expected_changelog_contains": "wireguard",
+      "notes": "#53: +changelog (version-scoped). WireGuard change filtered to v7.4 must return the v7.4 WireGuard-stability fix — exercises the version filter of routeros_search_changelogs."
+    },
+    {
+      "id": "video-container",
+      "query": "run docker containers on mikrotik",
+      "shape": "video",
+      "surface": "video",
+      "expected_video_contains": "container",
+      "notes": "#53: +video (direct video search). A container/Docker how-to transcript segment must surface."
+    },
+    {
+      "id": "video-wireguard",
+      "query": "wireguard vpn setup on smartphone",
+      "shape": "video",
+      "surface": "video",
+      "expected_video_contains": "wireguard",
+      "notes": "#53: +video. The WireGuard setup video transcript must surface."
+    }
+  ]
+}

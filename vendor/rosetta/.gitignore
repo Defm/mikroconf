@@ -1,0 +1,51 @@
+# Database (generated — rebuild with `make extract`)
+ros-help.db
+*.sqlite-shm
+*.sqlite-wal
+*.db-shm
+*.db-wal
+
+# Source data (not distributed — see README for instructions)
+box/
+
+# Docusaurus /docs Markdown cache (live-fetched by extract-docusaurus.ts; not
+# committed — a small curated subset lives in fixtures/docusaurus/ for tests instead).
+manual/
+
+# Dependencies
+node_modules/
+bun.lock
+
+# Python (archival scripts)
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+
+# Build output
+dist/
+*.bun-build
+images/
+.image-build/
+
+# potentially ros-help.db.gz from `gh` ops
+ros-help.db.gz
+
+# Skills cache (fetched from GitHub API — not committed like transcripts/dude).
+# Anchored to root so .github/skills/ (Claude Code skills) is NOT ignored.
+/skills/
+
+# Claude Code local settings (settings.local.json, scheduled_tasks.lock) —
+# but .claude/skills/ is committed: symlinks into .github/skills/ so Claude
+# Code can see this repo's skills, same as Copilot does.
+.claude/*
+!.claude/skills/
+.mcp.json
+
+# Coverage output should not be .git; CI saves as artifact
+coverage/lcov.info
+
+# Experimental CLI-Reference extraction (experiments/cliref-*.ts) — regenerable
+experiments/cliref.db
+experiments/out/

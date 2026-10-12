@@ -1,0 +1,477 @@
+# Skill Backlog
+
+This file tracks proposed new `routeros-*` skills and improvements to existing ones.
+
+It is organized by **how weak an LLM's pretraining is likely to be** on each topic
+— highest weakness → highest value of a grounded `SKILL.md`. A skill's job is
+not to re-teach things the model already knows; it's to correct the things the
+model is likely to confidently get wrong.
+
+Weakness is assessed from the perspective of a modern general-purpose LLM
+(Claude Opus 4.x class, training cutoff late 2025 / early 2026). The signals:
+
+- **Recency** — RouterOS subsystems added or reworked in v7 (roughly 2021+) and
+  especially the 7.13+ wifi pivot, 7.18+ package flow, 7.21+/7.22+ `/app`,
+  7.22+ inline container env/mount — these are underrepresented in training data.
+- **Vendor idiosyncrasy** — MikroTik patterns that superficially resemble
+  common Linux concepts (firewall, containers, bridges) but diverge in ways a
+  model will confidently paper over with Linux defaults.
+- **Scripting corpus scarcity** — `.rsc` has a tiny public corpus vs. bash/python;
+  the model often invents syntax.
+
+## Legend
+
+- **Priority** — H/M/L by expected value of a grounded SKILL
+- **Grounding** — where facts should be sourced from (tikoci project, MikroTik
+  docs page, `/console/inspect` query, anchor test, etc.)
+
+---
+
+## H — New skills, high value
+
+### `routeros-scripting`
+
+**Status: implemented initial skill.** RouterOS scripting language (`.rsc` and
+interactive) now has `routeros-scripting/SKILL.md`, seeded from the old
+`routeros-fundamentals/references/scripting.md` and the new MikroTik manual
+"Scripting Tips and Tricks" / "Scripting examples" pages. The skill intentionally
+focuses on LLM-hostile scripting/config pitfalls instead of copying full examples.
+
+LLMs conflate `.rsc` with bash, shell, or TCL. Common invented syntax:
+`if ($var == "foo") then`, `echo $var`, backtick command substitution. None of
+these exist. Real idioms: `:if ($var = "foo") do={ ... }`, `:put $var`,
+`[/system/resource/get board-name]`.
+
+Future expansion / corpus-mining targets (not all missing from the initial skill):
+
+- Variable scoping (`:local`, `:global`) and why assigning to an undeclared
+  variable fails
+- Control flow (`:if`, `:foreach`, `:while`, `:do { } on-error={ }`)
+- Arrays, iteration, `:tonum`/`:tostr`/`:totime` type coercion
+- String ops: `:pick`, `:find`, `:len`, `[:toarray [$str]]`
+- Command substitution vs. property access (`[...]` vs `$...`)
+- `:do { } on-error={ }` and when to use it vs. not
+- Scheduler patterns — `/system/scheduler` to run scripts, run-count semantics
+- `:serialize to=json` for REST-friendly output from any CLI output
+- Files vs. interactive: `.rsc` file semantics and `/import`
+- The `<%%` spread operator (undocumented, passes array as named params to func)
+- `:grep` (7.13+) for filtering output within a script block
+- `:convert` with `to=byte-array` / `to=num` — gotcha on MIPSBE (known bug)
+- `:rndnum from=N to=M` for random values
+
+**Grounding: lsp-routeros-ts corpus (primary)**
+
+`tikoci/lsp-routeros-ts` (local: `~/GitHub/lsp-routeros-ts`) holds 630+
+real `.rsc` snippets extracted from the MikroTik forum, organized by topic.
+These are LSP test data parsed and syntax-checked by the LSP. This is the best
+available grounded corpus of valid RouterOS scripting patterns.
+
+Structure:
+
+- `test-data/forum/amm0/` — 276 topics, 630 snippets (amm0 authorship)
+- `test-data/forum/rextended/` — additional high-quality scripts
+- `test-data/complex/piano.rsc` — large real-world script
+- `test-data/tikbook/` — annotated scripts with markdown commentary
+- `test-data/sample.rsc`, `test-data/test.rsc` — canonical idiom examples
+- `test-data/edge-cases/` — intentional error cases, empty/unicode edge cases
+
+**How to use this for the skill (not "dump scripts"):**
+
+The strategy is to mine the corpus for *idiom patterns*, not to embed whole
+scripts. Each pattern should be expressed as a minimal self-contained example:
+
+1. Run the LSP's assessment against `test-data/` — `assessment-results.json`
+   already exists and may flag scripts with parse errors vs. clean ones.
+2. For each target idiom (function definitions, array ops, `:foreach`, etc.),
+   find the most representative clean snippet from the corpus.
+3. Strip to the idiom, add comments explaining what's non-obvious, and include
+   in the skill's `references/scripting-idioms.md`.
+
+**Key idioms to extract from lsp-routeros-ts corpus:**
+
+- Function definition + call pattern (`:global fn do={ ... }; $fn arg`)
+- Named parameter passing via `<%%` spread from an array/dict
+- `:foreach` over `[find ...]` results and over literal arrays
+- Multi-command block that cleans up with `[find comment=$tag]`
+- `:do { } on-error={ }` for safe property fetching
+- `:serialize to=json` + `:deserialize` roundtrip
+- `:convert to=byte-array` for byte manipulation (and MIPSBE workaround)
+- Script-as-library: running a `/system/script` to load global functions
+
+**restraml / OpenAPI3 note:** The OpenAPI3 schema generated by restraml from
+the RouterOS command tree is already documented in `routeros-command-tree/SKILL.md`
+(section "OpenAPI 3.0"). No gap there — does not need repetition in the
+scripting skill.
+
+### `routeros-wifi`
+
+The "new" wifi package (7.13+), which displaces legacy `wireless`. This is the
+single biggest area where LLM training data is wrong, because (a) it's recent
+and (b) there's a parallel legacy system most training data describes.
+
+Key things the model needs told:
+
+- `/interface/wifi` (new) vs. `/interface/wireless` (legacy) — both exist, both
+  valid, do not mix
+- Package names: `wifi-qcom`, `wifi-qcom-ac`, `wifi` — which chipset takes
+  which package; `wifi-qcom` is not just "the ARM wifi package"
+- Configuration profiles: `/interface/wifi/configuration`, `/interface/wifi/security`,
+  `/interface/wifi/channel`, `/interface/wifi/datapath` — the "slice"
+  approach is different from legacy's monolithic interface config
+- CAPsMAN v2 (now integrated, not a separate package)
+- Which hardware supports the new package and which is stuck on legacy
+
+Grounding: MikroTik docs "WiFi" top-level page, `/console/inspect` for
+`/interface/wifi`, rosetta MCP. Hardware coverage from
+rosetta's device lookup.
+
+### `routeros-routing-v7`
+
+Routing was reorganized for v7. Key changes LLMs often miss:
+
+- Routing tables are first-class objects: `/routing/table/add name=... fib`
+- `/routing/rule` routes between tables (policy routing)
+- BGP, OSPF, RIP moved under `/routing/bgp`, `/routing/ospf`, `/routing/rip`
+  with new object models (instances, templates, peers/neighbors)
+- VRF (`/ip/vrf`) is usable
+- Route attributes (`/ip/route` vs legacy) and `gateway=` resolution
+- `routing-mark` → `.mark` in v7 / table assignment via rules
+- RPKI, BFD, MPLS-LDP settings
+
+LLMs very often write v6 syntax (`/ip/route/add routing-mark=...`) that no
+longer applies cleanly in v7.
+
+Grounding: MikroTik help.mikrotik.com pages under Routing, `/console/inspect`
+at `/routing/bgp/*` and `/ip/route`, rosetta MCP.
+
+### `routeros-firewall`
+
+Firewall is superficially similar to iptables but the model will default to
+iptables assumptions in subtle ways:
+
+- Chain ordering inside filter/nat/mangle (rules are position-ordered, not
+  priority-based)
+- `action=passthrough` vs `accept`/`drop`/`jump` semantics
+- `connection-state=new,established,related,invalid` and RouterOS's `untracked`
+- `raw` table — bypasses connection tracking (performance for DDoS)
+- `fasttrack-connection` and its interactions with mangle
+- Address-lists (`/ip/firewall/address-list`), dynamic vs static, timeout
+- `log=yes` + `log-prefix` for debugging, where logs show up (/log)
+- `in-interface-list` / `out-interface-list` — interface-list membership is
+  a powerful pattern LLMs rarely propose
+- Port protocol and service matchers (`protocol=tcp dst-port=80,443`)
+- IPv6 firewall (`/ipv6/firewall`) is separate — never forget this
+
+Grounding: MikroTik "Firewall" help pages, rosetta MCP, anchor examples in
+a future `test/firewall/` inside tikoci tooling.
+
+### `routeros-bridge-vlan`
+
+Bridge VLAN filtering is where real-world RouterOS configs break most often,
+and where LLMs most often give answers that "look right" but don't work on
+the actual chip offload.
+
+Key concepts:
+
+- `/interface/bridge` with `vlan-filtering=yes` changes the model entirely
+- `pvid=` on bridge ports (untagged ingress tagging)
+- `/interface/bridge/vlan` table — tagged vs untagged membership per VID
+- Frame types (`admit-only-untagged-and-priority-tagged`, etc.) on ports
+- MAC learning with vlan-filtering (per-VLAN FDB)
+- Hardware offload: `hw=yes` on bridge vs per-port, what that means on
+  different chips (CRS3xx, CRS5xx, RB5009, hEX series)
+- `ingress-filtering=yes` on bridge — widely recommended, often forgotten
+- In 7.16+, adding a VLAN to a bridge with `vlan-filtering=yes` and tagging
+  the bridge itself as tagged member **automatically creates** `/interface/bridge/vlan`
+  entries without explicit `/interface/bridge/vlan/add` — LLMs get this wrong
+
+**Anchor / rosetta stone: the mkvlan+lsbridge scripts**
+
+Two real scripts exist that are the authoritative implementation reference for
+this skill:
+
+1. **`$mkvlan` / `$rmvlan` / `$catvlan`** — MikroTik forum post by amm0:  
+   <https://forum.mikrotik.com/t/example-of-automating-vlan-creation-removal-inspecting-using-mkvlan-friends/181480>  
+   Also in lsp-routeros-ts corpus:  
+   `test-data/forum/amm0/topic-181480-*/post-0001-snippet-01.rsc`
+
+   What the script embodies (extract these as skill content, not the whole script):
+   - `vlan-filtering=yes` detection: `[/interface/bridge find vlan-filtering=yes]`
+   - Bridge-VLAN → IP address → DHCP → pool → interface-list → address-list atomically tagged with a consistent `comment=` (the "comment-as-tag" cleanup idiom)
+   - `%% [$pvid2array N]` spread operator to call a function with a computed dict
+   - `$pvid2array` → deterministic subnet mapping from PVID (IP addressing plan discipline)
+   - Removal by `[find comment=$tag]` across all subsystems — the single correct way to do paired create/remove scripting in RouterOS
+
+2. **`$lsbridge`** — L2 bridge topology viewer:  
+   <https://tikoci.github.io/scripts/lsbridge.rsc>  
+   (source URL, may require GH Pages access for raw content)
+
+   What it embodies:
+   - Walking `/interface/bridge/port/print detail as-value` and correlating with `/interface/bridge/vlan/print detail as-value`
+   - Displaying PVID, frame-type, hw=, tagged/untagged membership per port
+   - The difference between what WinBox shows and what the config actually is
+
+**Plan of attack for this skill:**
+
+The scripts are too large to embed verbatim. Instead:
+
+1. Extract the **mkvlan operation sequence** as an ordered CLI-command example:
+   the 7 paths touched in order (vlan → ip address → pool → dhcp-server →
+   dhcp-server/network → interface/list/member → firewall/address-list) with
+   the `comment=` tag pattern.
+
+2. Summarize the **7.16+ dynamic bridge/vlan rule** that makes access ports simpler
+   (one `pvid=` set vs. the old tagged= dance).
+
+3. Extract the **lsbridge inspection approach** as a "how to audit VLAN config"
+   section — which paths to `print detail as-value` and what fields matter.
+
+4. Add a minimal **IP addressing discipline** note (the `$pvid2array` idea):
+   always map VLAN IDs to subnets deterministically, example formula.
+
+The skill can cross-reference `routeros-scripting` for the `.rsc` idioms used
+and `routeros-fundamentals` for the bridge/interface background. This makes
+`routeros-bridge-vlan` primarily a *configuration correctness* skill, with
+scripting patterns embedded as "how to automate" examples rather than the focus.
+
+Grounding: MikroTik "Bridging and Switching" help pages; rosetta MCP for
+device-specific switch chip capabilities (`routeros_device_lookup`); the two
+anchor scripts above; lsp-routeros-ts corpus (`topic-147015-append-bridge-vlan-values`
+and related topics).
+
+### `routeros-certificates`
+
+Certificates touch IPsec, HTTPS (WebFig/REST), WireGuard (indirectly), SSTP,
+OpenVPN. The model often mixes OpenSSL semantics with RouterOS's.
+
+Key:
+
+- `/certificate/add` vs `/certificate/import` (different intents)
+- PEM vs DER detection, passphrase handling
+- SCEP, Let's Encrypt (`/certificate/enable-ssl-certificate-trust`)
+- Template → sign flow, self-signed CA creation
+- `key-usage=`, `trusted=` fields
+- Export (private key extraction) — restrictions
+- Certificate chain handling and common-name / subject-alt-name
+
+Grounding: MikroTik "Certificates" help page; CHR lab examples.
+
+---
+
+## M — New skills, medium value
+
+### `routeros-queues-qos`
+
+Simple queues vs queue tree vs CAKE vs HTB. Mangle marking patterns
+(`packet-mark` + `connection-mark` flow). Interface queue types.
+`pcq-rate`, `pcq-classifier`. Bufferbloat and CAKE (7.x+).
+
+LLMs tend to recommend queue-tree + mangle for everything even when a simple
+queue would work, because queue-tree looks more like tc.
+
+### `routeros-tools`
+
+`/tool/fetch` (the go-to HTTP client inside RouterOS), `/tool/traceroute`,
+`/tool/bandwidth-test`, `/tool/torch`, `/tool/ping-speed`, `/tool/profile`,
+`/tool/graphing`. The utility command set.
+
+`fetch` specifically — auth handling, headers, HTTPS cert validation defaults,
+`keep-result=no` for side-effect-only, saving to `/file`, multipart uploads.
+
+### `routeros-interface-lists`
+
+`/interface/list` + `/interface/list/member` is a foundational RouterOS
+pattern for firewall/policy that LLMs rarely surface. Worth a short skill.
+
+### `routeros-logging`
+
+`/system/logging` topics and actions (memory, disk, remote syslog, email).
+Log file rotation and retrieval. Which topics matter for which subsystem
+(`container`, `wireguard`, `wifi`, `dhcp`). A short skill — maybe one page —
+would prevent a lot of wrong advice.
+
+### `routeros-wireguard`
+
+Peer, endpoint, persistent-keepalive semantics. Key generation (`/interface/wireguard/peers/add`
+vs manual). Allowed-address and routing interactions. Preshared-keys.
+WireGuard on RouterOS has a few idiosyncrasies around `mtu` and firewall
+interactions worth grounding.
+
+### `routeros-vrrp`
+
+VRRP (Virtual Router Redundancy Protocol) on RouterOS. LLMs often suggest Linux
+keepalived or HSRP syntax instead of RouterOS's native VRRP implementation.
+
+Key:
+
+- `/interface/vrrp/add` — creates VRRP virtual interface
+- `vrid=` + `priority=` + `preemption-mode=`
+- VRRP interface used as gateway in DHCP server networks and routing
+- Event hooks: `on-master=`, `on-backup=`, `on-fail=` — NOT `tracked-interface=`
+  or `script=` (those properties do not exist on `/interface/vrrp`)
+- Common mistake: treating VRRP interface like a regular bridge/ethernet interface
+
+Grounding: MikroTik "VRRP" help page, `/console/inspect` at `/interface/vrrp`.
+
+### `routeros-files-and-backup`
+
+`/file` system, upload/download mechanisms (SCP, FTP, REST PUT, Winbox, WebFig),
+`/export` (plaintext config), `/system/backup/save` (binary), `.rsc` vs
+`.backup` semantics, restoring across hardware types.
+
+---
+
+## L — Nice to have, or could be references under existing skills
+
+- `routeros-hotspot` — captive portal, walled-garden. Large surface area
+  but niche in 2026.
+- `routeros-radius-usermanager` — RADIUS client/server, User Manager.
+- `routeros-snmp` — `/snmp`, community/v3, OIDs.
+- `routeros-ipv6` — might fit better as a reference file in firewall/routing
+  skills rather than its own top-level skill.
+- `routeros-api-proto` — the binary API on 8728/8729. Mostly legacy — REST is
+  preferred.
+- `routeros-dude` — The Dude monitoring. rosetta has a Dude dataset; a short
+  skill pointing at that MCP could be useful.
+- `routeros-tr069` — CWMP/TR-069 client config.
+
+---
+
+## Improvements to existing skills
+
+### `routeros-fundamentals`
+
+- Add a short section on **RouterOS version policy**: which channels map to
+  stable vs testing, what "long-term" means, how the `NEWESTa7.<channel>`
+  endpoint works. Some of this is in `version-parsing.md` but the "which
+  channel should I target?" decision isn't captured.
+- Add a pointer to the BACKLOG (this file) so model contributors know what's
+  planned vs what exists.
+- Add a short RouterOS object lifecycle note covering when to use direct
+  `enable`/`disable` commands versus `set disabled=yes|no` on resources like
+  routes, and call out that many menus expose both forms.
+
+### `routeros-qemu-chr`
+
+- **De-duplicate** acceleration/CPU-model advice with tikoci `quickchr` once
+  that project is published — the skill should describe *why* and point to
+  the project for the actual heuristic.
+- Consider adding a **boot-fail decision tree**: "image won't boot → is it
+  UEFI vs MBR?, correct pflash size?, virtio-blk-pci explicit on aarch64?,
+  KVM/HVF arch-match?".
+- The q35-vs-pc rationale now points to `tikoci/mikrotik-gpl` for kernel
+  config evidence — consider expanding the `references/` with a short
+  kernel-config summary pulled from that repo.
+
+### `routeros-container`
+
+- A short example of the common "container on bridge, container on L2, container
+  in its own L3" decision tree.
+- Note on external-disk requirement — currently mentioned but could be more
+  emphatic (USB / M.2 SSD; internal NAND does not have the IOPS).
+
+### `routeros-netinstall`
+
+- Keep the skill disciplined around **pure `netinstall-cli` behavior** and only
+  mention `tikoci/netinstall` as a wrapper/reference, not as the feature model.
+- Track unresolved behavior in `tikoci/netinstall/BACKLOG.md` instead of
+  guessing in the skill — especially the exact interaction matrix for `-r`,
+  `-e`, no flag, and `-s`.
+- Add more visible grounding where a version boundary matters, especially for
+  `-sm` requiring RouterOS + netinstall 7.22+ and for configure-script reset
+  persistence.
+
+### `routeros-command-tree`
+
+- A short worked example of turning `/console/inspect` output into a RAML or
+  JSON-Schema fragment, grounded in what `restraml` emits.
+
+---
+
+## Cross-cutting: grounding / footnote wishlist
+
+Per the repo's "less detail, but grounded" principle, these are places where
+existing claims would benefit from a visible grounding reference:
+
+- **Wherever a version is cited** (`7.18+`, `7.21+`, `7.22+`) — add a pointer
+  to the rosetta MCP query or `/console/inspect` diff that proves the
+  boundary. Version boundaries are the most common "one confident data point
+  becomes a general rule" failure mode.
+- **Anywhere a property name appears without a version qualifier** —
+  properties silently rename across versions (the most recent example: env/mount
+  reference properties 7.20 → 7.21). Default assumption should be "this may
+  have moved; verify via rosetta."
+- **Any "this works, that doesn't" claim** — should cite the anchor test or
+  lab notebook that exercises it. `bun-runtime-gotchas.md` does this well;
+  other references could copy the pattern.
+
+---
+
+## Skillstore / aiskillstore.com review notes
+
+PR [aiskillstore/marketplace#1454](https://github.com/aiskillstore/marketplace/pull/1454)
+auto-generated `skill-report.json` metadata for all 8 skills. All were marked
+safe/low risk and merged. No human review comments. Summary:
+
+**Their scheme (auto-generated from SKILL.md):** The skillstore extracts a
+structured marketplace record — `actual_capabilities` (6 items), `limitations`
+(4 items), `use_cases` (3), `prompt_templates` (4), `output_examples` (2-3),
+`best_practices` (3), `anti_patterns` (3), `faq` (6). The target reader of
+their scheme is a human browsing a marketplace, not an AI being grounded. Our
+goal (correcting specific model misbeliefs, lab-verified) is different.
+
+**Their template suggests:** `scripts/` (executable scripts), `assets/`
+(static files), and additional `references/` files for each skill. None of
+these apply to our grounding-first approach: we ship documentation, not
+executables. Our existing `references/` pattern (e.g. `routeros-fundamentals/references/`,
+`routeros-qemu-chr/references/`) already exceeds their "more ref files"
+suggestion. The `scripts/` and `assets/` dirs are not worth adding — they
+imply content we deliberately don't include (third-party artifacts,
+screenshots, helper tooling).
+
+**Don't chase:** exact item-count targets, SEO keywords, beginner/expert
+persona scaffolding, trivial limitations like "does not connect to live
+devices". Their template metrics don't map to grounding quality.
+
+**One genuinely useful signal:** their auto-generated `output_examples`
+describe *what a correct answer should contain* (not just what the LLM should
+know). This is a grounding discipline gap. See "Output contracts" below.
+
+### Skill output contracts (correct-answer specimens)
+
+Currently our skills describe **what the LLM needs to know**, but not **what a
+correct AI response looks like** for a characteristic query. The skillstore
+generates these mechanically from skill content; the concept is valid even if
+their specific format isn't.
+
+An "output contract" for a skill would be a pair like:
+
+```text
+Q: "Create a VETH interface and bridge for a container with IP 172.17.0.2"
+Expected: <actual RouterOS CLI block, not prose>
+```
+
+Adding 1-2 of these to a `references/` file per skill would:
+
+- Improve grounding (LLM can pattern-match against a known-good example)
+- Surface any content gaps in the skill (if you can't write the correct
+  answer, the skill isn't grounded enough)
+- Serve as a lightweight regression test for skill accuracy
+
+The `device-mode-rest.md`, `async-commands-rest.md`, and `bun-runtime-gotchas.md`
+already do this implicitly (lab-verified exact responses). The pattern should be
+generalized to skills where "write the correct syntax" is the core value.
+
+Priority: M — useful but not blocking. Start with `routeros-scripting` (if/when
+created) since it's the skill where LLM output quality is hardest to verify.
+
+---
+
+## Housekeeping
+
+- Consider a `CONTRIBUTING.md` or section in the README that codifies the
+  "grounding discipline" — each non-obvious claim cites a public tikoci repo,
+  mikrotik.com docs URL, `/console/inspect` query, or anchor test.
+- Consider adding a simple CI check that each SKILL.md starts with valid
+  frontmatter and a leading `# Title` heading, and that `references/*.md`
+  linked from a SKILL actually exist.

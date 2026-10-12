@@ -1,0 +1,9 @@
+
+:global globalScriptBeforeRun;
+$globalScriptBeforeRun "doLEDon";
+
+/system leds settings set all-leds-off=never;
+
+
+
+

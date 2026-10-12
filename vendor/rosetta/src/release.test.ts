@@ -1,0 +1,1466 @@
+/**
+ * release.test.ts — Release readiness tests.
+ *
+ * Validates that project files are consistent and release artifacts
+ * will be built correctly. No network, no database — just file reads
+ * and structural checks.
+ */
+import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+
+function readText(relPath: string): string {
+  return readFileSync(path.join(ROOT, relPath), "utf-8");
+}
+
+function mustIndex(haystack: string, needle: string): number {
+  const idx = haystack.indexOf(needle);
+  expect(idx).toBeGreaterThanOrEqual(0);
+  return idx;
+}
+
+function getPhonyBlock(makefile: string): string {
+  const phonyStart = mustIndex(makefile, ".PHONY:");
+  const blankLine = makefile.indexOf("\n\n", phonyStart);
+  const phonyEnd = blankLine === -1 ? makefile.length : blankLine;
+  return makefile.slice(phonyStart, phonyEnd);
+}
+
+function getWorkflowShellFunction(workflow: string, name: string): string {
+  const start = mustIndex(workflow, `          ${name}() {`);
+  const nextFunction = workflow.indexOf("\n          ensure_release_exists() {", start + 1);
+  const end = nextFunction === -1 ? workflow.indexOf("\n          if [", start + 1) : nextFunction;
+  expect(end).toBeGreaterThan(start);
+  return workflow.slice(start, end).replace(/^ {10}/gm, "");
+}
+
+// ---------------------------------------------------------------------------
+// package.json health
+// ---------------------------------------------------------------------------
+
+describe("package.json", () => {
+  const pkg = JSON.parse(readText("package.json"));
+
+  test("version is valid semver, optionally with the -next prerelease channel suffix", () => {
+    // release.yml's "Determine npm release channel" step reads this committed
+    // value as the single source of truth: a bare MAJOR.MINOR.PATCH means
+    // latest, a -next or -next.N suffix means the `next` dist-tag (#152).
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(-next(\.\d+)?)?$/);
+  });
+
+  test("name is @tikoci/rosetta", () => {
+    expect(pkg.name).toBe("@tikoci/rosetta");
+  });
+
+  test("repository URL contains tikoci/rosetta", () => {
+    expect(pkg.repository.url).toContain("tikoci/rosetta");
+  });
+
+  test("no duplicate scripts that Makefile owns", () => {
+    const makefileOwned = ["start", "extract", "assess", "search"];
+    for (const name of makefileOwned) {
+      expect(pkg.scripts[name]).toBeUndefined();
+    }
+  });
+
+  test("required scripts exist", () => {
+    expect(pkg.scripts.test).toBeDefined();
+    expect(pkg.scripts.typecheck).toBeDefined();
+    expect(pkg.scripts.lint).toBeDefined();
+  });
+
+  test("bin points to JS shim", () => {
+    expect(pkg.bin.rosetta).toBe("bin/rosetta.js");
+  });
+
+  test("files includes bin/, src/, matrix/", () => {
+    expect(pkg.files).toContain("bin/");
+    expect(pkg.files).toContain("src/");
+    expect(pkg.files).toContain("matrix/");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// npm bin shim
+// ---------------------------------------------------------------------------
+
+describe("bin/rosetta.js", () => {
+  test("shim exists", () => {
+    expect(existsSync(path.join(ROOT, "bin/rosetta.js"))).toBe(true);
+  });
+
+  test("has a bun shebang, so bunx runs it under Bun in one process (#175)", () => {
+    const src = readText("bin/rosetta.js");
+    expect(src.startsWith("#!/usr/bin/env bun")).toBe(true);
+  });
+
+  test("detects Bun runtime", () => {
+    const src = readText("bin/rosetta.js");
+    expect(src).toContain('typeof Bun !== "undefined"');
+  });
+
+  test("falls back to spawning bun for Node, and speaks only when Bun is missing", () => {
+    const src = readText("bin/rosetta.js");
+    expect(src).toContain('spawn("bun"');
+    expect(src).toContain('err.code === "ENOENT"');
+    expect(src).not.toContain("Attempting to run via bun");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Build constants declarations
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// db-sync / db-doctor — local grounding tooling (#94)
+// ---------------------------------------------------------------------------
+
+describe("db grounding tooling", () => {
+  test("package.json wires db:doctor and db:sync to the scripts (db:sync is NOT --refresh)", () => {
+    const pkg = JSON.parse(readText("package.json"));
+    expect(pkg.scripts["db:doctor"]).toBe("bun run scripts/db-doctor.ts");
+    expect(pkg.scripts["db:sync"]).toBe("bun run scripts/db-sync.ts");
+    // --refresh pins to the placeholder package version and falls back to the
+    // newest *stable* (older schema) — the exact bug db-sync exists to avoid.
+    expect(pkg.scripts["db:sync"]).not.toContain("--refresh");
+  });
+
+  test("db-sync discovers releases (prereleases included) via gh and passes the ordered candidate list to downloadDb", () => {
+    const src = readText("scripts/db-sync.ts");
+    expect(src).toContain("gh api");
+    expect(src).toContain("ros-help.db.gz");
+    // Must hand downloadDb the WHOLE ordered candidate list (not just the newest
+    // tag) so it can walk down past a higher-schema release to the newest one
+    // that matches this checkout — finding #2 in the Codex review of #113.
+    expect(src).toContain("tags.map");
+    expect(src).toContain("downloadDb(dbPath, console.log, urls)");
+  });
+
+  test("Makefile db-sync/db-doctor targets are declared .PHONY and call the scripts", () => {
+    const mk = readText("Makefile");
+    const phony = getPhonyBlock(mk);
+    expect(phony).toContain("db-doctor");
+    expect(phony).toContain("db-sync");
+    expect(mk).toContain("bun run scripts/db-doctor.ts");
+    expect(mk).toContain("bun run scripts/db-sync.ts");
+  });
+});
+
+describe("build-time constants", () => {
+  test("mcp.ts imports resolveVersion from paths.ts", () => {
+    const src = readText("src/mcp.ts");
+    expect(src).toContain("resolveVersion");
+  });
+
+  test("mcp.ts does not have hardcoded version fallback", () => {
+    const src = readText("src/mcp.ts");
+    expect(src).not.toContain('"0.2.0"');
+    expect(src).not.toContain("\"dev\"");
+  });
+
+  test("paths.ts declares IS_COMPILED and VERSION", () => {
+    const src = readText("src/paths.ts");
+    expect(src).toContain("declare const IS_COMPILED");
+    expect(src).toContain("declare const VERSION");
+  });
+
+  test("setup.ts declares REPO_URL and imports resolveVersion", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("declare const REPO_URL");
+    expect(src).toContain("resolveVersion");
+  });
+
+  test("build script injects all three constants", () => {
+    const src = readText("scripts/build-release.ts");
+    expect(src).toContain("VERSION=");
+    expect(src).toContain("REPO_URL=");
+    expect(src).toContain("IS_COMPILED=");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Build script structure
+// ---------------------------------------------------------------------------
+
+describe("build-release.ts", () => {
+  test("script exists", () => {
+    expect(existsSync(path.join(ROOT, "scripts/build-release.ts"))).toBe(true);
+  });
+
+  test("defines all 4 platform targets", () => {
+    const src = readText("scripts/build-release.ts");
+    expect(src).toContain("macos-arm64");
+    expect(src).toContain("macos-x64");
+    expect(src).toContain("windows-x64");
+    expect(src).toContain("linux-x64");
+  });
+
+  test("uses bun build --compile", () => {
+    const src = readText("scripts/build-release.ts");
+    expect(src).toContain("--compile");
+  });
+
+  test("passes JavaScript literals to Bun defines without embedding shell quotes", () => {
+    const src = readText("scripts/build-release.ts");
+    expect(src).toContain('const runtimeVersion = requestedVersion.replace(/^v+/, "")');
+    expect(src).toMatch(/const releaseTag = `v\$\{runtimeVersion\}`/);
+    expect(src).toMatch(/`VERSION=\$\{JSON\.stringify\(runtimeVersion\)\}`/);
+    expect(src).toMatch(/`REPO_URL=\$\{JSON\.stringify\(REPO_URL\)\}`/);
+    expect(src).not.toMatch(/VERSION='\$\{JSON\.stringify\(runtimeVersion\)\}'/);
+    expect(src).not.toMatch(/REPO_URL='\$\{JSON\.stringify\(REPO_URL\)\}'/);
+  });
+
+  test("compresses database", () => {
+    const src = readText("scripts/build-release.ts");
+    expect(src).toContain("ros-help.db.gz");
+  });
+
+  test("release build and publish jobs pin the compiled-binary toolchain", () => {
+    const src = readText(".github/workflows/release.yml");
+    const buildJob = src.slice(mustIndex(src, "\n  build:"), mustIndex(src, "\n  qa:"));
+    const publishJob = src.slice(mustIndex(src, "\n  publish:"), mustIndex(src, "\n  verify-dist-tags:"));
+    expect(buildJob).toContain("bun-version: 1.3.14");
+    expect(publishJob).toContain("bun-version: 1.3.14");
+  });
+
+  test("OCI tags keep v prefix while the compiled runtime receives bare semver", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).toMatch(/VERSION="v\$\{RUNTIME_VERSION\}"/);
+    expect(src).toMatch(/tags\+=\(--tag "\$\{registry\}:\$\{VERSION\}"/);
+    expect(src).not.toMatch(/tags\+=\(--tag "\$\{registry\}:\$\{RUNTIME_VERSION\}"/);
+    expect(src).toContain('--build-arg VERSION="$RUNTIME_VERSION"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setup.ts URL consistency
+// ---------------------------------------------------------------------------
+
+describe("setup.ts", () => {
+  test("REPO_URL fallback matches package.json repository", () => {
+    const src = readText("src/setup.ts");
+    const pkg = JSON.parse(readText("package.json"));
+
+    // Extract the fallback repo string: `? REPO_URL : "tikoci/rosetta"`
+    const match = src.match(/REPO_URL\s*:\s*"([^"]+)"/);
+    expect(match).not.toBeNull();
+
+    const fallbackRepo = match?.[1];
+    expect(pkg.repository.url).toContain(fallbackRepo);
+  });
+
+  test("downloads from GitHub Releases URL", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("github.com/");
+    // Now uses both a version-pinned URL and a /latest/ fallback (see dbDownloadUrls).
+    expect(src).toContain("/releases/download/");
+    expect(src).toContain("/releases/latest/download/ros-help.db.gz");
+  });
+
+  test("validates SQLite magic bytes before writing the canonical DB path", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("SQLite format 3");
+  });
+
+  test("writes to a .tmp file and renames atomically", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain(".tmp.");
+    expect(src).toContain("renameSync");
+  });
+
+  test("clears stale WAL/SHM siblings on download", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("-wal");
+    expect(src).toContain("-shm");
+  });
+
+  test("exports a quiet refreshDb path used by --refresh", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("export async function refreshDb");
+    const mcp = readText("src/mcp.ts");
+    expect(mcp).toContain("refreshDb");
+  });
+
+  test("serializes package DB preparation with a sidecar lock", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain(".lock");
+    expect(src).toContain("tryAcquireDownloadLock");
+    expect(src).toContain("waitForUsableDb");
+  });
+
+  test("mcp.ts fails hard on persistent schema mismatch (no silent fall-through)", () => {
+    const src = readText("src/mcp.ts");
+    // Must call process.exit on the unrecoverable schema-mismatch path
+    expect(src).toContain("Still incompatible after re-download");
+    expect(src).toMatch(/Still incompatible[\s\S]{0,500}(throw new Error|process\.exit\(1\))/);
+  });
+
+  test("mcp.ts aborts startup instead of continuing with an empty DB", () => {
+    const src = readText("src/mcp.ts");
+    expect(src).toContain("Unable to start rosetta without a usable database");
+    expect(src).toContain("Database remained incomplete after recovery");
+  });
+
+  test("mcp.ts uses checkDbFreshness (schema + release-tag) rather than a schema-only check (#76/#23)", () => {
+    const src = readText("src/mcp.ts");
+    expect(src).toContain("checkDbFreshness");
+    // detectMode is required so dev-mode DBs (release_tag not tied to a
+    // publish) never trigger a network redownload on release-tag drift alone.
+    expect(src).toContain("detectMode");
+  });
+
+  test("mcp.ts degrades gracefully instead of crashing on a non-fatal (release-tag-only) refresh failure", () => {
+    const src = readText("src/mcp.ts");
+    const warnIdx = mustIndex(src, "Refresh check failed");
+    const elseIdx = mustIndex(src, "} else {");
+    expect(elseIdx).toBeGreaterThan(warnIdx);
+    // The branch between the warning log and the `else` (hard-fail) branch
+    // must not throw — a release-tag-only mismatch keeps serving the
+    // existing, schema-current DB instead of crashing startup.
+    const gracefulBranch = src.slice(warnIdx, elseIdx);
+    expect(gracefulBranch).not.toContain("throw");
+    expect(gracefulBranch).toContain("p = previous;");
+  });
+
+  test("mcp.ts honors ROSETTA_OFFLINE=1 by skipping the network attempt, not by letting it fail slowly", () => {
+    const src = readText("src/mcp.ts");
+    expect(src).toContain('process.env.ROSETTA_OFFLINE === "1"');
+
+    // The offline short-circuit must sit inside the try block, ahead of the
+    // real downloadDb() call, so it reuses the exact same hard-fail-vs-graceful
+    // catch branching as a real network failure rather than duplicating it.
+    // (downloadDb() is called twice in this file — Case 1 and Case 2 — so
+    // search for the occurrence after the offline throw, not the first one.)
+    const offlineThrowIdx = mustIndex(src, 'throw new Error("ROSETTA_OFFLINE=1 set; not attempting a network download")');
+    const downloadCallIdx = src.indexOf("p = await downloadDb(dbPath, log);", offlineThrowIdx);
+    expect(downloadCallIdx).toBeGreaterThan(offlineThrowIdx);
+  });
+
+  test("mcp.ts fails fast under ROSETTA_OFFLINE=1 when no DB exists at all (nothing to fall back to)", () => {
+    const src = readText("src/mcp.ts");
+    const offlineNoDbIdx = mustIndex(
+      src,
+      "ROSETTA_OFFLINE=1 set and no usable database exists",
+    );
+    const firstDownloadCallIdx = mustIndex(src, "p = await downloadDb(dbPath, log);");
+    // This check must guard the very first download attempt (Case 1: missing/
+    // empty DB) — placed before it, not folded into the Case 2 freshness logic.
+    expect(offlineNoDbIdx).toBeLessThan(firstDownloadCallIdx);
+  });
+
+  test("setup.ts exports checkDbFreshness as a pure, unit-tested decision function", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("export function checkDbFreshness");
+  });
+
+  test("setup.ts cleans temp DB artifacts instead of accumulating stale .tmp files", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("cleanupStaleTempArtifacts");
+    expect(src).toContain("cleanupAbandonedTempArtifacts");
+    expect(src).toContain("tryUnlinkDbSidecars(tmpPath)");
+  });
+
+  test("setup.ts finalizes probe statements before renaming temp DBs", () => {
+    const src = readText("src/setup.ts");
+    expect(src).toContain("stmt.finalize()");
+    expect(src).toContain("sqliteGet");
+  });
+
+  test("readonly opens are limited to rollback-mode managed DBs (WAL-shm init trap on macOS)", () => {
+    // Freshly-renamed WAL-mode DBs fail to open readonly on macOS until a
+    // read-write connection initialises the .shm file (v0.8.0 "DB=unreadable").
+    // Managed package generations open readonly (#151), so every download is
+    // converted to rollback-journal mode before it is probed or published, and
+    // db.ts gates readonly on the managed-path check.
+    const strip = (file: string) => readText(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    for (const file of ["src/mcp.ts", "src/setup.ts"]) {
+      expect(strip(file)).not.toMatch(/readonly\s*:\s*true/);
+    }
+    expect(strip("src/db.ts")).toContain("DB_READONLY ? new sqlite(DB_PATH, { readonly: true }) : new sqlite(DB_PATH)");
+    const setup = strip("src/setup.ts");
+    expect(setup.indexOf("convertToRollbackJournal(tmpPath)")).toBeGreaterThan(-1);
+    expect(setup.indexOf("convertToRollbackJournal(tmpPath)")).toBeLessThan(setup.indexOf("probeDb(tmpPath)"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// db_meta provenance + stamp script
+// ---------------------------------------------------------------------------
+
+describe("db_meta provenance", () => {
+  test("stamp-db-meta.ts script exists and accepts --release-tag", () => {
+    const src = readText("scripts/stamp-db-meta.ts");
+    expect(src).toContain("--release-tag");
+    expect(src).toContain("CREATE TABLE IF NOT EXISTS db_meta");
+  });
+
+  test("release.yml stamps db_meta after extraction", () => {
+    const yml = readText(".github/workflows/release.yml");
+    expect(yml).toContain("scripts/stamp-db-meta.ts");
+    expect(yml).toContain("--release-tag");
+    expect(yml).toContain("--source-commit");
+  });
+
+  test("db.ts exposes setDbMeta / getDbMeta helpers", () => {
+    const src = readText("src/db.ts");
+    expect(src).toContain("export function setDbMeta");
+    expect(src).toContain("export function getDbMeta");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Makefile has release targets
+// ---------------------------------------------------------------------------
+
+describe("Makefile", () => {
+  const makefile = readText("Makefile");
+
+  test("has preflight target", () => {
+    expect(makefile).toContain("preflight:");
+  });
+
+  test("has verify target", () => {
+    expect(makefile).toContain("verify:");
+  });
+
+  test("has extract-videos target", () => {
+    expect(makefile).toContain("extract-videos:");
+  });
+
+  test("extract-videos is in PHONY", () => {
+    // PHONY uses line continuation; check block before first blank line after .PHONY
+    const phonyBlock = getPhonyBlock(makefile);
+    expect(phonyBlock).toContain("extract-videos");
+  });
+
+  test("has extract-dude target", () => {
+    expect(makefile).toContain("extract-dude:");
+  });
+
+  test("has extract-dude-from-cache target", () => {
+    expect(makefile).toContain("extract-dude-from-cache:");
+  });
+
+  test("has extract-skills target", () => {
+    expect(makefile).toContain("extract-skills:");
+  });
+
+  test("has extract-skills-from-cache target", () => {
+    expect(makefile).toContain("extract-skills-from-cache:");
+  });
+
+  test("extract-skills is in PHONY", () => {
+    const phonyBlock = getPhonyBlock(makefile);
+    expect(phonyBlock).toContain("extract-skills");
+  });
+
+  test("has gc-versions target with EXTRA_FLAGS passthrough", () => {
+    expect(makefile).toContain("gc-versions:");
+    expect(makefile).toContain("src/gc-versions.ts $(EXTRA_FLAGS)");
+  });
+
+  test("gc-versions is in PHONY", () => {
+    const phonyBlock = getPhonyBlock(makefile);
+    expect(phonyBlock).toContain("gc-versions");
+  });
+
+  test("extract-dude is in PHONY", () => {
+    const phonyBlock = getPhonyBlock(makefile);
+    expect(phonyBlock).toContain("extract-dude");
+  });
+
+  test("extract target includes Dude cache import", () => {
+    expect(makefile).toMatch(/^extract:.*extract-dude-from-cache/m);
+  });
+
+  test("extract target includes skills", () => {
+    expect(makefile).toMatch(/^extract:.*extract-skills/m);
+  });
+
+  test("extract-full target includes skills", () => {
+    expect(makefile).toMatch(/^extract-full:.*extract-skills/m);
+  });
+
+  test("extract-full target includes Dude cache import", () => {
+    expect(makefile).toMatch(/^extract-full:.*extract-dude-from-cache/m);
+  });
+
+  test("has extract-docusaurus and extract-docusaurus-from-cache targets", () => {
+    expect(makefile).toContain("extract-docusaurus:");
+    expect(makefile).toContain("extract-docusaurus-from-cache:");
+  });
+
+  test("extract-docusaurus is in PHONY", () => {
+    const phonyBlock = getPhonyBlock(makefile);
+    expect(phonyBlock).toContain("extract-docusaurus");
+  });
+
+  test("extract/extract-full use extract-docusaurus, not the legacy Confluence pipeline", () => {
+    // T-0035: extract-docusaurus.ts replaces extract-html.ts's role in the default
+    // pipeline. extract-html.ts survives only via extract-legacy-confluence, for
+    // rebuilding historical pre-migration release DBs (DESIGN.md).
+    expect(makefile).toMatch(/^extract: extract-docusaurus\b/m);
+    expect(makefile).toMatch(/^extract-full: extract-docusaurus\b/m);
+    expect(makefile).not.toMatch(/^extract:.*extract-html\b/m);
+    expect(makefile).not.toMatch(/^extract-full:.*extract-html\b/m);
+  });
+
+  test("has extract-legacy-confluence target wrapping extract-html + extract-properties", () => {
+    expect(makefile).toMatch(/^extract-legacy-confluence:.*extract-html.*extract-properties/m);
+  });
+
+  test("preflight checks dirty tree", () => {
+    expect(makefile).toContain("git diff --quiet");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CI release workflow
+// ---------------------------------------------------------------------------
+
+describe("release.yml", () => {
+  test("workflow file exists", () => {
+    expect(existsSync(path.join(ROOT, ".github/workflows/release.yml"))).toBe(
+      true,
+    );
+  });
+
+  test("has required inputs", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).not.toContain("html_url:");
+    expect(src).not.toContain("extract-html.ts");
+    expect(src).not.toContain("extract-properties.ts");
+    expect(src).toContain("version:");
+    expect(src).toContain("republish_assets:");
+    expect(src).not.toContain("inputs.force");
+  });
+
+  describe("npm prerelease channel", () => {
+    const src = readText(".github/workflows/release.yml");
+    const channelIdx = mustIndex(src, "Determine npm release channel");
+    const changelogGateIdx = mustIndex(
+      src,
+      "Verify CHANGELOG promotion for latest-channel release",
+    );
+    const preflightIdx = mustIndex(src, "Verify npm publish access");
+    const resolveVersionIdx = mustIndex(src, "Resolve release version");
+    const installIdx = mustIndex(src, "bun install");
+
+    test("channel detection runs before any preflight/publish step reads package.json's version", () => {
+      expect(installIdx).toBeLessThan(channelIdx);
+      expect(channelIdx).toBeLessThan(changelogGateIdx);
+      expect(channelIdx).toBeLessThan(preflightIdx);
+      expect(channelIdx).toBeLessThan(resolveVersionIdx);
+    });
+
+    test("parses a MAJOR.MINOR.PATCH-<stage> or -<stage>.N package.json version into channel/npm_tag outputs", () => {
+      const channelBlock = src.slice(channelIdx, changelogGateIdx);
+      expect(channelBlock).toContain(
+        "^([0-9]+\\.[0-9]+\\.[0-9]+)-([A-Za-z]+)(\\.[0-9]+)?$",
+      );
+      expect(channelBlock).toContain("channel=prerelease");
+      expect(channelBlock).toContain("channel=latest");
+      expect(channelBlock).toContain("npm_tag=next");
+      expect(channelBlock).toContain("npm_tag=latest");
+    });
+
+    test("accepts only the next prerelease stage; retired alpha/beta/rc fail loudly (#152)", () => {
+      const channelBlock = src.slice(channelIdx, changelogGateIdx);
+      // Exact, case-sensitive match: 0.11.3-NEXT must not be normalized and accepted.
+      expect(channelBlock).toContain('if [ "$STAGE" != "next" ]; then');
+      expect(channelBlock).not.toContain("tr '[:upper:]' '[:lower:]'");
+      expect(channelBlock).toMatch(/::error::Unrecognized prerelease stage/);
+      expect(channelBlock).toContain("exit 1");
+      expect(channelBlock).not.toContain("alpha|beta|rc) ;;");
+    });
+
+    test("a prerelease must be semver-newer than latest and next before anything builds (#152)", () => {
+      const aheadIdx = mustIndex(src, "Verify prerelease is ahead of latest and next");
+      expect(channelIdx).toBeLessThan(aheadIdx);
+      expect(aheadIdx).toBeLessThan(changelogGateIdx);
+      const aheadBlock = src.slice(aheadIdx, changelogGateIdx);
+      expect(aheadBlock).toContain("steps.channel.outputs.channel == 'prerelease'");
+      expect(aheadBlock).toContain("for TAG in latest next; do");
+      expect(aheadBlock).toContain(`npm view "@tikoci/rosetta@\${TAG}" version`);
+      expect(aheadBlock).toContain("Bun.semver.order('$NEW', '$CURRENT')");
+      expect(aheadBlock).toMatch(/::error::Prerelease \$NEW is not newer than \$\{TAG\}/);
+    });
+
+    test("a version matching neither the prerelease nor the bare-semver shape fails loudly instead of silently falling through to latest", () => {
+      const channelBlock = src.slice(channelIdx, changelogGateIdx);
+      // Bare-latest branch must be gated on a strict semver regex, not a bare `else`
+      // catch-all — otherwise a typo'd prerelease shape (e.g. "0.11.0-alpha1" with
+      // no separator, or a 4-part version) would silently publish as `latest`.
+      expect(channelBlock).toMatch(
+        /elif \[\[ "\$PKG_VERSION" =~ \^\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$ \]\]; then/,
+      );
+      expect(channelBlock).toMatch(
+        /::error::package\.json version '\$PKG_VERSION' doesn't match a recognized shape/,
+      );
+    });
+
+    test("rewrites package.json's version in-place with a run-number suffix for prerelease, workspace-only (not committed)", () => {
+      const channelBlock = src.slice(channelIdx, changelogGateIdx);
+      expect(channelBlock).toContain(`\${BASE}-next.\${GITHUB_RUN_NUMBER}`);
+      expect(channelBlock).toContain("fs.writeFileSync('package.json'");
+      expect(channelBlock).not.toContain("git add package.json");
+      expect(channelBlock).not.toContain("git commit");
+    });
+
+    test("republish_assets: true skips the package.json rewrite and requires an exact inputs.version for prerelease republishes", () => {
+      const channelBlock = src.slice(channelIdx, changelogGateIdx);
+      expect(channelBlock).toMatch(/if \[ "\$REPUBLISH_ASSETS" = "true" \]/);
+      expect(channelBlock).toMatch(
+        /republish_assets=true with a prerelease package\.json version.*requires inputs\.version/,
+      );
+      expect(channelBlock).toContain(
+        "package.json version left as committed",
+      );
+    });
+
+    test("republish_assets and version inputs are read via env:, not interpolated directly into the shell script (template-injection guard)", () => {
+      const channelBlock = src.slice(channelIdx, changelogGateIdx);
+      expect(channelBlock).toContain(`REPUBLISH_ASSETS: \${{ inputs.republish_assets }}`);
+      expect(channelBlock).toContain(`INPUT_VERSION: \${{ inputs.version }}`);
+      expect(channelBlock).not.toMatch(/\[ .*"\$\{\{ inputs\./);
+    });
+
+    test("latest-channel CHANGELOG gate fails without a matching [<version>] heading, skips for prerelease and republish", () => {
+      const gateIdx2 = mustIndex(src, "Verify npm publish access");
+      const gateBlock = src.slice(changelogGateIdx, gateIdx2);
+      expect(gateBlock).toContain('if: inputs.republish_assets != true');
+      expect(gateBlock).toContain('steps.channel.outputs.channel');
+      expect(gateBlock).toContain('grep -qF "## [$PKG_VERSION]" CHANGELOG.md');
+      expect(gateBlock).toMatch(/::error::CHANGELOG\.md has no/);
+    });
+
+    test("npm publish uses --tag next for prerelease; latest publishes bare and moves next only when the decision step says so", () => {
+      const publishIdx = mustIndex(src, "Publish to npm");
+      const readBackIdx = mustIndex(src, "Read back npm dist-tags");
+      const publishBlock = src.slice(publishIdx, readBackIdx);
+      expect(publishBlock).toContain(
+        "npm publish --access public --tag next --registry https://registry.npmjs.org/",
+      );
+      // Reads PKG_NAME from package.json dynamically rather than hardcoding
+      // the package name, so a rename can't silently drift out of sync.
+      expect(publishBlock).toContain(
+        "PKG_NAME=$(node -p \"require('./package.json').name\")",
+      );
+      expect(publishBlock).toContain(
+        `npm dist-tag add "\${PKG_NAME}@\${NPM_VERSION}" next`,
+      );
+      expect(publishBlock).toContain('if [ "$MOVE_NEXT" = "true" ]; then');
+      expect(publishBlock).toContain(
+        "npm publish --access public --registry https://registry.npmjs.org/",
+      );
+    });
+
+    test("a stable publish moves next only when next is semver-lower; one decision drives npm and OCI (#152)", () => {
+      const decideIdx = mustIndex(src, "Decide whether this run moves next");
+      const ociIdx = mustIndex(src, "Build and push OCI images");
+      const publishIdx = mustIndex(src, "Publish to npm");
+      expect(decideIdx).toBeLessThan(ociIdx);
+      const decideBlock = src.slice(decideIdx, ociIdx);
+      expect(decideBlock).toContain("id: next_tag");
+      expect(decideBlock).toContain('npm view "@tikoci/rosetta@next" version');
+      expect(decideBlock).toContain("Bun.semver.order('$NEW', '$CURRENT')");
+      expect(decideBlock).toContain("code E404");
+      expect(decideBlock).toContain('echo "move=false"');
+      const moveEnv = `MOVE_NEXT: \${{ steps.next_tag.outputs.move }}`;
+      expect(src.slice(ociIdx, publishIdx)).toContain(moveEnv);
+      expect(src.slice(publishIdx)).toContain(moveEnv);
+    });
+
+    test("after publishing, a read-back fails the run unless this run's tag resolves to it and next ≥ latest (#152)", () => {
+      // Its own job since #176, so a slow registry can't skip the install smoke.
+      const jobIdx = mustIndex(src, "\n  verify-dist-tags:");
+      const smokeIdx = mustIndex(src, "\n  smoke:");
+      const jobBlock = src.slice(jobIdx, smokeIdx);
+      expect(jobBlock).toMatch(/needs:\s*\[build,\s*publish\]/);
+      expect(jobBlock).toContain("if: inputs.republish_assets != true");
+      expect(jobBlock).toContain("for i in {1..180}; do");
+      const readBackBlock = jobBlock.slice(mustIndex(jobBlock, "Read back npm dist-tags"));
+      expect(readBackBlock).toContain("npm view @tikoci/rosetta dist-tags --json");
+      expect(readBackBlock).toContain("Bun.semver.order(tags.next, tags.latest) >= 0");
+      expect(readBackBlock).toContain("own === process.env.NPM_VERSION");
+      expect(readBackBlock).toMatch(/::error::npm dist-tags did not settle/);
+    });
+
+    test("OCI tags align with npm scheme: version+sha always, floating next for prerelease, latest (+next when moved) for latest channel, republish never moves floating tags", () => {
+      const ociIdx = mustIndex(src, "Build and push OCI images");
+      const smokeIdx = mustIndex(src, "Smoke test published OCI images");
+      const ociBlock = src.slice(ociIdx, smokeIdx);
+      expect(ociBlock).toContain(`tags+=(--tag "\${registry}:\${VERSION}" --tag "\${registry}:sha-\${SHORT_SHA}")`);
+      expect(ociBlock).toContain(`tags+=(--tag "\${registry}:next")`);
+      expect(ociBlock).toContain(`tags+=(--tag "\${registry}:latest")`);
+      expect(ociBlock).toContain('if [ "$MOVE_NEXT" = "true" ]; then');
+      expect(ociBlock).not.toContain("STAGE");
+      // republish_assets is read via env: (template-injection guard), not
+      // interpolated directly into the `if [ ... ]` shell test.
+      expect(ociBlock).toContain(`REPUBLISH_ASSETS: \${{ inputs.republish_assets }}`);
+      expect(ociBlock).toMatch(/if \[ "\$REPUBLISH_ASSETS" != "true" \]/);
+    });
+
+    test("GitHub Release is created with --prerelease for prerelease channel runs", () => {
+      const releaseIdx = mustIndex(src, "Create or update GitHub Release");
+      const publishIdx = mustIndex(src, "Publish to npm");
+      const releaseBlock = src.slice(releaseIdx, publishIdx);
+      expect(releaseBlock).toContain("PRERELEASE_FLAGS=(--prerelease)");
+      expect(releaseBlock).toContain('needs.build.outputs.channel');
+      expect(releaseBlock).toContain(`"\${PRERELEASE_FLAGS[@]}"`);
+    });
+
+    test("docs_date and republish_assets inputs are read via env: in the GitHub Release step (template-injection guard)", () => {
+      const releaseIdx = mustIndex(src, "Create or update GitHub Release");
+      const publishIdx = mustIndex(src, "Publish to npm");
+      const releaseBlock = src.slice(releaseIdx, publishIdx);
+      expect(releaseBlock).toContain(`DOCS_DATE: \${{ inputs.docs_date }}`);
+      expect(releaseBlock).toContain(`REPUBLISH_ASSETS: \${{ inputs.republish_assets }}`);
+      expect(releaseBlock).toMatch(/if \[ "\$REPUBLISH_ASSETS" = "true" \]/);
+      expect(releaseBlock).not.toContain(`DOCS_DATE="\${{ inputs.docs_date }}"`);
+    });
+
+    test("the release body leads with the CHANGELOG block, then the stats (#22)", () => {
+      const releaseIdx = mustIndex(src, "Create or update GitHub Release");
+      const publishIdx = mustIndex(src, "Publish to npm");
+      const releaseBlock = src.slice(releaseIdx, publishIdx);
+      expect(releaseBlock).toContain('CHANGES=$(bun run scripts/release-notes.ts "$VERSION")');
+      const notesIdx = releaseBlock.indexOf(`NOTES="\${CHANGES}`);
+      expect(notesIdx).toBeGreaterThan(-1);
+      expect(notesIdx).toBeLessThan(releaseBlock.indexOf("## Database Stats"));
+      // Every path rewrites the whole body with --notes; none appends.
+      expect(releaseBlock).not.toContain("--notes-file");
+      expect(releaseBlock.match(/gh release edit "\$VERSION" --notes "\$NOTES"/g)?.length).toBe(3);
+    });
+  });
+
+  test("runs test coverage in release CI and uploads it as a workflow artifact", () => {
+    const src = readText(".github/workflows/release.yml");
+    const fastFailIdx = mustIndex(src, "Run tests (fast-fail)");
+    const buildxIdx = mustIndex(src, "Set up Docker Buildx");
+    const coverageBlock = src.slice(fastFailIdx, buildxIdx);
+
+    expect(coverageBlock).toContain("bun test --coverage");
+    expect(coverageBlock).toContain("--coverage-reporter=lcov");
+    expect(coverageBlock).toContain("## Test coverage");
+    expect(coverageBlock).toContain("Upload coverage artifact");
+    expect(coverageBlock).toContain("coverage/lcov.info");
+  });
+
+  test("coverage step always closes its summary code fence, even when bun test fails (PIPESTATUS, not implicit pipefail)", () => {
+    const src = readText(".github/workflows/release.yml");
+    const fastFailIdx = mustIndex(src, "Run tests (fast-fail)");
+    const uploadIdx = mustIndex(src, "Upload coverage artifact");
+    const coverageBlock = src.slice(fastFailIdx, uploadIdx);
+
+    expect(coverageBlock).toContain("set +e");
+    const statusIdx = mustIndex(coverageBlock, `status=\${PIPESTATUS[0]}`);
+    const closeFenceIdx = coverageBlock.lastIndexOf("echo '```'");
+    const exitIdx = mustIndex(coverageBlock, 'exit "$status"');
+
+    expect(statusIdx).toBeLessThan(closeFenceIdx);
+    expect(closeFenceIdx).toBeLessThan(exitIdx);
+  });
+
+  test("runs extraction pipeline", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).toContain("extract-docusaurus.ts");
+    expect(src).toContain("extract-commands.ts");
+    expect(src).toContain("extract-devices.ts");
+    expect(src).toContain("extract-test-results.ts");
+    expect(src).toContain("extract-changelogs.ts");
+    expect(src).toContain("extract-skills.ts");
+    expect(src).toContain("link-commands.ts");
+  });
+
+  test("Docusaurus extraction step proves the docs-count invariant, not just a manual/local run", () => {
+    const src = readText(".github/workflows/release.yml");
+    const extractIdx = mustIndex(src, "Extract Docusaurus pages, properties, callouts");
+    const commandTreeIdx = mustIndex(src, "Extract command tree");
+    const extractBlock = src.slice(extractIdx, commandTreeIdx);
+
+    expect(extractBlock).toContain("extract-docusaurus.ts --check-counts --strict");
+  });
+
+  test("imports Dude wiki from cache", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).toContain("extract-dude-from-cache");
+  });
+
+  test("extracts agent skills in CI", () => {
+    const src = readText(".github/workflows/release.yml");
+    const skillsIdx = mustIndex(src, "Extract agent skills from GitHub");
+    const linkIdx = mustIndex(src, "Link commands to pages");
+    const skillsBlock = src.slice(skillsIdx, linkIdx);
+
+    expect(skillsBlock).toContain("extract-skills.ts");
+    expect(skillsBlock).toContain("GITHUB_TOKEN");
+    expect(skillsBlock).toContain("$" + "{{ github.token }}");
+  });
+
+  test("wires the CLI-Reference overlay: extract-cliref then link-cliref AFTER schema_nodes (#127)", () => {
+    const src = readText(".github/workflows/release.yml");
+    const commandTreeIdx = mustIndex(src, "Extract command tree");
+    const extractCliRefIdx = mustIndex(src, "Extract CLI-Reference overlay");
+    const linkCliRefIdx = mustIndex(src, "Link CLI-Reference to inspect");
+    const devicesIdx = mustIndex(src, "Extract devices");
+    // link-cliref fails fast on an empty schema_nodes, so it MUST follow the command tree.
+    expect(commandTreeIdx).toBeLessThan(extractCliRefIdx);
+    expect(extractCliRefIdx).toBeLessThan(linkCliRefIdx);
+    expect(linkCliRefIdx).toBeLessThan(devicesIdx);
+    expect(src).toContain("bun run src/extract-cliref.ts");
+    expect(src).toContain("bun run src/link-cliref.ts");
+  });
+
+  test("runs the fast-fail quality gate in the build job (contract/eval moved to the qa job)", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).toContain("bun run typecheck");
+    expect(src).toContain("bun test");
+    expect(src).toContain("bun run lint");
+    // The real-DB contract suite is no longer inlined here — it runs once, in
+    // qa.yml, against the artifact DB. Asserted in the qa.yml describe block.
+    expect(src).not.toContain("ROSETTA_REAL_DB_TESTS=1 bun test src/mcp-contract.test.ts");
+  });
+
+  test("runs early quality gate before Docusaurus extraction", () => {
+    const src = readText(".github/workflows/release.yml");
+    const installIdx = mustIndex(src, "bun install");
+    const typecheckIdx = mustIndex(src, "Type check (fast-fail)");
+    const lintIdx = mustIndex(src, "Lint (fast-fail)");
+    const earlyTestIdx = mustIndex(src, "Run tests (fast-fail)");
+    const extractIdx = mustIndex(src, "Extract Docusaurus pages, properties, callouts");
+
+    expect(installIdx).toBeLessThan(typecheckIdx);
+    expect(typecheckIdx).toBeLessThan(lintIdx);
+    expect(lintIdx).toBeLessThan(earlyTestIdx);
+    expect(earlyTestIdx).toBeLessThan(extractIdx);
+  });
+
+  test("preflights npm publish access before release side effects", () => {
+    const src = readText(".github/workflows/release.yml");
+    const preflightIdx = mustIndex(src, "Verify npm publish access");
+    const extractIdx = mustIndex(src, "Extract Docusaurus pages, properties, callouts");
+    const ociIdx = mustIndex(src, "Build and push OCI images");
+    const releaseIdx = mustIndex(src, "Create or update GitHub Release");
+    const publishIdx = mustIndex(src, "Publish to npm");
+    const preflightBlock = src.slice(preflightIdx, extractIdx);
+
+    expect(preflightIdx).toBeLessThan(extractIdx);
+    expect(preflightIdx).toBeLessThan(ociIdx);
+    expect(preflightIdx).toBeLessThan(releaseIdx);
+    expect(preflightIdx).toBeLessThan(publishIdx);
+    expect(preflightBlock).toContain("NODE_AUTH_TOKEN");
+    expect(preflightBlock).toContain("npm whoami");
+    expect(preflightBlock).toContain("npm access list collaborators");
+    expect(preflightBlock).toContain("read-write access");
+    expect(preflightBlock).toContain("npm view");
+  });
+
+  test("keeps post-extraction DB-wipe guard after extraction", () => {
+    const src = readText(".github/workflows/release.yml");
+    const linkIdx = mustIndex(src, "Link commands to pages");
+    const guardIdx = mustIndex(src, "Run tests (DB-wipe guard)");
+    const buildIdx = mustIndex(src, "Build release artifacts");
+
+    expect(guardIdx).toBeGreaterThan(linkIdx);
+    expect(guardIdx).toBeLessThan(buildIdx);
+    expect(src.slice(guardIdx, buildIdx)).toContain("bun test");
+  });
+
+  test("runs schema_node_presence GC after link and before stats/build", () => {
+    const src = readText(".github/workflows/release.yml");
+    const linkIdx = mustIndex(src, "Link commands to pages");
+    const gcIdx = mustIndex(src, "GC schema node presence versions");
+    const statsIdx = mustIndex(src, "Collect DB stats");
+    const buildIdx = mustIndex(src, "Build release artifacts");
+
+    expect(gcIdx).toBeGreaterThan(linkIdx);
+    expect(gcIdx).toBeLessThan(statsIdx);
+    expect(gcIdx).toBeLessThan(buildIdx);
+    expect(src.slice(gcIdx, statsIdx)).toContain("make gc-versions EXTRA_FLAGS=--verbose");
+  });
+
+  // The MCP contract suite and the Phase 0/1 retrieval evals are no longer
+  // inlined in release.yml — Phase B (#42) moved them into the single qa.yml
+  // definition, which release.yml's `qa` job calls with db_source=artifact.
+  // The qa.yml describe block below asserts they run there; here we only prove
+  // release.yml delegates to them (and no longer carries a copy).
+  test("delegates contract + retrieval evals to the qa job, not an inline copy", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).not.toContain("MCP retrieval eval (Phase 0)");
+    expect(src).not.toContain("MCP retrieval eval (Phase 1, self-supervised, non-blocking)");
+    expect(src).not.toContain("bun run src/eval/retrieval.ts");
+    expect(src).not.toContain("bun run src/eval/self-supervised.ts");
+    // The delegation itself: a qa job that calls the reusable workflow.
+    expect(src).toContain("uses: ./.github/workflows/qa.yml");
+  });
+
+  test("creates GitHub Release", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).toContain("gh release create");
+    expect(src).toContain("gh_retry()");
+    expect(src).toContain("ensure_release_exists()");
+    expect(src).toContain("GitHub can return a transient 5xx after creating the release");
+  });
+
+  test("gh_retry preserves the failing command exit status after retries", () => {
+    const src = readText(".github/workflows/release.yml");
+    const ghRetry = getWorkflowShellFunction(src, "gh_retry");
+    const proc = Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        `${ghRetry}
+sleep() { :; }
+failing_command() { return 42; }
+gh_retry failing_command
+exit $?`,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+
+    expect(proc.exitCode).toBe(42);
+  });
+
+  test("republish_assets controls immutable npm skips and release clobbering", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).toContain("republish_assets:");
+    expect(src).toContain("Does NOT re-publish npm");
+    expect(src).not.toContain("inputs.force");
+    expect(src).not.toContain("force=true");
+
+    // republish_assets is read via an env-mapped $REPUBLISH_ASSETS, not
+    // interpolated directly into the shell script (template-injection guard).
+    const republishBranchIdx = src.search(
+      /if \[ "\$REPUBLISH_ASSETS" = "true" \]; then/,
+    );
+    expect(republishBranchIdx).toBeGreaterThanOrEqual(0);
+    const clobberIdx = mustIndex(src, "gh release upload");
+    expect(src.slice(clobberIdx, clobberIdx + 120)).toContain("--clobber");
+    expect(republishBranchIdx).toBeLessThan(clobberIdx);
+    expect(src).toContain('elif gh release view "$VERSION"');
+    expect(src).toContain("updated before npm publish retry");
+    expect(src).toContain("ensure_release_exists");
+    expect(src).toContain("gh_retry gh release upload");
+    expect(src).toContain("gh_retry gh release edit");
+
+    expect(src).toContain("if: inputs.republish_assets != true");
+    expect(src).toContain("if: inputs.republish_assets == true");
+    expect(src).toMatch(
+      /Publish to npm[\s\S]{0,120}if: inputs\.republish_assets != true/,
+    );
+    expect(src).toMatch(
+      /\n {2}smoke:[\s\S]{0,120}if: inputs\.republish_assets != true/,
+    );
+  });
+
+  test("bump-version job and its auto-commit are gone entirely — version bumps are a manual step for every channel", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).not.toContain("bump-version:");
+    expect(src).not.toContain("git push origin HEAD:main");
+    expect(src).not.toContain("Bumped version:");
+    expect(src).not.toContain("Promoted [Unreleased]");
+  });
+
+  test("publishes to npm", () => {
+    const src = readText(".github/workflows/release.yml");
+    expect(src).toContain("npm publish --access public --registry https://registry.npmjs.org/");
+    expect(src).toContain("NPM_TOKEN");
+  });
+
+  test("bunx-smoke covers windows with bash steps and a runner temp log", () => {
+    const src = readText(".github/workflows/release-smoke.yml");
+    const bunxIdx = mustIndex(src, "bunx-smoke:");
+    const bunxBlock = src.slice(bunxIdx);
+
+    expect(bunxBlock).toContain("windows-latest");
+    expect(bunxBlock).toContain("shell: bash");
+    expect(bunxBlock).toContain("RUNNER_TEMP");
+    expect(bunxBlock).not.toContain("mktemp");
+  });
+
+  test("gates the DB before any publish side effect via the qa job (regression: v0.7.6 shipped 3 pages)", () => {
+    const src = readText(".github/workflows/release.yml");
+    // The degenerate-DB guard (the DB-content floors) is no longer inlined here —
+    // it's the db-content gate in qa.yml, which the `qa` job runs against the
+    // artifact build uploaded. Assert release.yml delegates and that publish is
+    // fenced behind qa so nothing ships past a red gate.
+    expect(src).not.toContain("Validate DB has expected content");
+    expect(src).not.toMatch(/PAGES.*-lt 200/);
+
+    // publish depends on BOTH build (the artifact) and qa (the gates).
+    expect(src).toMatch(/publish:\s*\n\s*needs:\s*\[build,\s*qa\]/);
+
+    // The qa job that fences it: uses the reusable workflow against the artifact.
+    const qaIdx = mustIndex(src, "\n  qa:");
+    const publishIdx = mustIndex(src, "\n  publish:");
+    const qaBlock = src.slice(qaIdx, publishIdx);
+    expect(qaBlock).toContain("uses: ./.github/workflows/qa.yml");
+    expect(qaBlock).toContain("db_source: artifact");
+    expect(qaBlock).toContain("artifact_name: ros-help-db");
+
+    // build must exist and hand the DB + resolved package.json downstream before qa/publish.
+    const buildIdx = mustIndex(src, "\n  build:");
+    expect(buildIdx).toBeLessThan(qaIdx);
+    expect(src).toContain("name: Upload built DB artifact");
+    expect(src).toContain("name: Upload resolved package.json");
+  });
+
+  test("publish restores the resolved package.json + DB artifact and needs both build and qa", () => {
+    const src = readText(".github/workflows/release.yml");
+    const publishIdx = mustIndex(src, "\n  publish:");
+    const publishBlock = src.slice(publishIdx, mustIndex(src, "\n  verify-dist-tags:"));
+
+    // Downloads the exact DB qa validated and the run-numbered package.json.
+    expect(publishBlock).toContain("name: Download built DB artifact");
+    expect(publishBlock).toContain("name: Download resolved package.json");
+    expect(publishBlock).toContain("actions/download-artifact");
+    // Side-effect steps still live here, keyed off build's job outputs.
+    expect(publishBlock).toContain("needs.build.outputs.version");
+    expect(publishBlock).toContain("docker buildx build");
+    expect(publishBlock).toContain("gh release create");
+    expect(publishBlock).toContain("npm publish --access public");
+  });
+
+  test("smoke depends on publish only and passes the published version to release-smoke.yml (#176)", () => {
+    const src = readText(".github/workflows/release.yml");
+    const smokeBlock = src.slice(mustIndex(src, "\n  smoke:"));
+    // Not on verify-dist-tags: the smoke waits for the exact version it tests.
+    expect(smokeBlock).toMatch(/needs:\s*\[build,\s*publish\]/);
+    expect(smokeBlock).toContain("uses: ./.github/workflows/release-smoke.yml");
+    expect(smokeBlock).toContain(`version: \${{ needs.publish.outputs.version }}`);
+    expect(smokeBlock).toContain(`previous_version: \${{ needs.build.outputs.previous_version }}`);
+    // The smoke jobs themselves live only in release-smoke.yml.
+    expect(src).not.toContain("\n  bunx-smoke:");
+    expect(src).not.toContain("\n  bunx-upgrade-smoke:");
+    // The old monolithic job name is gone entirely.
+    expect(src).not.toContain("build-and-release");
+
+    const smoke = readText(".github/workflows/release-smoke.yml");
+    const bunxBlock = smoke.slice(mustIndex(smoke, "\n  bunx-smoke:"), mustIndex(smoke, "\n  bunx-upgrade-smoke:"));
+    expect(bunxBlock).toContain('bun scripts/smoke-install.ts "$CURRENT_VERSION" "$PREVIOUS_VERSION"');
+    expect(bunxBlock).toContain(`npm view "@tikoci/rosetta@\${NPM_VER}" version`);
+  });
+
+  test("release-smoke.yml is dispatchable against an already-published version (#176)", () => {
+    const smoke = readText(".github/workflows/release-smoke.yml");
+    expect(smoke).toMatch(/on:\s*\n\s*workflow_dispatch:/);
+    expect(smoke).toContain("workflow_call:");
+    expect(smoke).toMatch(/version:\s*\n\s*description:[^\n]*\n\s*required: true/);
+    // No job outputs from release.yml exist on a dispatch — inputs only.
+    expect(smoke).not.toContain("needs.build.");
+    expect(smoke).not.toContain("needs.publish.");
+  });
+
+  test("build job captures the previously-published version per dist-tag (for bunx-upgrade-smoke)", () => {
+    const src = readText(".github/workflows/release.yml");
+    const buildIdx = mustIndex(src, "\n  build:");
+    const qaIdx = mustIndex(src, "\n  qa:");
+    const buildBlock = src.slice(buildIdx, qaIdx);
+
+    expect(buildBlock).toContain(`previous_version: \${{ steps.previous_version.outputs.previous_version }}`);
+    expect(buildBlock).toContain("id: previous_version");
+    // Must resolve against the SAME dist-tag this run publishes to (latest,
+    // or the prerelease stage) — not just "any GitHub Release" — otherwise
+    // the seeded upgrade-smoke DB wouldn't represent a real user's path.
+    expect(buildBlock).toContain(`npm view "@tikoci/rosetta@\${NPM_TAG}" version`);
+    // A missing tag is expected for the first release on a channel, but a
+    // registry/auth/transport failure must not silently skip the smoke gate.
+    expect(buildBlock).toContain("code E404");
+    expect(buildBlock).not.toContain("2>/dev/null || true");
+  });
+
+  test("bunx-upgrade-smoke seeds a stale DB from the previous version, then proves a bare bunx auto-refreshes it (#76/#23/#78)", () => {
+    const src = readText(".github/workflows/release-smoke.yml");
+    const upgradeIdx = mustIndex(src, "\n  bunx-upgrade-smoke:");
+    const upgradeBlock = src.slice(upgradeIdx);
+
+    // Skipped (not failed) when there's no prior publish on this channel yet.
+    expect(upgradeBlock).toMatch(/if: inputs\.previous_version != ''/);
+    // The channel comes from the version: a prerelease resolves through @next.
+    expect(upgradeBlock).toContain(`case "$NPM_VER" in *-*) NPM_SPEC="\${NPM_SPEC}@next" ;; esac`);
+    // It waits on the dist-tag itself, so it gets the long budget (#176).
+    expect(upgradeBlock).toContain("for i in {1..180}; do");
+
+    // Seeds with the OLD version, then invokes the NEW version through the
+    // real bare/tag client form (never an exact-version pin or --refresh).
+    expect(upgradeBlock).toContain(`bunx "@tikoci/rosetta@\${PREV_NPM_VER}" --refresh`);
+    expect(upgradeBlock).toContain('NPM_SPEC="@tikoci/rosetta"');
+    expect(upgradeBlock).toContain(`bunx "$NPM_SPEC" --http`);
+    // The new version must never be invoked by exact pin or with --refresh:
+    // neither would exercise an ordinary MCP client's dist-tag resolution.
+    expect(upgradeBlock).not.toContain(`"@tikoci/rosetta@\${NPM_VER}"`);
+
+    // Asserts on the startup banner (ensureDbReady), not just "server answered" —
+    // that's the only signal that actually proves the DB content refreshed.
+    expect(upgradeBlock).toContain(`grep -F "release v\${NPM_VER}" "$LOG"`);
+
+    // Also exercises the graceful-degradation half against a real bunx install.
+    expect(upgradeBlock).toContain("ROSETTA_OFFLINE=1");
+    expect(upgradeBlock).toContain(`grep -F "ROSETTA_OFFLINE=1" "$LOG"`);
+    // Offline fallback applies only to a release-tag mismatch. A schema-mismatched
+    // prior DB must still hard-fail, so this smoke compares both PRAGMAs and
+    // skips rather than claiming graceful recovery across a schema bump.
+    expect(upgradeBlock).toContain('CURRENT_SCHEMA=$(DB_PATH="$DB_PATH" bun --eval');
+    expect(upgradeBlock).toContain('SEEDED_SCHEMA=$(DB_PATH="$DB_PATH" bun --eval');
+    expect(upgradeBlock).toContain("Skipping ROSETTA_OFFLINE smoke");
+    expect(upgradeBlock).toContain(`DB_PATH: \${{ runner.temp }}/rosetta-upgrade.db`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// qa.yml — dispatchable / callable definition of the release-locked quality
+// gates (issue #40 Phase A; #42 Phase B). As of Phase B this is the SINGLE
+// definition: release.yml's `qa` job calls it (db_source=artifact) instead of
+// carrying inline copies. These anchors pin the dispatch surface, the artifact
+// (release) path, and that the DB-content floors live here and only here.
+// ---------------------------------------------------------------------------
+
+describe("qa.yml", () => {
+  test("workflow file exists", () => {
+    expect(existsSync(path.join(ROOT, ".github/workflows/qa.yml"))).toBe(true);
+  });
+
+  test("is dispatchable and callable, but not push/PR-triggered (no test.yml/codeql duplication)", () => {
+    const src = readText(".github/workflows/qa.yml");
+    expect(src).toContain("workflow_dispatch:");
+    expect(src).toContain("workflow_call:");
+    // Heavy gates must stay off the PR/push path — that's test.yml's job.
+    const onBlock = src.slice(mustIndex(src, "\non:"), mustIndex(src, "\npermissions:"));
+    expect(onBlock).not.toContain("pull_request");
+    expect(onBlock).not.toMatch(/\bpush:/);
+  });
+
+  test("never publishes — read-only permissions, no npm/OCI/release commands", () => {
+    const src = readText(".github/workflows/qa.yml");
+    expect(src).toContain("permissions:\n  contents: read");
+    expect(src).not.toContain("packages: write");
+    // Concrete publish/push commands (not prose) must be absent — this is a
+    // rehearsal, never a release.
+    expect(src).not.toContain("npm publish --");
+    expect(src).not.toContain("docker buildx build");
+    expect(src).not.toContain("gh release create");
+  });
+
+  test("exposes the focused-rehearsal dispatch menu (test_scope / db_source / eval_self_blocking / full_versions)", () => {
+    const src = readText(".github/workflows/qa.yml");
+    for (const scope of [
+      "all",
+      "contract",
+      "eval-golden",
+      "eval-self",
+      "db-content",
+      "db-meta",
+      "docusaurus-count",
+      "device-map",
+    ]) {
+      expect(src).toContain(`- ${scope}`);
+    }
+    expect(src).toContain("- local-build");
+    expect(src).toContain("- published");
+    expect(src).toContain("eval_self_blocking:");
+    expect(src).toContain("full_versions:");
+  });
+
+  test("validates inputs up front so a typo'd scope fails loudly instead of a vacuous green run", () => {
+    const src = readText(".github/workflows/qa.yml");
+    expect(src).toContain("name: Validate inputs");
+    // Allowlist enforced via case; unknown values error out.
+    expect(src).toMatch(/::error::Unknown test_scope/);
+    expect(src).toMatch(/::error::Unknown db_source/);
+    // The one valid-but-empty combination is rejected too.
+    expect(src).toContain("test_scope=docusaurus-count requires db_source=local-build");
+    // Validation runs before anything expensive (setup-bun / install / build).
+    expect(mustIndex(src, "name: Validate inputs")).toBeLessThan(
+      mustIndex(src, "Build DB (local-build)"),
+    );
+  });
+
+  test("acquires the on-disk DB only AFTER the fixture-DB tests (so the :memory: wipe guard can't trip)", () => {
+    const src = readText(".github/workflows/qa.yml");
+    const fixtureTestsIdx = mustIndex(src, "Run tests (fixture DB)");
+    const buildIdx = mustIndex(src, "Build DB (local-build)");
+    const downloadIdx = mustIndex(src, "Download published DB");
+    expect(fixtureTestsIdx).toBeLessThan(buildIdx);
+    expect(fixtureTestsIdx).toBeLessThan(downloadIdx);
+  });
+
+  test("local-build reuses the Makefile pipeline (encodes extract-devices → extract-hardware-catalog order)", () => {
+    const src = readText(".github/workflows/qa.yml");
+    expect(src).toContain("make extract-full");
+    expect(src).toContain("make extract\n");
+    // db_meta stamped so the db-content / db-meta gates have real values to assert.
+    expect(src).toContain("scripts/stamp-db-meta.ts");
+  });
+
+  // Phase B (#42) collapsed the two copies into one: qa.yml is now the SOLE
+  // definition of the DB-content floors, and release.yml calls it (db_source=
+  // artifact) instead of carrying its own copy. So this is no longer a cross-file
+  // drift guard — it just pins that the single definition still enforces every
+  // floor, including the hardware-overlay floors (PR #41 / issue #38). release.yml
+  // is asserted NOT to contain floors over in the release.yml describe block.
+  test("is the single definition of the DB-content floors (incl. hardware overlay floors)", () => {
+    const qa = readText(".github/workflows/qa.yml");
+    for (const re of [
+      /PAGES.*-lt 200/,
+      /COMMANDS.*-lt 1000/,
+      /DEVICES.*-lt 100/,
+      /PROPERTIES.*-lt 1000/,
+      /PAGE_TABLES.*-lt 600/,
+      /PAGE_TABLE_DATA_ROWS.*-lt 6100/,
+      /TABLE_PROPERTIES.*-lt 2450/,
+      /HARDWARE_CATALOG.*-lt 200/,
+      /DEVICE_ALIASES.*-lt 600/,
+      /CLIREF_ENTRIES.*-lt 900/,
+      /CLIREF_FIELDS.*-lt 8000/,
+      /CLIREF_FLAGS.*-lt 800/,
+      /CLIREF_LINKS.*-lt 800/,
+    ]) {
+      expect(qa).toMatch(re);
+    }
+  });
+
+  test("gates version coverage against the count extract-all-versions stamped (#178)", () => {
+    const qa = readText(".github/workflows/qa.yml");
+    expect(qa).toContain("key = 'command_versions_expected'");
+    expect(qa).toMatch(/CMD_VERSIONS.*-lt "\$EXPECTED_VERSIONS"/);
+    expect(readText("src/extract-all-versions.ts")).toContain('setDbMeta("command_versions_expected"');
+  });
+
+  test("gates the CLI-Reference overlay in db-content: link-drift + db-integrity (#127)", () => {
+    const qa = readText(".github/workflows/qa.yml");
+    expect(qa).toContain("make link-cliref-check");
+    expect(qa).toContain("make cliref-db-check");
+    // Both run on a built DB (local-build OR the release artifact), same guard as the floors.
+    expect(qa).toMatch(
+      /CLI-Reference link drift[\s\S]*?inputs\.db_source == 'local-build' \|\| inputs\.db_source == 'artifact'/,
+    );
+    expect(qa).toMatch(
+      /CLI-Reference DB integrity[\s\S]*?inputs\.db_source == 'local-build' \|\| inputs\.db_source == 'artifact'/,
+    );
+  });
+
+  test("supports db_source=artifact for the release path — downloads the build artifact and floors it", () => {
+    const src = readText(".github/workflows/qa.yml");
+    // artifact is a valid (workflow_call-only) source with a downloader step.
+    expect(src).toContain("local-build|published|artifact)");
+    expect(src).toContain("name: Download build artifact (artifact)");
+    expect(src).toContain("actions/download-artifact");
+    expect(src).toContain("artifact_name:");
+    // db-content must run for a built DB under `all`, whether local-build OR the
+    // release artifact — otherwise the release path would skip the floors.
+    expect(src).toMatch(
+      /Validate DB has expected content[\s\S]*?inputs\.db_source == 'local-build' \|\| inputs\.db_source == 'artifact'/,
+    );
+  });
+
+  test("eval-self is non-blocking by default, flipped to a hard gate by eval_self_blocking", () => {
+    const src = readText(".github/workflows/qa.yml");
+    expect(src).toMatch(
+      /continue-on-error:\s*\$\{\{\s*!inputs\.eval_self_blocking\s*\}\}/,
+    );
+  });
+
+  test("wires every VALIDATION.md gate this rehearses", () => {
+    const src = readText(".github/workflows/qa.yml");
+    expect(src).toContain("ROSETTA_REAL_DB_TESTS=1 bun test src/mcp-contract.test.ts");
+    expect(src).toContain("bun run src/eval/retrieval.ts");
+    expect(src).toContain("bun run src/eval/self-supervised.ts");
+    expect(src).toContain("--check-counts --strict");
+    expect(src).toContain("make device-map-check");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI flags in mcp.ts
+// ---------------------------------------------------------------------------
+
+describe("CLI flags", () => {
+  const src = readText("src/mcp.ts");
+
+  test("supports --version flag", () => {
+    expect(src).toContain("--version");
+  });
+
+  test("supports --help flag", () => {
+    expect(src).toContain("--help");
+  });
+
+  test("supports --setup flag", () => {
+    expect(src).toContain("--setup");
+  });
+
+  test("supports --refresh flag", () => {
+    expect(src).toContain("--refresh");
+  });
+
+  test("browse mode bootstraps database before importing browse.ts", () => {
+    expect(src).toContain('if (args[0] === "browse")');
+    expect(src).toContain("await ensureDbReady");
+  });
+
+  test("top-level CLI bootstrap has a catch that exits non-zero on startup errors", () => {
+    expect(src).toContain("})().catch((err) => {");
+    expect(src).toContain("process.exit(1)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Browse TUI structural checks — catch pager/navigation regressions at build time
+// ---------------------------------------------------------------------------
+
+describe("browse TUI structure", () => {
+  const src = readText("src/browse.ts");
+  const changelogPrefix = 'await selectFromPager(`  ' + "$" + '{bold("Changelogs")}';
+
+  test("defines helper to route pager digit selections back into current context", () => {
+    expect(src).toContain("async function selectFromPager");
+    expect(src).toContain("handleNumberSelect(result.selected - 1)");
+  });
+
+  test("re-rendered result views preserve pager selection", () => {
+    expect(src).toContain('await selectFromPager(renderSearchResults(ctx.response), ctx.results.length)');
+    expect(src).toContain('await selectFromPager(renderCommandTree(ctx.path, children), children.length)');
+    expect(src).toContain('await selectFromPager(renderCallouts(ctx.results), ctx.results.length)');
+    expect(src).toContain('await selectFromPager(renderChangelogs(ctx.results), ctx.results.length)');
+  });
+
+  test("initial changelog and page-callout views push context before pager selection", () => {
+    expect(src).toContain('pushCtx({ type: "changelogs", results });');
+    expect(src).toContain(changelogPrefix);
+    expect(src).toContain('pushCtx({ type: "callouts", query: "", results: pageCallouts });');
+    expect(src).toContain('await selectFromPager(renderCallouts(pageCallouts), pageCallouts.length);');
+  });
+
+  test("page-scoped [p] and [cal] work on both page and sections contexts", () => {
+    // Pages with headings push type:"sections" not type:"page", so both handlers
+    // must check for sections context to make the hints visible on the page work.
+    expect(src).toContain('ctx.type === "page" || ctx.type === "sections"');
+    // Both handlers must appear at least twice (one per fix)
+    const matches = src.split('ctx.type === "page" || ctx.type === "sections"').length - 1;
+    expect(matches).toBeGreaterThanOrEqual(2);
+  });
+
+  test("pager keystrokes cleared from readline buffer before re-prompt", () => {
+    // readline's data handler stays active while pager runs in raw mode, so
+    // pager keystrokes accumulate in rl.line and appear after the next prompt.
+    // The REPL line handler must clear rl.line/cursor before calling rl.prompt().
+    expect(src).toContain('rlBuf.line = ""');
+    expect(src).toContain("rlBuf.cursor = 0");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HTTP transport structural checks — catch per-session breakage at build time
+// ---------------------------------------------------------------------------
+
+describe("HTTP transport structure", () => {
+  const src = readText("src/mcp.ts");
+
+  test("uses per-session transport routing (not single shared transport)", () => {
+    // The single-transport pattern was: `await server.connect(httpTransport)` at module level
+    // followed by `httpTransport.handleRequest(req)`. The per-session pattern has a
+    // transports Map and creates transport/server per session.
+    expect(src).toContain("new Map");
+    expect(src).toContain("transports.set");
+    expect(src).toContain("transports.get");
+  });
+
+  test("creates new McpServer per session, not one shared instance", () => {
+    // createServer() factory must exist and be called per-session
+    expect(src).toContain("function createServer()");
+    expect(src).toContain("createServer()");
+  });
+
+  test("checks isInitializeRequest before creating transport", () => {
+    expect(src).toContain("isInitializeRequest");
+  });
+
+  test("registers onsessioninitialized callback", () => {
+    expect(src).toContain("onsessioninitialized");
+  });
+
+  test("cleans up transport on close", () => {
+    expect(src).toContain("transport.onclose");
+    expect(src).toContain("transports.delete");
+  });
+
+  test("passes parsedBody to handleRequest after consuming body", () => {
+    // Once we req.json() for isInitializeRequest check, the body is consumed.
+    // Must pass parsedBody so the transport doesn't try to re-parse.
+    expect(src).toContain("parsedBody");
+  });
+
+  test("handles missing session ID on non-initialize requests", () => {
+    expect(src).toContain("No valid session ID provided");
+  });
+
+  test("handles invalid session ID with 404", () => {
+    expect(src).toContain("Session not found");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Container / entrypoint checks
+// ---------------------------------------------------------------------------
+
+describe("container entrypoint", () => {
+  test("entrypoint script exists", () => {
+    expect(existsSync(path.join(ROOT, "scripts/container-entrypoint.sh"))).toBe(true);
+  });
+
+  test("defaults to --http mode", () => {
+    const src = readText("scripts/container-entrypoint.sh");
+    expect(src).toContain("--http");
+  });
+
+  test("defaults to 0.0.0.0 host binding", () => {
+    const src = readText("scripts/container-entrypoint.sh");
+    expect(src).toContain("0.0.0.0");
+  });
+
+  test("supports TLS via env vars", () => {
+    const src = readText("scripts/container-entrypoint.sh");
+    expect(src).toContain("TLS_CERT_PATH");
+    expect(src).toContain("TLS_KEY_PATH");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dockerfile structure
+// ---------------------------------------------------------------------------
+
+describe("Dockerfile.release", () => {
+  test("copies entrypoint script", () => {
+    const src = readText("Dockerfile.release");
+    expect(src).toContain("container-entrypoint.sh");
+    expect(src).toContain("ENTRYPOINT");
+  });
+
+  test("copies database into image", () => {
+    const src = readText("Dockerfile.release");
+    expect(src).toContain("ros-help.db");
+  });
+
+  test("exposes port 8080", () => {
+    const src = readText("Dockerfile.release");
+    expect(src).toContain("EXPOSE 8080");
+  });
+
+  test("injects build constants", () => {
+    const src = readText("Dockerfile.release");
+    expect(src).toMatch(/--define VERSION="\\"\$\{VERSION\}\\""/);
+    expect(src).toMatch(/--define REPO_URL="\\"\$\{REPO_URL\}\\""/);
+    expect(src).toContain("--define IS_COMPILED=true");
+    expect(src).not.toMatch(/'\\"\$\{VERSION\}\\"'/);
+    expect(src).not.toMatch(/'\\"\$\{REPO_URL\}\\"'/);
+  });
+
+  test("pins the Bun compiler used by the last successful OCI smoke", () => {
+    const src = readText("Dockerfile.release");
+    expect(src).toMatch(/^FROM --platform=\$BUILDPLATFORM oven\/bun:1\.3\.14 AS builder$/m);
+    expect(src).not.toMatch(/^FROM --platform=\$BUILDPLATFORM oven\/bun:1 AS builder$/m);
+  });
+});

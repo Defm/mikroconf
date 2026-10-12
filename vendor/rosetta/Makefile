@@ -1,0 +1,301 @@
+DB         := ros-help.db
+HTML_DIR   := box/latest/ROS
+VERSION    ?=
+.PHONY: extract extract-full extract-legacy-confluence extract-html extract-properties extract-commands \
+        extract-docusaurus extract-docusaurus-from-cache extract-docusaurus-check-counts \
+        extract-cliref extract-cliref-from-cache link-cliref \
+        link-cliref-baseline link-cliref-check cliref-db-check \
+        extract-schema extract-all-versions extract-devices extract-test-results extract-changelogs \
+        extract-changelogs-extended \
+        extract-videos extract-videos-from-cache save-videos-cache \
+        extract-dude extract-dude-from-cache \
+        extract-skills extract-skills-from-cache \
+        link gc-versions assess assess-hardware assess-www device-map device-map-check \
+        extract-hardware-catalog search browse serve \
+	typecheck lint test preflight verify \
+        db-doctor db-sync \
+        install setup clean eval eval-update eval-self eval-self-update
+
+# ── Development ──
+
+install:
+	bun install
+
+serve:
+	bun run src/mcp.ts
+
+# Report whether the resolved ros-help.db matches this checkout (#94). Prints the
+# resolved path + db_meta provenance + a grounding verdict; non-zero when not "ok".
+# The latest CI-built release DB is the source of truth for grounding claims — a
+# local `make extract` build is for extraction work, not for claims about shipped data.
+db-doctor:
+	bun run scripts/db-doctor.ts
+
+# Fetch the newest CI-built release DB that matches this checkout's schema into
+# the resolved DB path (dev: repo root), so the MCP server / db-doctor ground on
+# what npm consumers actually get. Discovers the newest release shipping the DB
+# asset via `gh` (prereleases included; `--refresh` follows the running version
+# first and falls back to latest stable). Atomic replace; stop clients
+# owning this path first (live WAL replacement can cause SQLite I/O errors). Requires the `gh` CLI.
+db-sync:
+	bun run scripts/db-sync.ts
+
+search:
+	bun run src/search.ts $(query)
+
+browse:
+	bun run src/mcp.ts browse $(query)
+
+assess:
+	bun run src/assess-html.ts
+
+# Page-cache contract (#160), shared by assess-hardware, assess-www, extract-docusaurus,
+# extract-cliref and extract-dude: a live run re-fetches every page it discovers and
+# overwrites its cache file (never reads the cache as input). After a complete live run
+# (no --limit, no fetch errors) it deletes cached pages it did not discover, keeping the
+# index files it wrote (_sitemap.txt, _llms.txt). A --from-cache run makes no network
+# requests and reproduces that last complete live run. The one exception is
+# extract-docusaurus --check-counts, which compares against the live llms.txt on purpose.
+
+# Live fetch of manual.mikrotik.com/hardware/*, cached to manual/pages/hardware/.
+assess-hardware:
+	bun run src/assess-hardware.ts
+
+# Live fetch of mikrotik.com/product/<code>, cached to manual/pages/www/.
+assess-www:
+	bun run src/assess-www.ts
+
+# Regenerate the reviewable device→URL map (device-map.tsv) + the reverse audit view
+# (hardware-unmatched.tsv, /hardware pages with no matrix device) from the committed assessment
+# JSON + curated device-exceptions.toml. Exits non-zero on drift (an unlisted device stops
+# auto-resolving, or a curated exception goes stale) — safe to wire into CI as a gate. Use
+# `device-map-check` to validate without rewriting the TSVs. See briefings/B-0018 for the legend.
+device-map:
+	bun run src/build-device-map.ts
+
+device-map-check:
+	bun run src/build-device-map.ts --check
+
+# Build hardware_catalog + device_aliases from ros-hardware-assessment.json +
+# ros-www-assessment.json (run assess-hardware/assess-www first to refresh those).
+# Reads the committed assessment JSON — no network. Requires extract-devices to
+# have already populated `devices` for device_id linking; both `extract` and
+# `extract-full` order it after extract-devices for exactly that reason. See
+# briefings/B-0017-hardware-overlay-device-resolution.md and issue #35.
+extract-hardware-catalog:
+	bun run src/extract-hardware-catalog.ts
+
+# ── Quality ──
+
+typecheck:
+	bun run typecheck
+
+test:
+	bun test
+
+# Full local lint = the same three checks test.yml runs, so `make lint` locally
+# and CI agree: Biome (src/), markdownlint-cli2 (all *.md, LLM instruction files
+# excluded via .markdownlint-cli2.yaml), and cspell (repo-wide, project-words.txt).
+lint:
+	bun run lint
+	bun run lint:md
+	bun run lint:spell
+
+preflight:
+	@echo "── Preflight checks ──"
+	@git diff --quiet --exit-code || (echo "✗ Working tree has uncommitted changes" && exit 1)
+	@git diff --quiet --cached --exit-code || (echo "✗ Index has staged changes" && exit 1)
+	@echo "✓ Clean working tree"
+	@test -f $(DB) || (echo "✗ Database $(DB) not found" && exit 1)
+	@sqlite3 $(DB) "SELECT COUNT(*) FROM pages" > /dev/null 2>&1 || (echo "✗ Database has no page data" && exit 1)
+	@echo "✓ Database exists"
+	@$(MAKE) --no-print-directory typecheck
+	@echo "✓ Typecheck passed"
+	@$(MAKE) --no-print-directory test
+	@echo "✓ Tests passed"
+	@$(MAKE) --no-print-directory lint
+	@echo "✓ Lint passed"
+	@echo "── Preflight OK ──"
+
+verify:
+	@echo "── Verify ──"
+	@test -f $(DB) || (echo "✗ Database $(DB) not found — run 'make extract' first" && exit 1)
+	@echo "✓ Database exists"
+	@$(MAKE) --no-print-directory typecheck
+	@echo "✓ Typecheck passed"
+	@$(MAKE) --no-print-directory lint
+	@echo "✓ Lint passed"
+	@$(MAKE) --no-print-directory test
+	@echo "✓ Tests passed"
+	bun test src/mcp-contract.test.ts
+	@echo "✓ MCP contract tests passed"
+	bun run src/eval/retrieval.ts
+	@echo "✓ Retrieval eval passed"
+	@echo "── Verify OK ──"
+
+# ── Extraction pipeline ──
+#
+# extract-docusaurus (Markdown, manual.mikrotik.com) is the current prose source —
+# see DESIGN.md and briefings/B-0012-docusaurus-manual-migration.md. extract-html
+# (Confluence HTML) is kept only for rebuilding historical pre-migration release
+# DBs via `make extract-legacy-confluence`; it is not part of the default pipeline.
+
+# extract-hardware-catalog MUST come after extract-devices: extract-devices.ts
+# wipes device_aliases + hardware_catalog (device_id links point at AUTOINCREMENT
+# ids that a devices rebuild invalidates), so running the hardware overlay first
+# would have its rows deleted out from under it. Ordering here is load-bearing.
+# `extract` (dev) loads the legacy `commands` table via extract-commands, which does
+# NOT populate schema_nodes — so it runs extract-cliref (source tables) but NOT
+# link-cliref (which needs schema_nodes and fails fast without it). Run `extract-full`
+# or `make extract-schema link-cliref` to add the inspect crosswalk.
+extract: extract-docusaurus extract-commands extract-devices extract-hardware-catalog extract-test-results extract-changelogs extract-dude-from-cache extract-skills extract-cliref link
+
+# `extract-full` uses extract-all-versions, which populates schema_nodes, so link-cliref
+# (last, after schema_nodes exists) resolves the entry crosswalk.
+extract-full: extract-docusaurus extract-all-versions extract-devices extract-hardware-catalog extract-test-results extract-changelogs extract-dude-from-cache extract-skills extract-cliref link link-cliref
+
+# Live fetch from manual.mikrotik.com's sitemap.xml, caching each page's raw
+# Markdown to manual/pages/ (gitignored — not the full-corpus fixture set) and
+# pruning cached pages the run did not discover (page-cache contract above).
+extract-docusaurus:
+	bun run src/extract-docusaurus.ts
+
+# Re-extract from the manual/pages/ cache (the last complete live run) — no network.
+extract-docusaurus-from-cache:
+	bun run src/extract-docusaurus.ts --from-cache
+
+# Compare extracted page count against the live llms.txt (B-0012 H8, V-docusaurus-docs-count);
+# the one network request a --from-cache run makes. Non-blocking by design — prints a
+# MATCH/MISMATCH line, does not fail the build.
+extract-docusaurus-check-counts:
+	bun run src/extract-docusaurus.ts --from-cache --check-counts
+
+# CLI-Reference overlay (issue #124): live fetch of every cli-reference page (sitemap ∪
+# llms.txt), overwriting manual/cli-reference/ (gitignored) and pruning pages the run did
+# not discover — a cached page is never reused (#160). Populates
+# cliref_pages/entries/fields/flags; link-cliref (below) adds the inspect crosswalk.
+extract-cliref:
+	bun run src/extract-cliref.ts
+
+# Re-extract from manual/cli-reference/ (the last complete live run) — no network.
+extract-cliref-from-cache:
+	bun run src/extract-cliref.ts --from-cache --check-counts
+
+# Resolve cliref entries to schema_nodes (exact/alias/manual-only). MUST run after
+# both extract-cliref AND schema_nodes population (extract-all-versions/extract-schema);
+# with an empty schema_nodes every entry resolves manual-only.
+link-cliref:
+	bun run src/link-cliref.ts
+
+# Regenerate the committed reviewable crosswalk (cli-reference-links.tsv) after a corpus
+# refresh — links, then rewrites the baseline. Commit the result. (V-cliref-link-drift)
+link-cliref-baseline:
+	bun run src/link-cliref.ts --write-baseline
+
+# V-cliref-link-drift gate: re-link the built DB and fail if the exact/alias/manual-only
+# crosswalk drifts from the committed cli-reference-links.tsv, or an alias names a segment
+# outside KNOWN_ALIAS_SEGMENTS. Needs a schema_nodes+cliref DB (release/qa build).
+link-cliref-check:
+	bun run src/link-cliref.ts --check
+
+# V-cliref-db-integrity gate: structural + semantic invariants on the full built overlay
+# (integrity/FK/orphans/enums/uniqueness + settable-only field view). Runs in qa.yml.
+cliref-db-check:
+	bun run src/check-cliref-db.ts
+
+# Historical-rebuild path only (March 2026 Confluence export) — not run by
+# `extract`/`extract-full`. See DESIGN.md "Legacy Confluence HTML archive".
+extract-legacy-confluence: extract-html extract-properties
+
+extract-html:
+	bun run src/extract-html.ts
+
+extract-properties:
+	bun run src/extract-properties.ts
+
+extract-commands:
+	bun run src/extract-commands.ts
+
+# Import from deep-inspect files (multi-arch, completion data).
+# Requires --x86= and/or --arm64= flags.
+# Example: make extract-schema X86=path/to/deep-inspect.x86.json ARM64=path/to/deep-inspect.arm64.json
+extract-schema:
+	bun run src/extract-schema.ts $(if $(X86),--x86=$(X86)) $(if $(ARM64),--arm64=$(ARM64)) $(EXTRA_FLAGS)
+
+extract-all-versions:
+	bun run src/extract-all-versions.ts
+
+extract-devices:
+	bun run src/extract-devices.ts
+
+extract-test-results:
+	bun run src/extract-test-results.ts
+
+extract-changelogs:
+	bun run src/extract-changelogs.ts
+
+# Extract changelogs for all available RouterOS v7 versions (7.1.1 back through current).
+# Discovers patch versions automatically using --probe-patches.
+extract-changelogs-extended:
+	bun run src/extract-changelogs.ts --probe-patches
+
+extract-videos:
+	bun run src/extract-videos.ts
+
+# Import cached transcripts (committed NDJSON in transcripts/) into DB — no yt-dlp needed.
+# Use in CI: fast, reproducible, no network dependency on YouTube.
+extract-videos-from-cache:
+	bun run src/extract-videos.ts --from-cache
+
+# Export current DB content to transcripts/YYYY-MM-DD/videos.ndjson.
+# Run locally after extract-videos, then commit the transcripts/ directory.
+save-videos-cache:
+	bun run src/extract-videos.ts --save-cache
+
+# Re-fetch every Dude wiki page from the Wayback Machine, rewriting the committed
+# dude/pages/ HTML and pruning pages no longer listed (review the diff before committing).
+# Images already in dude/images/ are kept; pass --force to the script to re-download them.
+extract-dude:
+	bun run src/extract-dude.ts
+
+# Re-extract from the committed HTML in dude/pages/ — no network dependency.
+extract-dude-from-cache:
+	bun run src/extract-dude.ts --from-cache --skip-images
+
+# Fetch agent skill guides from tikoci/routeros-skills GitHub repo.
+extract-skills:
+	bun run src/extract-skills.ts
+
+# Re-extract from cached skills/ directory — no network dependency for local/offline rebuilds.
+extract-skills-from-cache:
+	bun run src/extract-skills.ts --from-cache
+
+link:
+	bun run src/link-commands.ts
+
+gc-versions:
+	bun run src/gc-versions.ts $(EXTRA_FLAGS)
+
+setup:
+	bun install
+	bun run src/setup.ts
+
+clean:
+	rm -f $(DB) $(DB)-shm $(DB)-wal
+	rm -rf dist/
+
+# ── MCP eval (see BACKLOG: "MCP Behavioral Testing") ──
+
+# Phase 0: hand-curated golden-query retrieval eval
+eval:
+	bun run src/eval/retrieval.ts
+
+eval-update:
+	bun run src/eval/retrieval.ts --update-baseline
+
+# Phase 1: self-supervised retrieval eval (auto-generated from DB)
+eval-self:
+	bun run src/eval/self-supervised.ts
+
+eval-self-update:
+	bun run src/eval/self-supervised.ts --update-baseline

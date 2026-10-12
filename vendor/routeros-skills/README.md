@@ -1,0 +1,75 @@
+# MikroTik RouterOS "SkillStore" (`SKILL.md`) for AI assistants
+
+[![CI](https://github.com/tikoci/routeros-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/tikoci/routeros-skills/actions/workflows/ci.yml)
+
+Custom instruction skills for [GitHub Copilot](https://docs.github.com/en/copilot/customizing-copilot/adding-custom-instructions-for-github-copilot), Claude Code, Codex, and similar AI coding assistants that teach them about [MikroTik RouterOS](https://mikrotik.com/) v7.
+
+## Skills
+
+| Skill | Description |
+|-------|-------------|
+| **routeros-fundamentals** | RouterOS v7 domain knowledge — CLI, REST API, scripting, architecture. The foundational skill that others build on. |
+| **routeros-scripting** | RouterOS scripting and CLI config automation — `.rsc` syntax, `[find]` selectors, script-safe IDs, arrays, globals, scheduler policies. |
+| **routeros-container** | RouterOS `/container` subsystem — VETH/bridge networking, OCI images, device-mode, lifecycle management. |
+| **routeros-firewall** | RouterOS firewall filter, NAT, mangle, and address-list configuration — rule ordering, connection tracking, address/interface lists, DNS redirects, and port forwarding. |
+| **routeros-hotspot** | RouterOS hotspot captive portal for wired/wireless access control — hotspot chains, profiles, walled garden, DHCP option 114 (RFC 8910), RADIUS integration. |
+| **routeros-app-yaml** | RouterOS `/app` YAML format for container applications (7.21+ builtin, 7.22+ custom YAML). |
+| **routeros-command-tree** | `/console/inspect` API — command tree introspection, schema generation, CLI-to-REST mapping. |
+| **routeros-syntax-inspection** | `/console/inspect` syntax surfaces (`highlight`/`completion`/`syntax`) + `:parse` IL — validating commands, reading token streams, enum discovery, script "explain"/lint; necessary-not-sufficient vs runtime. |
+| **routeros-qemu-chr** | MikroTik CHR (Cloud Hosted Router) with QEMU — boot, VirtIO, acceleration, CI/CD patterns. |
+| **routeros-quickchr** | Ground RouterOS config/scripts/API code against a real router with quickchr (`@tikoci/quickchr`) — boot a disposable CHR, apply config, read it back; networking recipes, integration-test harness patterns. |
+| **routeros-quickchr-cli** | The shell-first half of quickchr — boot a disposable CHR from the terminal and drive it with centrs. Lifecycle (`add` is not `start`), `--bg`, endpoints and credentials, L2 links between VMs, and the provisioning steps that only apply before first boot. |
+| **routeros-centrs** | Drive a real router or CHR with centrs (`@tikoci/centrs`) — target resolution from the WinBox CDB or a quickchr VM, RouterOS command validation before it runs, and one structured envelope over REST, native API, SSH/SFTP, MAC-Telnet, and MNDP. Use instead of hand-rolled `curl`/`ssh`. |
+| **routeros-netinstall** | `netinstall-cli` for automated RouterOS device flashing — etherboot, BOOTP/TFTP, modescript. |
+| **routeros-mndp** | MNDP (MikroTik Neighbor Discovery Protocol) — wire format, `/ip/neighbor`, WinBox discovery. |
+| **routeros-mac-telnet** | MAC-Telnet (UDP 20561) — Layer-2 terminal by MAC address, 22-byte header, control blocks, MD5 + MTWEI (EC-SRP) auth. |
+| **routeros-sniffer** | RouterOS packet capture and TZSP streaming — `/tool/sniffer`, firewall sniff-tzsp, Wireshark integration. |
+
+## Install
+
+Clone this repo and symlink the skill folders into your assistant skill directories:
+
+```sh
+git clone https://github.com/tikoci/routeros-skills.git ~/GitHub/routeros-skills
+
+cd ~/GitHub/routeros-skills
+make link   # Copilot, Claude, Codex, and Hermes
+make check
+```
+
+Each skill is a folder containing a `SKILL.md` file and optionally a `references/` subfolder. VS Code Copilot and Claude Code automatically discover skills in their respective `~/.*/skills/` directories.
+Codex discovers user-authored skills in `~/.agents/skills`, and Hermes in `~/.hermes/skills`.
+
+> **Tip:** Start with **routeros-fundamentals** — it covers the core concepts that other skills reference.
+
+## Repository layout
+
+This repo is the **single source of truth** for all `routeros-*` skills. Locally, `~/.copilot/skills/routeros-*`, `~/.claude/skills/routeros-*`, `~/.agents/skills/routeros-*`, and `~/.hermes/skills/routeros-*` are symlinks into this repo — editing any of those locations is the same as editing here.
+
+Non-`routeros-*` skills (e.g. `tikoci-*`, `screenshot`, `sql-as-rag`) are personal/project-scoped and live only in the local user-level skill directories, **not** in this repo. See [SETUP.md](SETUP.md) for the full local setup guide.
+
+**The Skill Set is the `routeros-*/` folders only.** Everything else at the repo root is the **CI/QA and tooling layer** that validates and ships those skills — it is *not* part of the skill content and is not symlinked into `~/.*/skills/`:
+
+- `.github/` — CI workflows (lint, link check, dependency review), CodeQL Default Setup, and Dependabot config
+- `scripts/` — the `SKILL.md` validator (`check-skills.ts`) run by CI and `make lint`
+- `hooks/` — optional local git hooks that re-symlink skills after checkout/merge (`make install-hooks`)
+- `Makefile`, `.markdownlint*.yaml`, `cspell.json`, `project-words.txt`, `package.json`, `bun.lock` — lint/build configuration and the dev dependency tree
+
+## Scope
+
+These skills cover **RouterOS 7.x** (long-term and newer releases). RouterOS v6 is not covered and accuracy for v6 questions will be low.
+
+## Contributing
+
+1. Fork this repository (or branch, if you have write access)
+2. Edit or add skills (each skill is a `<name>/SKILL.md` folder)
+3. Run the checks locally: `make lint` (and `make lint-links` if you have [lychee](https://lychee.cli.rs/))
+4. Open a pull request — `main` is protected, so all changes land via PR
+
+Every PR is gated by [CI](.github/workflows/ci.yml) (markdownlint + cspell + a `SKILL.md` validator + offline link check) and reviewed by CodeRabbit and Copilot. See [CONTRIBUTING.md](CONTRIBUTING.md) for the local setup, the dictionary policy, and what each check does.
+
+Feedback, corrections, and new skill ideas are welcome via [issues](https://github.com/tikoci/routeros-skills/issues).
+
+## License
+
+[MIT](LICENSE)

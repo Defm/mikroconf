@@ -1,0 +1,44 @@
+{
+  "name": "@tikoci/rosetta",
+  "version": "0.11.3",
+  "description": "RouterOS documentation as SQLite FTS5 — RAG search + command glossary via MCP",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "rosetta": "bin/rosetta.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tikoci/rosetta.git"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "matrix/"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun tsc --noEmit",
+    "lint": "biome check src/",
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "lint:spell": "cspell lint . --no-progress",
+    "browse": "bun run src/mcp.ts browse",
+    "db:doctor": "bun run scripts/db-doctor.ts",
+    "db:sync": "bun run scripts/db-sync.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^4.3.6"
+  },
+  "engines": {
+    "bun": ">=1.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.7",
+    "@types/bun": "^1.3.10",
+    "cspell": "^10.0.0",
+    "linkedom": "^0.18.9",
+    "markdownlint-cli2": "^0.23.0",
+    "typescript": "^7.0.2"
+  }
+}

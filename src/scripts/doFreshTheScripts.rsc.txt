@@ -1,0 +1,102 @@
+
+:local sysname [/system identity get name];
+:local scriptname "doFreshTheScripts";
+:global globalScriptBeforeRun;
+$globalScriptBeforeRun $scriptname;
+
+:local GitHubUserName "Defm";
+:local GitHubRepoName "mikrobackups";
+
+#should be used for private repos
+:local GitHubAccessToken "";
+
+:local RequestUrl "https://$GitHubAccessToken@relay.usetheforce.io/$GitHubUserName/$GitHubRepoName/master/scripts/";
+
+:local UseUpdateList true;
+:local UpdateList [:toarray "doBackup,doEnvironmentSetup,doEnvironmentClearance,doRandomGen,doFreshTheScripts,doCertificatesIssuing,doNetwatchHost, doIPSECPunch,doStartupScript,doHeatFlag,doPeriodicLogDump,doPeriodicLogParse,doTelegramNotify,doLEDoff,doLEDon,doCPUHighLoadReboot,doUpdatePoliciesRemotely,doUpdateExternalDNS,doSuperviseCHRviaSSH,doCoolConsole,doFlushLogs,doCloudBackup"];
+
+:global globalNoteMe;
+:local itsOk true;
+:local state "";
+
+:foreach scriptName in=$UpdateList do={
+
+    :if ([:len [/system script find name=$scriptName]] = 0) do={
+
+      :set state "Script '$scriptName' skipped due to absence";
+      $globalNoteMe value=$state;
+
+    }
+}
+  
+:foreach scriptId in [/system script find] do={
+
+  :local code "";
+  :local theScript [/system script get $scriptId name];
+  :local skip false;
+
+  :if ( $UseUpdateList ) do={
+    :if ( [:len [find key=$theScript in=$UpdateList ]] > 0 ) do={
+    } else={
+      :set state "Script '$theScript' skipped due to setup";
+      $globalNoteMe value=$state;
+      :set skip true;
+    }
+  } else={
+  }
+
+  :if ( $itsOk and !$skip) do={
+    :do {
+
+      :set state "/tool fetch url=$RequestUrl$$theScript.rsc.txt output=user as-value";
+      $globalNoteMe value=$state;
+ 
+      #Please keep care about consistency if size over 4096 bytes
+      :local answer ([ /tool fetch url="$RequestUrl$$theScript.rsc.txt" output=user as-value]);
+      :set code ( $answer->"data" );
+      $globalNoteMe value="Done";
+
+    } on-error= { 
+      :set state "Error When Downloading Script '$theScript' From GitHub";
+      $globalNoteMe value=$state;
+      :set itsOk false;
+    }
+  }
+
+  :if ( $itsOk and !$skip) do={
+    :do {
+      :set state "Setting Up Script source for '$theScript'";
+      $globalNoteMe value=$state;
+      /system script set $theScript source="$code";
+      $globalNoteMe value="Done";
+    } on-error= { 
+      :set state "Error When Setting Up Script source for '$theScript'";
+      $globalNoteMe value=$state;
+      :set itsOk false;
+    }
+  }
+
+  :delay 1s
+}
+
+:local inf ""
+:if ($itsOk) do={
+  :set inf "$scriptname on $sysname: scripts refreshed Successfully"
+}
+
+:if (!$itsOk) do={
+  :set inf "Error When $scriptname on $sysname: $state"  
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+
+  :global globalTgMessage;
+  $globalTgMessage value=$inf;
+  :error $inf; 
+  
+}
+
+
+

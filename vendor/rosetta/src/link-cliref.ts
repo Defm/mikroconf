@@ -1,0 +1,333 @@
+#!/usr/bin/env bun
+
+/**
+ * link-cliref.ts — Resolve each CLI-Reference entry to its inspect coordinate and
+ * populate cliref_entry_schema_links. Issue #124.
+ *
+ * Runs AFTER both extract-schema.ts (schema_nodes) and extract-cliref.ts (cliref_*).
+ * Only the *entry* crosswalk is stored — it carries the non-derivable exact/alias
+ * decision. Field→arg links are the cliref_field_inspect_links view, never stored.
+ *
+ * Resolution, per entry source_path (e.g. "caps-man/acl/access-list"):
+ *   1. exact  — /<source_path> is a dir/cmd node in schema_nodes.
+ *   2. alias  — dropping exactly one internal source segment yields exactly one
+ *               dir/cmd node (the manual leaks internal module names into headings,
+ *               e.g. caps-man/acl/access-list → /caps-man/access-list). Ambiguous
+ *               (≥2 candidates) stays manual-only — never guess. A segment whose own
+ *               prefix is a published entry is a real menu and is never dropped (#136).
+ *   3. manual-only — no link row; a first-class entry inspect cannot self-report.
+ *
+ * Usage:
+ *   bun run src/link-cliref.ts                  # link against the current DB
+ *   bun run src/link-cliref.ts --report         # print exact/alias/manual-only breakdown
+ *   bun run src/link-cliref.ts --write-baseline # link + (re)write cli-reference-links.tsv
+ *   bun run src/link-cliref.ts --check          # link + fail if the committed baseline drifts
+ */
+
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { db, initDb } from "./db.ts";
+
+const REPORT = process.argv.includes("--report");
+const WRITE_BASELINE = process.argv.includes("--write-baseline");
+const CHECK = process.argv.includes("--check");
+
+// Committed reviewable crosswalk (V-cliref-link-drift). Repo root, next to device-map.tsv.
+const BASELINE_PATH = join(import.meta.dirname, "..", "cli-reference-links.tsv");
+
+interface SchemaNode {
+  id: number;
+  type: string;
+}
+
+/**
+ * Internal module names observed in the current CLI-Reference headings but absent
+ * from the public inspect path. Alias matching is deliberately an allowlist: accepting
+ * any droppable segment would silently normalize a new source mismatch instead of
+ * making the link-count drift gate report it.
+ */
+export const KNOWN_ALIAS_SEGMENTS = new Set([
+  "acl",
+  "cfg",
+  "chancfg",
+  "controller",
+  "dpathcfg",
+  "ifaceactual",
+  "ratescfg",
+  "remoteap",
+  "rule",
+  "seccfg",
+  "sta",
+  "poe",
+  "qos",
+  "easymesh",
+  "route",
+  "serial-interface",
+  "ddns",
+  "ifaces",
+  "queues",
+]);
+
+/** dir/cmd nodes keyed by path (a path may exist as more than one type). */
+function loadNodeIndex(): Map<string, SchemaNode[]> {
+  const rows = db
+    .query("SELECT id, path, type FROM schema_nodes WHERE type IN ('dir', 'cmd')")
+    .all() as Array<{ id: number; path: string; type: string }>;
+  const index = new Map<string, SchemaNode[]>();
+  for (const r of rows) {
+    const list = index.get(r.path);
+    if (list) list.push({ id: r.id, type: r.type });
+    else index.set(r.path, [{ id: r.id, type: r.type }]);
+  }
+  return index;
+}
+
+/** Inspect type an entry of this source_type should prefer when a path is polymorphic. */
+function preferredType(sourceType: string): string {
+  return sourceType === "Command" ? "cmd" : "dir"; // Directory / Settings Directory → dir
+}
+
+/**
+ * The node at a path whose type matches the entry kind, or null when only a
+ * type-mismatched node exists there (Command source over a `dir` node, or vice versa).
+ * A mismatch is treated as "no candidate" rather than silently linking the wrong-typed
+ * node — the field view branches on the linked node's type, so a mismatched link would
+ * silently produce wrong/empty field→inspect mappings. Never falls back to nodes[0].
+ */
+function pickNode(nodes: SchemaNode[], sourceType: string): SchemaNode | null {
+  const want = preferredType(sourceType);
+  return nodes.find((n) => n.type === want) ?? null;
+}
+
+export interface EntryLink {
+  schemaNodeId: number;
+  matchKind: "exact" | "alias";
+  matchDetail: string | null;
+}
+
+export function resolveEntry(
+  sourcePath: string,
+  sourceType: string,
+  index: Map<string, SchemaNode[]>,
+  publishedPaths: ReadonlySet<string> = new Set(),
+): EntryLink | null {
+  const exact = index.get(`/${sourcePath}`);
+  if (exact) {
+    const node = pickNode(exact, sourceType);
+    // A path that exists only as the wrong type is not a valid exact match — fall
+    // through to the alias search rather than linking a type-mismatched node.
+    if (node) return { schemaNodeId: node.id, matchKind: "exact", matchDetail: null };
+  }
+
+  // Alias: drop one *internal* segment at a time; collect distinct matching nodes.
+  // Only internal segments (never the first/root-menu or last/leaf name) are the
+  // spurious module names the manual leaks — dropping the last segment would collapse a
+  // genuinely-absent submenu (e.g. interface/bridge/msrp) onto its parent, a false
+  // alias; dropping the first would rename the root menu.
+  const segments = sourcePath.split("/");
+  const candidates = new Map<number, { node: SchemaNode; dropped: string }>();
+  for (let i = 1; i < segments.length - 1; i++) {
+    const dropped = segments[i];
+    if (!KNOWN_ALIAS_SEGMENTS.has(dropped)) continue;
+    // Prefix-scoping (#136): the allowlist encodes "this word is a doc-internal module
+    // name" as a global property, but it is positional. When the prefix ending at this
+    // segment is itself a published entry, the segment is a REAL menu at this point in the
+    // path (`interface/ethernet/poe`, `interface/ethernet/switch/qos`) — dropping it links
+    // a different command. Derivable from the publication alone; no device needed.
+    if (publishedPaths.has(segments.slice(0, i + 1).join("/"))) continue;
+    const candidatePath = `/${segments.slice(0, i).concat(segments.slice(i + 1)).join("/")}`;
+    const nodes = index.get(candidatePath);
+    if (nodes) {
+      const node = pickNode(nodes, sourceType);
+      if (node) candidates.set(node.id, { node, dropped });
+    }
+  }
+  if (candidates.size === 1) {
+    const { node, dropped } = [...candidates.values()][0];
+    return { schemaNodeId: node.id, matchKind: "alias", matchDetail: `dropped segment "${dropped}"` };
+  }
+  return null; // no match, or ambiguous → manual-only
+}
+
+export function linkEntries(): { exact: number; alias: number; manual: number } {
+  const index = loadNodeIndex();
+  // Fail fast before the DELETE: with no dir/cmd nodes, schema_nodes hasn't been
+  // populated (extract-schema/extract-all-versions must run first). Proceeding would
+  // wipe any previously-correct links and re-resolve everything to manual-only — a
+  // silent regression. This is why `make extract` (which loads only the legacy
+  // `commands` table) does NOT run link-cliref; `make extract-full` does.
+  if (index.size === 0) {
+    throw new Error(
+      "link-cliref: schema_nodes has no dir/cmd nodes — run extract-schema/extract-all-versions first. Refusing to wipe cliref_entry_schema_links.",
+    );
+  }
+  const entries = db
+    .query("SELECT id, source_path, source_type FROM cliref_entries")
+    .all() as Array<{ id: number; source_path: string; source_type: string }>;
+  // Published menu paths, for the alias branch's prefix-scoping guard (#136).
+  const publishedPaths = new Set(entries.map((e) => e.source_path));
+
+  const insLink = db.prepare(
+    "INSERT INTO cliref_entry_schema_links (entry_id, schema_node_id, match_kind, match_detail) VALUES (?, ?, ?, ?)",
+  );
+  let exact = 0;
+  let alias = 0;
+  let manual = 0;
+  db.transaction(() => {
+    db.run("DELETE FROM cliref_entry_schema_links;");
+    for (const e of entries) {
+      const link = resolveEntry(e.source_path, e.source_type, index, publishedPaths);
+      if (link === null) {
+        manual++;
+        continue;
+      }
+      insLink.run(e.id, link.schemaNodeId, link.matchKind, link.matchDetail);
+      if (link.matchKind === "exact") exact++;
+      else alias++;
+    }
+  })();
+  return { exact, alias, manual };
+}
+
+interface CrosswalkRow {
+  source_path: string;
+  source_type: string;
+  match_kind: string; // 'exact' | 'alias' | 'manual-only'
+  match_detail: string;
+}
+
+/** Every entry's resolution, manual-only entries surfaced (LEFT JOIN → NULL match). */
+export function readCrosswalk(): CrosswalkRow[] {
+  return db
+    .query(
+      `SELECT e.source_path                          AS source_path,
+              e.source_type                          AS source_type,
+              COALESCE(l.match_kind, 'manual-only')  AS match_kind,
+              COALESCE(l.match_detail, '')           AS match_detail
+       FROM cliref_entries e
+       LEFT JOIN cliref_entry_schema_links l ON l.entry_id = e.id
+       -- (page_id, source_order) is the entry identity and breaks ties fully: the corpus
+       -- allows duplicate heading paths, so source_path/source_type alone leaves tied rows
+       -- in undefined order and the baseline TSV could reorder harmlessly and trip --check.
+       ORDER BY e.source_path, e.source_type, e.page_id, e.source_order`,
+    )
+    .all() as CrosswalkRow[];
+}
+
+/**
+ * The committed reviewable crosswalk. Body lists only the audit-worthy rows — alias
+ * (the manual leaked an internal module segment) and manual-only (no inspect node) —
+ * since an exact match is just source_path == inspect path. A `# counts` header pins
+ * exact/alias/manual-only/entries so a pure exact-count shift can't slip past the
+ * byte-compare. Any drift (new mismatch, changed alias segment, count move) shows in
+ * the diff, exactly like device-map.tsv.
+ */
+export function buildBaselineTsv(): string {
+  const rows = readCrosswalk();
+  let exact = 0;
+  let alias = 0;
+  let manual = 0;
+  const body: string[] = [];
+  for (const r of rows) {
+    if (r.match_kind === "exact") {
+      exact++;
+      continue;
+    }
+    if (r.match_kind === "alias") alias++;
+    else manual++;
+    // source_path/source_type/match_detail are slug/enum/quoted-segment text — no tabs
+    // or newlines — but sanitize defensively so a row can never break the TSV grid.
+    body.push([r.source_path, r.source_type, r.match_kind, r.match_detail].map((c) => c.replace(/[\t\r\n]/g, " ")).join("\t"));
+  }
+  return [
+    "# cli-reference entry→inspect crosswalk (V-cliref-link-drift baseline; regenerate: make link-cliref-baseline)",
+    `# counts\texact=${exact}\talias=${alias}\tmanual-only=${manual}\tentries=${rows.length}`,
+    ["source_path", "source_type", "match_kind", "match_detail"].join("\t"),
+    ...body,
+    "",
+  ].join("\n");
+}
+
+/**
+ * Line-level diff of two baseline TSVs as `- committed` / `+ built` rows, so a STALE
+ * failure names what moved instead of leaving CI log readers to guess. Lines are counted,
+ * not deduplicated: the corpus allows duplicate heading paths (identical body lines).
+ */
+export function baselineDrift(committed: string, fresh: string): string[] {
+  const counts = new Map<string, number>();
+  for (const line of committed.split("\n")) counts.set(line, (counts.get(line) ?? 0) + 1);
+  const added: string[] = [];
+  for (const line of fresh.split("\n")) {
+    const n = counts.get(line) ?? 0;
+    if (n > 0) counts.set(line, n - 1);
+    else added.push(`+ ${line}`);
+  }
+  const removed: string[] = [];
+  for (const [line, n] of counts) for (let i = 0; i < n; i++) removed.push(`- ${line}`);
+  return [...removed, ...added];
+}
+
+/** The `--check` STALE failure, carrying the drift rows; null when the baseline matches. */
+export function staleBaselineProblem(committed: string, fresh: string): string | null {
+  if (committed === fresh) return null;
+  return (
+    `cli-reference-links.tsv is STALE — the built DB's crosswalk differs from the committed baseline. ` +
+    `Review the change; if intended, run 'make link-cliref-baseline' and commit cli-reference-links.tsv.\n` +
+    baselineDrift(committed, fresh)
+      .map((d) => `      ${d}`)
+      .join("\n")
+  );
+}
+
+/** Every stored alias must name a KNOWN_ALIAS_SEGMENTS member (the linker allowlist). */
+export function auditAliasSegments(): string[] {
+  const problems: string[] = [];
+  const aliases = db
+    .query("SELECT e.source_path, l.match_detail FROM cliref_entry_schema_links l JOIN cliref_entries e ON e.id = l.entry_id WHERE l.match_kind = 'alias'")
+    .all() as Array<{ source_path: string; match_detail: string }>;
+  for (const a of aliases) {
+    const dropped = a.match_detail.match(/^dropped segment "(.+)"$/)?.[1];
+    if (dropped === undefined || !KNOWN_ALIAS_SEGMENTS.has(dropped)) {
+      problems.push(`alias for ${a.source_path} names an unexpected segment: ${JSON.stringify(a.match_detail)} (not in KNOWN_ALIAS_SEGMENTS)`);
+    }
+  }
+  return problems;
+}
+
+if (import.meta.main) {
+  initDb();
+  const { exact, alias, manual } = linkEntries();
+  console.log(`Linked cliref entries: ${exact} exact, ${alias} alias, ${manual} manual-only`);
+
+  if (REPORT) {
+    const rows = db
+      .query(
+        `SELECT e.source_path, l.match_kind, l.match_detail
+         FROM cliref_entries e JOIN cliref_entry_schema_links l ON l.entry_id = e.id
+         WHERE l.match_kind = 'alias' ORDER BY e.source_path`,
+      )
+      .all() as Array<{ source_path: string; match_kind: string; match_detail: string }>;
+    console.log(`\nAlias resolutions (${rows.length}):`);
+    for (const r of rows) console.log(`  ${r.source_path}  (${r.match_detail})`);
+  }
+
+  if (WRITE_BASELINE) {
+    const tsv = buildBaselineTsv();
+    await Bun.write(BASELINE_PATH, tsv);
+    console.log(`\nWrote crosswalk baseline (${alias} alias + ${manual} manual-only rows) to ${BASELINE_PATH}`);
+  }
+
+  if (CHECK) {
+    const problems = auditAliasSegments();
+    const fresh = buildBaselineTsv();
+    const committed = existsSync(BASELINE_PATH) ? readFileSync(BASELINE_PATH, "utf8") : "";
+    const stale = staleBaselineProblem(committed, fresh);
+    if (stale) problems.push(stale);
+    if (problems.length > 0) {
+      console.error(`\nV-cliref-link-drift FAILED (${problems.length}):`);
+      for (const p of problems) console.error(`  ✗ ${p}`);
+      process.exit(1);
+    }
+    console.log(`\nV-cliref-link-drift OK — crosswalk matches the committed baseline; all aliases are allowlisted.`);
+  }
+}

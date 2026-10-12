@@ -1,0 +1,3168 @@
+/**
+ * query.ts — Natural-language → FTS5 query planner for RouterOS documentation.
+ *
+ * NL → FTS5 query planner for docs. SQL-as-RAG pattern:
+ * no author/date/engagement signals — just text search with BM25 ranking.
+ */
+
+import { type CanonicalCommand, canonicalize } from "./canonicalize.ts";
+import { makeDbVerbResolver } from "./canonicalize-resolver.ts";
+import { classifyQuery, type QueryClassification } from "./classify.ts";
+import { db } from "./db.ts";
+import {
+  gradeRows,
+  type PropertyLookupConfidence,
+  tierRank,
+} from "./property-confidence.ts";
+import { compareVersions } from "./version-compare.ts";
+
+/**
+ * Sentinel markers for FTS5 snippet() highlighting. Indexed prose is raw
+ * Markdown/MDX (since T-0035) and can already contain native `**bold**`, so
+ * wrapping matches in the same `**` markers collides (`****hAP****`). `>>>`/
+ * `<<<` are corpus-safe: the only literal occurrences in the 365 in-scope
+ * pages are fenced-code API wire-protocol notation (api.md), which lives in
+ * the separate `code` FTS column that snippet() never targets.
+ */
+export const EXCERPT_MARK_START = ">>>";
+export const EXCERPT_MARK_END = "<<<";
+
+/**
+ * Lazy DB-backed verb resolver for the classifier. Built on first use so
+ * tests that import query.ts but never call searchAll don't pay the cost,
+ * and it inherits the same `db` singleton everything else uses.
+ */
+let _verbResolver: ReturnType<typeof makeDbVerbResolver> | null = null;
+function getVerbResolver() {
+  if (!_verbResolver) _verbResolver = makeDbVerbResolver(db);
+  return _verbResolver;
+}
+
+export type SearchResult = {
+  id: number;
+  title: string;
+  path: string;
+  url: string;
+  word_count: number;
+  code_lines: number;
+  excerpt: string;
+  best_section?: { heading: string; anchor_id: string; url: string };
+};
+
+export type SearchResponse = {
+  query: string;
+  ftsQuery: string;
+  fallbackMode: "or" | null;
+  results: SearchResult[];
+  total: number;
+  note?: string;
+};
+
+type CsvScalar = string | number | null;
+
+const DEFAULT_LIMIT = 8;
+const MAX_TERMS = 8;
+const MIN_TERM_LENGTH = 2;
+
+const STOP_WORDS = new Set([
+  "a", "about", "an", "and", "are", "by", "can", "command", "commands",
+  "configure", "do", "does", "documentation", "docs", "find", "for", "from",
+  "how", "i", "in", "into", "is", "it", "me", "mikrotik", "most", "my",
+  "of", "on", "or", "page", "pages", "routeros", "router", "show", "tell",
+  "that", "the", "their", "them", "these", "this", "those",
+  "what", "when", "where", "which", "why", "with", "without",
+]);
+
+const CHANGELOG_GENERIC_TERMS = new Set([
+  "change",
+  "changed",
+  "changes",
+  "changelog",
+  "changelogs",
+  "new",
+  "release",
+  "released",
+  "version",
+]);
+
+const COMPOUND_TERMS: [string, string][] = [
+  ["firewall", "filter"],
+  ["firewall", "mangle"],
+  ["firewall", "nat"],
+  ["firewall", "raw"],
+  ["ip", "address"],
+  ["ip", "route"],
+  ["ip", "pool"],
+  ["ip", "firewall"],
+  ["ip", "dns"],
+  ["ip", "dhcp"],
+  ["bridge", "port"],
+  ["bridge", "vlan"],
+  ["bridge", "filter"],
+  ["bridge", "host"],
+  ["system", "scheduler"],
+  ["system", "script"],
+  ["system", "package"],
+  ["system", "clock"],
+  ["system", "identity"],
+  ["system", "resource"],
+  ["interface", "bridge"],
+  ["interface", "vlan"],
+  ["interface", "wireless"],
+  ["interface", "ethernet"],
+  ["interface", "list"],
+  ["routing", "filter"],
+  ["routing", "table"],
+  ["routing", "ospf"],
+  ["routing", "bgp"],
+  ["container", "envs"],
+  ["container", "mounts"],
+  ["certificate", "import"],
+  ["caps", "man"],
+  ["wifi", "channel"],
+  ["wifi", "security"],
+  ["wifi", "configuration"],
+  ["dhcp", "server"],
+  ["dhcp", "client"],
+  ["dhcp", "relay"],
+  ["switch", "chip"],
+  ["switch", "rule"],
+  ["queue", "simple"],
+  ["queue", "tree"],
+  ["address", "list"],
+];
+
+// KNOWN_TOPICS is defined in classify.ts (pure module, no DB) and re-exported
+// from here for backward compatibility. See classify.ts for the canonical definition.
+export { KNOWN_TOPICS } from "./classify.ts";
+
+function applyContextualTermFilters(terms: string[]): string[] {
+  // "set up" is a phrasal verb: as an AND term the particle "up" excludes focused pages
+  // that never use the word (the split DHCP Server page says "setup"/"set", not "up").
+  // Runs first so adjacency is judged on the original order, not after "switch" is dropped.
+  let filtered = terms.filter((term, i) => !(term === "up" && terms[i - 1] === "set"));
+  if (filtered.includes("bridge") && filtered.includes("vlan") && filtered.includes("filtering")) {
+    filtered = filtered.filter((term) => term !== "switch");
+  }
+  return filtered;
+}
+
+function getSpecialSearchHint(question: string): string | undefined {
+  const normalized = question.toLowerCase();
+  if (/(?:^|\b)(?:the\s+)?dude(?:\b|$)/.test(normalized)) {
+    return 'This looks like a Dude query. For retired Dude GUI or wiki topics, use routeros_dude_search. For current RouterOS CLI and server paths, use routeros_command_tree with path "/dude".';
+  }
+  return undefined;
+}
+
+function escapeCsv(value: CsvScalar): string {
+  if (value === null) return "";
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function rowsToCsv<T extends Record<string, CsvScalar>>(
+  rows: T[],
+  columns: Array<keyof T & string>,
+): string {
+  const header = columns.join(",");
+  const body = rows.map((row) => columns.map((column) => escapeCsv(row[column] ?? null)).join(",")).join("\n");
+  return body ? `${header}\n${body}\n` : `${header}\n`;
+}
+
+export function extractTerms(question: string): string[] {
+  const terms = question
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= MIN_TERM_LENGTH && !STOP_WORDS.has(t));
+  // Cap after the contextual filters so a dropped term frees its slot.
+  return applyContextualTermFilters(terms).slice(0, MAX_TERMS);
+}
+
+export function buildFtsQuery(terms: string[], mode: "AND" | "OR"): string {
+  if (terms.length === 0) return "";
+
+  // Check for compound terms and convert to NEAR expressions
+  const used = new Set<number>();
+  const parts: string[] = [];
+
+  for (const [a, b] of COMPOUND_TERMS) {
+    const idxA = terms.indexOf(a);
+    const idxB = terms.indexOf(b);
+    if (idxA >= 0 && idxB >= 0 && !used.has(idxA) && !used.has(idxB)) {
+      parts.push(`NEAR("${a}" "${b}", 5)`);
+      used.add(idxA);
+      used.add(idxB);
+    }
+  }
+
+  // Add remaining terms
+  for (let i = 0; i < terms.length; i++) {
+    if (!used.has(i)) {
+      parts.push(`"${terms[i]}"`);
+    }
+  }
+
+  return parts.join(mode === "AND" ? " AND " : " OR ");
+}
+
+export function searchPages(question: string, limit = DEFAULT_LIMIT): SearchResponse {
+  const terms = extractTerms(question);
+  const note = getSpecialSearchHint(question);
+  if (terms.length === 0) {
+    return { query: question, ftsQuery: "", fallbackMode: null, results: [], total: 0, ...(note ? { note } : {}) };
+  }
+
+  // Try AND first
+  let ftsQuery = buildFtsQuery(terms, "AND");
+  let fallbackMode: "or" | null = null;
+
+  const results = runFtsQuery(ftsQuery, limit);
+
+  // Preserve precise AND matches, then fill unused result slots from OR
+  // matches so short topic pages are not hidden by a small incidental set.
+  if (results.length < limit && terms.length > 1) {
+    const orQuery = buildFtsQuery(terms, "OR");
+    const seen = new Set(results.map((result) => result.id));
+    const originalLength = results.length;
+
+    for (const result of runFtsQuery(orQuery, limit)) {
+      if (results.length >= limit) break;
+      if (seen.has(result.id)) continue;
+      seen.add(result.id);
+      results.push(result);
+    }
+
+    if (results.length > originalLength) {
+      ftsQuery = orQuery;
+      fallbackMode = "or";
+    }
+  }
+
+  attachBestSections(results, terms);
+
+  return { query: question, ftsQuery, fallbackMode, results, total: results.length, ...(note ? { note } : {}) };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// searchAll — unified entry point for MCP `routeros_search` and TUI `s`.
+// Runs the classifier first, then the main pages FTS, then classifier-informed
+// side queries in parallel (all sync under bun:sqlite). Returns a single
+// enriched response so a typical question gets a multi-source answer in one
+// roundtrip. See DESIGN.md "North Star Architecture".
+// ───────────────────────────────────────────────────────────────────────────
+
+type RelatedCommand = {
+  path: string;
+  name: string;
+  type: string;
+  description: string | null;
+  page_title: string | null;
+  page_url: string | null;
+};
+
+type RelatedProperty = {
+  name: string;
+  type: string | null;
+  default_val: string | null;
+  description: string;
+  page_title: string;
+  page_url: string;
+  page_id: number | null;
+  confidence: PropertyLookupConfidence;
+  source: PropertyLookupRow["source"];
+};
+
+type RelatedDevice = {
+  product_name: string;
+  product_code: string | null;
+  architecture: string | null;
+  cpu: string | null;
+  license_level: number | null;
+  product_url: string | null;
+  category: string | null;
+  discontinued: boolean;
+};
+
+type RelatedCallout = {
+  type: string;
+  content: string;
+  page_title: string;
+  page_url: string;
+  excerpt: string;
+};
+
+type CommandNodeMatch = {
+  path: string;
+  type: string;
+  description: string | null;
+  linked_page?: { id: number; title: string; url: string };
+};
+
+type RelatedGlossary = {
+  term: string;
+  definition: string;
+  category: string;
+  search_hint: string;
+};
+
+export type SearchAllRelated = {
+  callouts?: RelatedCallout[];
+  properties?: RelatedProperty[];
+  changelogs?: ChangelogResult[];
+  videos?: VideoSearchResult[];
+  commands?: RelatedCommand[];
+  devices?: RelatedDevice[];
+  skills?: SkillSummary[];
+  command_node?: CommandNodeMatch;
+  glossary?: RelatedGlossary;
+};
+
+export type SearchAllResponse = {
+  query: string;
+  classified: QueryClassification;
+  pages: SearchResult[];
+  total_pages: number;
+  fallback_mode: "or" | null;
+  related: SearchAllRelated;
+  next_steps: string[];
+  note?: string;
+};
+
+// Related-block caps scale with `limit` so an agent (or human) can express
+// "hunger" through one knob — small limit = focused, large limit = wider net.
+// See DESIGN.md "limit as hunger signal" (Parra-aligned: one knob, not many tools).
+const BASE_RELATED_CAP = 3;
+const BASE_RELATED_VIDEO_CAP = 2;
+
+function relatedCaps(limit: number): { cap: number; videoCap: number } {
+  return {
+    cap: Math.max(BASE_RELATED_CAP, Math.floor(limit / 3)),
+    videoCap: Math.max(BASE_RELATED_VIDEO_CAP, Math.floor(limit / 4)),
+  };
+}
+
+export function searchAll(query: string, limit = DEFAULT_LIMIT): SearchAllResponse {
+  const classified = classifyQuery(query, { isVerb: getVerbResolver() });
+  const pagesResp = searchPages(query, limit);
+  const { cap: RELATED_CAP, videoCap: RELATED_VIDEO_CAP } = relatedCaps(limit);
+
+  const related: SearchAllRelated = {};
+
+  // ── Command-path side query ─────────────────────────────────────────────
+  if (classified.command_path) {
+    const node = db
+      .prepare(
+        `SELECT c.path, c.type, c.description,
+                p.id as page_id, p.title as page_title, p.url as page_url
+         FROM commands c
+         LEFT JOIN pages p ON p.id = c.page_id
+         WHERE c.path = ? LIMIT 1`,
+      )
+      .get(classified.command_path) as
+      | { path: string; type: string; description: string | null; page_id: number | null; page_title: string | null; page_url: string | null }
+      | null;
+
+    if (node) {
+      related.command_node = {
+        path: node.path,
+        type: node.type,
+        description: node.description,
+        ...(node.page_id && node.page_title && node.page_url
+          ? { linked_page: { id: node.page_id, title: node.page_title, url: node.page_url } }
+          : {}),
+      };
+    }
+
+    const children = db
+      .prepare(
+        `SELECT c.path, c.name, c.type, c.description,
+                p.title as page_title, p.url as page_url
+         FROM commands c
+         LEFT JOIN pages p ON p.id = c.page_id
+         WHERE c.parent_path = ?
+         ORDER BY c.type DESC, c.name
+         LIMIT ?`,
+      )
+      .all(classified.command_path, RELATED_CAP) as RelatedCommand[];
+    if (children.length > 0) related.commands = children;
+  }
+
+  // ── Property side query ─────────────────────────────────────────────────
+  if (classified.property) {
+    const props = lookupProperty(classified.property).slice(0, RELATED_CAP);
+    if (props.length > 0) {
+      // section_anchor rides along because this block can surface several same-named properties
+      // from one page (issue #90) — without it they are indistinguishable in the response.
+      related.properties = props.map((p) => ({
+        name: p.name,
+        type: p.type,
+        default_val: p.default_val,
+        description: p.description,
+        section_anchor: p.section_anchor,
+        page_title: p.page_title,
+        page_url: p.page_url,
+        page_id: p.page_id,
+        confidence: p.confidence,
+        source: p.source,
+      }));
+    }
+  }
+
+  // ── Device side query ───────────────────────────────────────────────────
+  // Regex classification (classified.device) handles named families; when it finds nothing
+  // and the whole input is a single token that matches an alias (a bare product code like
+  // "cap_ac" or a concatenation like "hapax3" the regexes miss), probe once and resolve it
+  // — no fuzz, indexed lookups only.
+  let deviceQuery = classified.device;
+  if (!deviceQuery && /^[\w.+-]{3,40}$/.test(query.trim()) && probeAlias(query)) {
+    deviceQuery = query.trim();
+  }
+  // Per-token probe: a device mentioned inside prose ("hapax3 wifi settings") that the styled
+  // regexes can't see (#67). Only tokens that look like model spellings — containing a digit
+  // or a code separator — are probed, so bare English words that double as product names
+  // (Audience, KNOT, Cube, DISC) stay regex-gated on their styled form. Leftmost hit wins.
+  if (!deviceQuery) {
+    const tokens = query.trim().split(/\s+/).map((t) => t.replace(/[.,;:!?]+$/, ""));
+    const eligible = tokens.filter((t) => /^[\w.+-]{3,40}$/.test(t) && /[\d_+-]/.test(t)).slice(0, 8);
+    deviceQuery = eligible.find((t) => probeAlias(t));
+  }
+  if (deviceQuery) {
+    const devResp = searchDevices(deviceQuery, {}, RELATED_CAP);
+    if (devResp.results.length > 0) {
+      const capped = devResp.results.slice(0, RELATED_CAP);
+      const meta = catalogMetaForDeviceIds(capped.map((d) => d.id));
+      related.devices = capped.map((d) => {
+        const m = meta.get(d.id);
+        return {
+          product_name: d.product_name,
+          product_code: d.product_code,
+          architecture: d.architecture,
+          cpu: d.cpu,
+          license_level: d.license_level,
+          product_url: d.product_url,
+          category: m?.category ?? null,
+          discontinued: m?.discontinued ?? false,
+        };
+      });
+    }
+  }
+
+  // ── Changelog side query ────────────────────────────────────────────────
+  // Prefer classifier signals: version narrows, primary topic filters by category.
+  if (classified.version || classified.topics.length > 0) {
+    const opts: Parameters<typeof searchChangelogs>[1] = { limit: RELATED_CAP };
+    if (classified.version) opts.version = classified.version;
+    if (classified.topics[0]) {
+      // Category filter — only fire if the topic is actually a known changelog category.
+      const exists = db
+        .prepare("SELECT 1 FROM changelogs WHERE category = ? LIMIT 1")
+        .get(classified.topics[0]);
+      if (exists) opts.category = classified.topics[0];
+    }
+    // Only run if we actually have a narrowing signal (don't flood with recent generic entries).
+    if (opts.version || opts.category) {
+      const logs = searchChangelogs(query, opts);
+      if (logs.length > 0) related.changelogs = logs.slice(0, RELATED_CAP);
+    }
+  }
+
+  // ── Video side query ────────────────────────────────────────────────────
+  const videos = searchVideos(query, RELATED_VIDEO_CAP);
+  if (videos.length > 0) related.videos = videos;
+
+  // ── Callout side query ──────────────────────────────────────────────────
+  const calloutsRaw = searchCallouts(query, undefined, RELATED_CAP);
+  if (calloutsRaw.length > 0) {
+    related.callouts = calloutsRaw.slice(0, RELATED_CAP).map((c) => ({
+      type: c.type,
+      content: c.content,
+      page_title: c.page_title,
+      page_url: c.page_url,
+      excerpt: c.excerpt,
+    }));
+  }
+
+  // ── Skills side query ───────────────────────────────────────────────────
+  // Only include when a classifier topic overlaps a skill name (cheap string match).
+  if (classified.topics.length > 0) {
+    const allSkills = listSkills();
+    const matched = allSkills.filter((s) =>
+      classified.topics.some((t) => s.name.toLowerCase().includes(t)),
+    );
+    if (matched.length > 0) related.skills = matched.slice(0, 1);
+  }
+
+  // ── Glossary side query ─────────────────────────────────────────────────
+  // For short single-term queries, attach a glossary entry if one matches the
+  // raw input (or a topic) by exact term or alias. Surfaces domain jargon to
+  // agents without adding a separate tool.
+  {
+    const candidates: string[] = [];
+    if (classified.input.split(/\s+/).length <= 2) candidates.push(classified.input);
+    candidates.push(...classified.topics);
+    for (const c of candidates) {
+      const g = lookupGlossary(c);
+      if (g) {
+        related.glossary = {
+          term: g.term,
+          definition: g.definition,
+          category: g.category,
+          search_hint: g.search_hint,
+        };
+        break;
+      }
+    }
+  }
+
+  const next_steps = buildNextSteps(classified, pagesResp.results, related);
+
+  const note = buildSearchAllNote(classified, pagesResp, related);
+
+  return {
+    query,
+    classified,
+    pages: pagesResp.results,
+    total_pages: pagesResp.total,
+    fallback_mode: pagesResp.fallbackMode,
+    related,
+    next_steps,
+    ...(note ? { note } : {}),
+  };
+}
+
+function buildNextSteps(
+  classified: QueryClassification,
+  pages: SearchResult[],
+  related: SearchAllRelated,
+): string[] {
+  const steps: string[] = [];
+
+  if (related.command_node) {
+    const p = related.command_node.path;
+    steps.push(`routeros_command_tree path="${p}" — browse children of ${p}`);
+    if (classified.version) {
+      steps.push(`routeros_command_version_check path="${p}" — confirm availability in ${classified.version}`);
+    }
+    if (related.command_node.linked_page) {
+      steps.push(`routeros_get_page id=${related.command_node.linked_page.id} — full docs for "${related.command_node.linked_page.title}"`);
+    }
+  }
+
+  if (classified.device) {
+    steps.push(`routeros_device_lookup query="${classified.device}" — hardware specs and test results`);
+  }
+
+  if (classified.property && !related.properties?.length) {
+    steps.push(`routeros_lookup_property name="${classified.property}" — direct property lookup (with optional command_path filter)`);
+  }
+
+  if (classified.version && !related.changelogs?.length) {
+    steps.push(`routeros_search_changelogs version="${classified.version}" — version-specific changes`);
+  }
+
+  // Zero-result fallback — steer the agent toward alternate tools.
+  if (pages.length === 0 && Object.keys(related).length === 0) {
+    steps.push(`routeros_search_changelogs query="${classified.input}" — check if the term appears in changelog history`);
+    if (!classified.device && /[A-Z]{2,}\d/.test(classified.input)) {
+      steps.push(`routeros_device_lookup query="${classified.input}" — could be a device model`);
+    }
+    steps.push(`routeros_stats — verify DB coverage and version range`);
+  }
+
+  if (pages.length > 0) {
+    const top = pages[0];
+    steps.push(`routeros_get_page id=${top.id} — open "${top.title}"`);
+  }
+
+  return steps;
+}
+
+function buildSearchAllNote(
+  classified: QueryClassification,
+  pagesResp: SearchResponse,
+  related: SearchAllRelated,
+): string | undefined {
+  const notes: string[] = [];
+  if (pagesResp.note) notes.push(pagesResp.note);
+  if (pagesResp.fallbackMode === "or") {
+    notes.push("Broadened page matches with OR fallback.");
+  }
+  if (pagesResp.results.length === 0 && Object.keys(related).length === 0) {
+    const hints: string[] = [];
+    if (classified.device) hints.push(`device "${classified.device}"`);
+    if (classified.version) hints.push(`version ${classified.version}`);
+    if (classified.topics.length > 0) hints.push(`topics: ${classified.topics.join(", ")}`);
+    const hintStr = hints.length > 0 ? ` Classifier detected: ${hints.join("; ")}.` : "";
+    notes.push(`Nothing matched for "${classified.input}".${hintStr} See next_steps for alternatives.`);
+  }
+  return notes.length > 0 ? notes.join(" ") : undefined;
+}
+
+type ExplainCommandConfidence = CanonicalCommand["confidence"] | "none";
+
+type ExplainCommandCanonical = {
+  path: string;
+  verb: string;
+  args: string[];
+  confidence: CanonicalCommand["confidence"];
+};
+
+type ExplainCommandArg = {
+  raw: string;
+  name: string;
+  value: string;
+  property?: {
+    name: string;
+    type: string | null;
+    default_val: string | null;
+    description: string;
+    page_title: string;
+    page_url: string;
+    page_id: number | null;
+    confidence: PropertyLookupConfidence;
+    source: PropertyLookupRow["source"];
+  };
+};
+
+type ExplainCommandWarning = {
+  kind:
+    | "no-command"
+    | "low-confidence"
+    | "unknown-arg"
+    | "no-description"
+    | "command-not-in-version"
+    | "model-context-unused";
+  message: string;
+  arg?: string;
+  suggestion?: string;
+};
+
+export type ExplainCommandResult = {
+  command: string;
+  canonical: ExplainCommandCanonical | null;
+  confidence: ExplainCommandConfidence;
+  args: ExplainCommandArg[];
+  warnings: ExplainCommandWarning[];
+  pages: SearchResult[];
+  changelog_hits: ChangelogResult[];
+  version_check?: ReturnType<typeof checkCommandVersions>;
+};
+
+function isReadOnlyCliRef(row: PropertyLookupRow | undefined): boolean {
+  return row?.source === "cli-reference" && row.section === "Read-only Argument";
+}
+
+function parseKeyValueArg(raw: string): { name: string; value: string } | null {
+  const eq = raw.indexOf("=");
+  if (eq <= 0) return null;
+  return {
+    name: raw.slice(0, eq),
+    value: raw.slice(eq + 1),
+  };
+}
+
+function explainCommandSearchText(command: string, canonical: ExplainCommandCanonical | null, args: ExplainCommandArg[]): string {
+  if (!canonical) return command;
+  const argNames = args.map((arg) => arg.name).join(" ");
+  return `${canonical.path} ${canonical.verb} ${argNames}`.trim();
+}
+
+/**
+ * Explain a candidate RouterOS CLI command using only the local rosetta DB.
+ *
+ * This is read-only: it canonicalizes the command, annotates key=value args
+ * with documentation-property matches, checks version presence, and surfaces
+ * compact docs/changelog context. It never connects to or modifies a router.
+ */
+export function explainCommand(command: string, rosVersion?: string, model?: string): ExplainCommandResult {
+  const parsed = canonicalize(command, "/", { isVerb: getVerbResolver() });
+  const primary = parsed.commands.find((cmd) => !cmd.subshell) ?? parsed.commands[0] ?? null;
+  const warnings: ExplainCommandWarning[] = [];
+
+  if (!primary?.verb) {
+    warnings.push({
+      kind: "no-command",
+      message: "No primary RouterOS command verb could be extracted from the input.",
+      suggestion: "Pass a full CLI command such as '/ip/firewall/filter add chain=forward action=drop'.",
+    });
+  }
+
+  const canonical = primary
+    ? {
+      path: primary.path,
+      verb: primary.verb,
+      args: primary.args,
+      confidence: primary.confidence,
+    }
+    : null;
+  const confidence: ExplainCommandConfidence = canonical?.confidence ?? "none";
+
+  if (confidence === "low") {
+    warnings.push({
+      kind: "low-confidence",
+      message: "The command path/verb was inferred from a loose or prose-shaped input.",
+      suggestion: "Use a full absolute RouterOS CLI form such as '/ip/firewall/filter add ...'.",
+    });
+  }
+
+  if (model) {
+    warnings.push({
+      kind: "model-context-unused",
+      message: `Model context "${model}" was accepted but device-specific command validation is not implemented yet.`,
+      suggestion: "Use routeros_device_lookup separately for hardware specs; this tool stays read-only and documentation-backed.",
+    });
+  }
+
+  const args: ExplainCommandArg[] = [];
+  if (canonical) {
+    for (const raw of canonical.args) {
+      const parsedArg = parseKeyValueArg(raw);
+      if (!parsedArg) continue;
+      // A command that is not a menu verb (`/tool fetch`, `/system reboot`) has its own
+      // CLI-Reference entry at path/verb, which the menu-level lookup never reaches.
+      // A read-only CLI-Reference field is print output, not evidence for a settable argument,
+      // so it gives way to any settable row and only survives to explain the warning.
+      // The command's own entry follows the same ordering as a menu's (B-0025): described, it beats
+      // a menu answer below `high`; blank, it only beats a `low` one.
+      const menuRows = lookupProperty(parsedArg.name, canonical.path);
+      const settable = menuRows.find((row) => !isReadOnlyCliRef(row));
+      const commandRow = lookupCliRefProperty(parsedArg.name, `${canonical.path}/${canonical.verb}`)
+        .find((row) => !isReadOnlyCliRef(row));
+      const menuHolds = settable && settable.confidence !== "low" &&
+        !(commandRow?.description.trim() && settable.confidence !== "high");
+      const match = menuHolds ? settable : (commandRow ?? menuRows.find(isReadOnlyCliRef) ?? settable);
+      const readOnly = isReadOnlyCliRef(match);
+      const explainedArg: ExplainCommandArg = {
+        raw,
+        name: parsedArg.name,
+        value: parsedArg.value,
+      };
+      if (match && match.confidence !== "low" && !readOnly) {
+        explainedArg.property = {
+          name: match.name,
+          type: match.type,
+          default_val: match.default_val,
+          description: match.description,
+          page_title: match.page_title,
+          page_url: match.page_url,
+          page_id: match.page_id,
+          confidence: match.confidence,
+          source: match.source,
+        };
+        // The overlay proves the argument exists at this menu, but describes nothing — and an
+        // overlay row only leads when no menu-aligned manual row describes it either. The warning
+        // must not read as "unsupported": the argument is listed; only its description is missing.
+        if (match.source === "cli-reference" && !match.description.trim()) {
+          warnings.push({
+            kind: "no-description",
+            arg: parsedArg.name,
+            message: `"${parsedArg.name}" is listed as an argument of ${match.page_title.replace(/^CLI Reference: /, "")} in MikroTik's CLI Reference${match.type ? ` (type: ${match.type})` : ""}, so it exists at this menu. MikroTik has not published a description for it, and no menu-aligned manual page describes it. This is missing documentation, not a sign that the argument is invalid.`,
+            suggestion: `Use routeros_search or routeros_get_page for surrounding documentation if you need its meaning.`,
+          });
+        }
+      } else {
+        warnings.push({
+          kind: "unknown-arg",
+          arg: parsedArg.name,
+          message: readOnly
+            ? `The CLI Reference documents "${parsedArg.name}" for ${canonical.path} only as a read-only field, not as a settable argument.`
+            : `"${parsedArg.name}" was not found for ${canonical.path}: rosetta matched no argument in MikroTik's CLI Reference and no menu-aligned manual property. This is a gap in what rosetta could match, not proof that the argument is invalid.`,
+          suggestion: `Use routeros_command_tree path="${canonical.path}" or routeros_get_page for the linked documentation to confirm available arguments.`,
+        });
+      }
+      args.push(explainedArg);
+    }
+  }
+
+  let version_check: ReturnType<typeof checkCommandVersions> | undefined;
+  if (canonical) {
+    version_check = checkCommandVersions(canonical.path);
+    if (rosVersion && !version_check.versions.includes(rosVersion)) {
+      warnings.push({
+        kind: "command-not-in-version",
+        message: `${canonical.path} is not present in tracked command data for RouterOS ${rosVersion}.`,
+        suggestion: version_check.versions.length > 0
+          ? `Tracked range for this path: ${version_check.first_seen}–${version_check.last_seen}. Use routeros_command_diff for upgrade changes.`
+          : "Use routeros_command_tree/routeros_search to confirm the path, or check routeros_stats for tracked version coverage.",
+      });
+    }
+  }
+
+  const contextQuery = explainCommandSearchText(command, canonical, args);
+  const pages = searchPages(contextQuery || command, 3).results;
+  const changelog_hits = searchChangelogs(contextQuery || command, {
+    ...(rosVersion ? { version: rosVersion } : {}),
+    limit: 3,
+  });
+
+  return {
+    command,
+    canonical,
+    confidence,
+    args,
+    warnings,
+    pages,
+    changelog_hits,
+    ...(version_check ? { version_check } : {}),
+  };
+}
+
+function runFtsQuery(ftsQuery: string, limit: number): SearchResult[] {
+  if (!ftsQuery) return [];
+  try {
+    return db
+      .prepare(
+        `SELECT s.id, s.title, s.path, s.url, s.word_count, s.code_lines,
+                snippet(pages_fts, 2, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 30) as excerpt
+         FROM pages_fts fts
+         JOIN pages s ON s.id = fts.rowid
+         WHERE pages_fts MATCH ?
+         ORDER BY bm25(pages_fts, 3.0, 2.0, 1.0, 0.5)
+         LIMIT ?`,
+      )
+      .all(ftsQuery, limit) as SearchResult[];
+  } catch {
+    return [];
+  }
+}
+
+/** For each search result with sections, find the section whose text best matches the search terms. */
+function attachBestSections(results: SearchResult[], terms: string[]): void {
+  if (results.length === 0 || terms.length === 0) return;
+
+  const stmt = db.prepare(
+    `SELECT heading, anchor_id, text FROM sections WHERE page_id = ? ORDER BY sort_order`,
+  );
+
+  for (const result of results) {
+    const sections = stmt.all(result.id) as Array<{ heading: string; anchor_id: string; text: string }>;
+    if (sections.length === 0) continue;
+
+    let bestSection: (typeof sections)[0] | null = null;
+    let bestScore = 0;
+
+    for (const sec of sections) {
+      const haystack = `${sec.heading} ${sec.text}`.toLowerCase();
+      let score = 0;
+      for (const term of terms) {
+        if (haystack.includes(term)) score++;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestSection = sec;
+      }
+    }
+
+    if (bestSection && bestScore > 0) {
+      result.best_section = {
+        heading: bestSection.heading,
+        anchor_id: bestSection.anchor_id,
+        url: `${result.url}#${bestSection.anchor_id}`,
+      };
+    }
+  }
+}
+
+/** Section TOC entry returned when a large page would be truncated. */
+export type SectionTocEntry = {
+  heading: string;
+  level: number;
+  anchor_id: string;
+  char_count: number;
+  url: string;
+};
+
+/** Compact property summary included in TOC-mode responses to surface high-signal content early. */
+type PagePropertySummary = { name: string; type: string | null; description: string };
+
+/** Compact related-video segment included in TOC-mode responses. */
+type RelatedVideo = { title: string; url: string; chapter_title: string | null; start_s: number; excerpt: string };
+
+/** Top-N properties for a page (by sort_order). Description trimmed for compactness. */
+function getPagePropertiesSummary(pageId: number, limit = 10): PagePropertySummary[] {
+  const rows = db
+    .prepare(
+      `SELECT name, type, description FROM properties WHERE page_id = ? ORDER BY sort_order LIMIT ?`,
+    )
+    .all(pageId, limit) as Array<{ name: string; type: string | null; description: string }>;
+  return rows.map((r) => ({
+    name: r.name,
+    type: r.type,
+    description: r.description.length > 200 ? `${r.description.slice(0, 200).trim()}...` : r.description,
+  }));
+}
+
+/** Related video segments via FTS5 match on page title. Compact — one line per segment. */
+function getRelatedVideos(pageTitle: string, limit = 3): RelatedVideo[] {
+  try {
+    const results = searchVideos(pageTitle, limit);
+    return results.map((r) => ({ title: r.title, url: r.url, chapter_title: r.chapter_title, start_s: r.start_s, excerpt: r.excerpt }));
+  } catch {
+    return [];
+  }
+}
+
+/** Get full page content by ID or title. Optional max_length truncates text+code.
+ *  If `section` is provided, returns only that section's content.
+ *  If content would be truncated and the page has sections, returns a TOC instead —
+ *  TOC responses include prioritized high-signal fields (`properties`, `related_videos`)
+ *  so the caller sees valuable content without a second tool call. */
+export function getPage(idOrTitle: string | number, maxLength?: number, section?: string): {
+  id: number;
+  title: string;
+  path: string;
+  url: string;
+  text: string;
+  code: string;
+  word_count: number;
+  code_lines: number;
+  callouts: Array<{ type: string; content: string }>;
+  callout_summary?: { count: number; types: Record<string, number> };
+  truncated?: { text_total: number; code_total: number };
+  sections?: SectionTocEntry[];
+  section?: { heading: string; level: number; anchor_id: string };
+  properties?: PagePropertySummary[];
+  related_videos?: RelatedVideo[];
+  note?: string;
+} | null {
+  const row =
+    typeof idOrTitle === "number" || /^\d+$/.test(String(idOrTitle))
+      ? db.prepare("SELECT id, title, path, url, text, code, word_count, code_lines FROM pages WHERE id = ?").get(Number(idOrTitle))
+      : db.prepare("SELECT id, title, path, url, text, code, word_count, code_lines FROM pages WHERE title = ? COLLATE NOCASE").get(idOrTitle);
+  if (!row) return null;
+  const page = row as { id: number; title: string; path: string; url: string; text: string; code: string; word_count: number; code_lines: number };
+  const callouts = db
+    .prepare("SELECT type, content FROM callouts WHERE page_id = ? ORDER BY sort_order")
+    .all(page.id) as Array<{ type: string; content: string }>;
+
+  // Section-specific retrieval: return section content including descendants
+  if (section) {
+    const sec = db
+      .prepare(
+        `SELECT heading, level, anchor_id, text, code, word_count, sort_order
+         FROM sections WHERE page_id = ? AND (anchor_id = ? OR heading = ? COLLATE NOCASE)
+         ORDER BY sort_order LIMIT 1`,
+      )
+      .get(page.id, section, section) as { heading: string; level: number; anchor_id: string; text: string; code: string; word_count: number; sort_order: number } | null;
+
+    if (sec) {
+      // Include descendant sections (children under this heading)
+      const nextSibling = db
+        .prepare(
+          `SELECT min(sort_order) as next_order FROM sections
+           WHERE page_id = ? AND sort_order > ? AND level <= ?`,
+        )
+        .get(page.id, sec.sort_order, sec.level) as { next_order: number | null };
+      const upperBound = nextSibling?.next_order ?? 999999;
+
+      // The synthetic lead stores introductory prose; level 0 does not make it
+      // a parent of every normal heading on the page.
+      const descendants = sec.anchor_id === "_lead" ? [] : db
+        .prepare(
+          `SELECT heading, level, anchor_id, text, code, word_count
+           FROM sections WHERE page_id = ? AND sort_order > ? AND level > ? AND sort_order < ?
+           ORDER BY sort_order`,
+        )
+        .all(page.id, sec.sort_order, sec.level, upperBound) as Array<{ heading: string; level: number; anchor_id: string; text: string; code: string; word_count: number }>;
+
+      let fullText = sec.text;
+      let fullCode = sec.code;
+      let totalWords = sec.word_count;
+      for (const child of descendants) {
+        const prefix = "#".repeat(Math.min(child.level + 1, 4));
+        fullText += `\n\n${prefix} ${child.heading}\n${child.text}`;
+        if (child.code) fullCode += `\n${child.code}`;
+        totalWords += child.word_count;
+      }
+
+      // If section+descendants exceed maxLength and there are subsections, return sub-TOC
+      if (maxLength && (fullText.length + fullCode.length) > maxLength && descendants.length > 0) {
+        const subToc: SectionTocEntry[] = [
+          { heading: sec.heading, level: sec.level, anchor_id: sec.anchor_id, char_count: sec.text.length + sec.code.length, url: `${page.url}#${sec.anchor_id}` },
+          ...descendants.map((d) => ({ heading: d.heading, level: d.level, anchor_id: d.anchor_id, char_count: d.text.length + d.code.length, url: `${page.url}#${d.anchor_id}` })),
+        ];
+        const totalChars = fullText.length + fullCode.length;
+        const props = getPagePropertiesSummary(page.id);
+        const videos = getRelatedVideos(page.title);
+        return {
+          id: page.id, title: page.title, path: page.path, url: `${page.url}#${sec.anchor_id}`,
+          text: "", code: "",
+          word_count: totalWords, code_lines: 0,
+          callouts: [], callout_summary: calloutSummary(callouts),
+          sections: subToc,
+          section: { heading: sec.heading, level: sec.level, anchor_id: sec.anchor_id },
+          ...(props.length > 0 ? { properties: props } : {}),
+          ...(videos.length > 0 ? { related_videos: videos } : {}),
+          note: `Section "${sec.heading}" content (${totalChars} chars) exceeds max_length (${maxLength}). Showing ${subToc.length} sub-sections. Re-call with a more specific section heading or anchor_id.`,
+        };
+      }
+
+      // If section exceeds maxLength but has no sub-sections, truncate
+      if (maxLength && (fullText.length + fullCode.length) > maxLength) {
+        const textTotal = fullText.length;
+        const codeTotal = fullCode.length;
+        const codeBudget = Math.min(codeTotal, Math.floor(maxLength * 0.2));
+        const textBudget = maxLength - codeBudget;
+        fullText = `${fullText.slice(0, textBudget)}\n\n[... truncated — ${textTotal} chars total, showing first ${textBudget}]`;
+        fullCode = codeTotal > codeBudget ? `${fullCode.slice(0, codeBudget)}\n# [... truncated — ${codeTotal} chars total]` : fullCode;
+      }
+
+      return {
+        id: page.id,
+        title: page.title,
+        path: page.path,
+        url: `${page.url}#${sec.anchor_id}`,
+        text: fullText,
+        code: fullCode,
+        word_count: totalWords,
+        code_lines: fullCode.split("\n").filter((l) => l.trim()).length,
+        callouts,
+        section: { heading: sec.heading, level: sec.level, anchor_id: sec.anchor_id },
+      };
+    }
+
+    // Section not found — return TOC if sections exist
+    const toc = getPageToc(page.id, page.url);
+    if (toc.length > 0) {
+      return {
+        id: page.id, title: page.title, path: page.path, url: page.url,
+        text: "", code: "",
+        word_count: page.word_count, code_lines: page.code_lines,
+        callouts: [], callout_summary: calloutSummary(callouts),
+        sections: toc,
+        note: `Section "${section}" not found. ${toc.length} sections available — use a heading or anchor_id from the list.`,
+      };
+    }
+    // No sections — return full page with note
+    return {
+      id: page.id, title: page.title, path: page.path, url: page.url,
+      text: page.text, code: page.code,
+      word_count: page.word_count, code_lines: page.code_lines,
+      callouts,
+      note: `Section "${section}" not found (this page has no sections). Returning full page.`,
+    };
+  }
+
+  // Truncation with TOC fallback: if page would be truncated and has sections,
+  // return a table of contents instead of a truncated blob
+  let truncated: { text_total: number; code_total: number } | undefined;
+  let { text, code } = page;
+  if (maxLength && (text.length + code.length) > maxLength) {
+    const toc = getPageToc(page.id, page.url);
+    if (toc.length > 0) {
+      const totalChars = text.length + code.length;
+      const props = getPagePropertiesSummary(page.id);
+      const videos = getRelatedVideos(page.title);
+      return {
+        id: page.id, title: page.title, path: page.path, url: page.url,
+        text: "", code: "",
+        word_count: page.word_count, code_lines: page.code_lines,
+        callouts: [], callout_summary: calloutSummary(callouts),
+        sections: toc,
+        ...(props.length > 0 ? { properties: props } : {}),
+        ...(videos.length > 0 ? { related_videos: videos } : {}),
+        truncated: { text_total: text.length, code_total: code.length },
+        note: `Page content (${totalChars} chars) exceeds max_length (${maxLength}). Showing table of contents with ${toc.length} sections${props.length > 0 ? ` + ${props.length} top properties` : ""}${videos.length > 0 ? ` + ${videos.length} related videos` : ""}. Re-call with section parameter to retrieve specific sections, or routeros_lookup_property for full property details.`,
+      };
+    }
+
+    // No sections — fall back to truncation. Callouts are already returned in full
+    // (they carry high-signal Warnings/Notes). Also surface properties so the caller
+    // doesn't need a follow-up routeros_lookup_property call to see them.
+    const textTotal = text.length;
+    const codeTotal = code.length;
+    const codeBudget = Math.min(code.length, Math.floor(maxLength * 0.2));
+    const textBudget = maxLength - codeBudget;
+    text = `${text.slice(0, textBudget)}\n\n[... truncated — ${textTotal} chars total, showing first ${textBudget}]`;
+    code = codeTotal > codeBudget ? `${code.slice(0, codeBudget)}\n# [... truncated — ${codeTotal} chars total]` : code;
+    truncated = { text_total: textTotal, code_total: codeTotal };
+    const props = getPagePropertiesSummary(page.id);
+    return {
+      id: page.id, title: page.title, path: page.path, url: page.url,
+      text, code, word_count: page.word_count, code_lines: page.code_lines,
+      callouts,
+      ...(props.length > 0 ? { properties: props } : {}),
+      truncated,
+    };
+  }
+
+  return { id: page.id, title: page.title, path: page.path, url: page.url, text, code, word_count: page.word_count, code_lines: page.code_lines, callouts };
+}
+
+/** Build compact callout summary (count + type breakdown) for TOC-mode responses. */
+function calloutSummary(callouts: Array<{ type: string; content: string }>): { count: number; types: Record<string, number> } {
+  const types: Record<string, number> = {};
+  for (const c of callouts) types[c.type] = (types[c.type] || 0) + 1;
+  return { count: callouts.length, types };
+}
+
+/** Build section TOC for a page. */
+function getPageToc(pageId: number, pageUrl: string): SectionTocEntry[] {
+  const rows = db
+    .prepare(
+      `SELECT heading, level, anchor_id, length(text) + length(code) as char_count
+       FROM sections WHERE page_id = ? ORDER BY sort_order`,
+    )
+    .all(pageId) as Array<{ heading: string; level: number; anchor_id: string; char_count: number }>;
+  return rows.map((r) => ({
+    heading: r.heading,
+    level: r.level,
+    anchor_id: r.anchor_id,
+    char_count: r.char_count,
+    url: `${pageUrl}#${r.anchor_id}`,
+  }));
+}
+
+export type { PropertyLookupConfidence };
+
+export type PropertyLookupRow = {
+  name: string;
+  type: string | null;
+  default_val: string | null;
+  description: string;
+  /** Raw nearest-heading text (any level, h1–h6). Not unique within a page — see section_anchor. */
+  section: string | null;
+  /**
+   * anchor_id of the section documenting this property, feedable straight to
+   * `routeros_get_page(page, section=…)`. This is what disambiguates a page that documents one
+   * property name several times: `section` is heading TEXT and repeats (ppp-aaa returns three
+   * rows named `name`, all reading "Properties"), while the anchor does not (`properties`,
+   * `properties-1`, `properties-2`). Null when the property sits above any heading. Issue #90.
+   */
+  section_anchor: string | null;
+  page_title: string;
+  page_url: string;
+  /** `pages.id` for a manual row; null for a CLI-Reference row, which has no prose page. */
+  page_id: number | null;
+  confidence: PropertyLookupConfidence;
+  /**
+   * Where the row came from. `manual` rows are prose property tables on a documentation page.
+   * `cli-reference` rows are `cliref_fields` from manual.mikrotik.com/docs/cli-reference — a
+   * version-less overlay (#25), consulted only when the manual has nothing better (#169).
+   */
+  source: "manual" | "cli-reference";
+};
+
+/** As returned, plus the `section_id` used to grade the row and then dropped. */
+type PropertyLookupRowUngraded = Omit<PropertyLookupRow, "confidence" | "source" | "page_id"> & {
+  page_id: number;
+  section_id: number | null;
+};
+
+const PROPERTY_LOOKUP_COLUMNS = `p.name, p.type, p.default_val, p.description, p.section, p.section_id,
+          s.anchor_id as section_anchor,
+          pg.title as page_title, pg.url as page_url, pg.id as page_id`;
+
+/**
+ * Lookup property by name, optionally filtered by command path.
+ *
+ * Every row with the name is graded against `commandPath` by `property-confidence.ts`, and
+ * results come back best tier first (B-0024 step 4).
+ *
+ * The candidate set deliberately is **not** limited to the page `commands.page_id` links to.
+ * That link is the fuzzy, page-grained one this whole briefing exists because of, and scoping
+ * to it hides the very rows the grading is meant to surface: `/interface/bridge/host` + `vid`
+ * links to the IGMP snooping page, so the `high` "Static Entries" section — which names
+ * `/interface/bridge/host` outright — would never be returned. What the link still buys is the
+ * `medium` page tier for rows carrying no path evidence of their own.
+ *
+ * Rows off the linked page must therefore earn their place: once the linked page contributes
+ * anything, an off-page row is kept only if its tier is at least as good as the best the linked
+ * page offers. A correct link keeps the tight result it always had, and only rows that match or
+ * beat it widen the answer. With no linked page at all, the global name match is the whole
+ * answer, exactly as before.
+ *
+ * Within a tier, linked-page rows sort first. Grading is menu-level, so a ubiquitous name can
+ * legitimately be `high` on several pages at once — `name` is `high` for `/interface/ethernet`
+ * on both the Ethernet and Bonding pages — and without this tie-break the winner was decided by
+ * page title, which is how `explainCommand` came to describe `name=ether2` as "Name of the
+ * bonding interface".
+ *
+ * The CLI-Reference overlay ({@link lookupCliRefProperty}) is the other source (#169, B-0025).
+ * Scoped, its exact-menu row leads — with any manual rows following as candidates — when:
+ *
+ * - it has a description and the manual has nothing `high`. A `medium` manual row is often a
+ *   neighbouring menu's (`/ip/firewall/filter chain` → "Bridge firewall chain"), and the overlay
+ *   row is the menu's own definition; or
+ * - the manual has nothing better than `low`, even if the overlay row is blank: an exact menu and
+ *   type beat an unrelated page's description.
+ *
+ * A blank overlay row never displaces a `medium` manual description — 46% of settable overlay
+ * fields are blank, mostly Wi-Fi, where the manual still holds the only description. Unscoped,
+ * the overlay answers only when the manual has nothing at all.
+ *
+ * A dotted name with no answer at its own menu (`channel.width` at `/interface/wifi`) is retried
+ * as the last segment under the sub-menu the other segments name (`width` at
+ * `/interface/wifi/channel`), which is where both the manual and the CLI Reference document it.
+ * Rows keep the documented name (`width`).
+ */
+export function lookupProperty(name: string, commandPath?: string): PropertyLookupRow[] {
+  const direct = lookupPropertyAt(name, commandPath);
+  if (!commandPath || !name.includes(".") || direct.some((row) => row.confidence !== "low")) return direct;
+  // inspect names nested settings with dots (`/interface/wifi` `channel.width`); the manual and
+  // the CLI Reference document the same setting as `width` under `/interface/wifi/channel`.
+  const segments = name.split(".");
+  const field = segments.pop() as string;
+  const nested = lookupPropertyAt(field, `${commandPath.replace(/\/+$/, "")}/${segments.join("/")}`);
+  return nested.some((row) => row.confidence !== "low") ? [...nested, ...direct] : direct;
+}
+
+/** {@link lookupProperty} for one exact (name, menu) pair, before any dotted-name mapping. */
+function lookupPropertyAt(name: string, commandPath?: string): PropertyLookupRow[] {
+  const prose = lookupManualProperty(name, commandPath);
+  if (!commandPath) return prose.length > 0 ? prose : lookupCliRefProperty(name);
+  if (prose.some((row) => row.confidence === "high")) return prose;
+  // Judge the row that would actually lead: a described read-only sibling must not carry a blank
+  // settable row past a medium manual description.
+  const overlay = lookupCliRefProperty(name, commandPath);
+  const proseAligned = prose.some((row) => row.confidence !== "low");
+  if (overlay.length === 0 || (proseAligned && !overlay[0].description.trim())) return prose;
+  return [...overlay, ...prose];
+}
+
+/**
+ * The CLI-Reference fallback for {@link lookupProperty} (#169). MikroTik keeps moving property
+ * tables out of manual pages into /docs/cli-reference/ (DNS, DHCP, NAT, user, scheduler, …), so
+ * a menu the manual no longer documents would otherwise answer "no property found" even though
+ * `cliref_fields` lists the argument.
+ *
+ * Scoped, it matches the exact menu only (`cliref_entries.source_path` is the path without its
+ * leading slash) and grades `high`: the entry is the official argument list for that menu, not
+ * prose that has to earn its alignment. Unscoped, every same-named field comes back `medium`,
+ * the same answer an unscoped manual row gets. The overlay carries no version data, so rows say
+ * where they came from through `source` and leave `page_id` null — there is no page to open.
+ * `section` is the CLI-Reference table the field sits in, `Argument` or `Read-only Argument`;
+ * settable rows sort first, and described rows before blank ones.
+ */
+function lookupCliRefProperty(name: string, commandPath?: string): PropertyLookupRow[] {
+  // `/` + verb joins to `//ping` for a root command; the stored path is `ping`. Blank-sorting
+  // trims tab/LF/CR as well as spaces, matching the JavaScript `.trim()` callers use: SQLite's
+  // one-argument trim() strips spaces only.
+  const sourcePath = commandPath?.replace(/^\/+/, "");
+  const rows = db
+    .prepare(
+      `SELECT f.name, f.field_kind, f.raw_type, f.description_markdown, e.source_path, cp.url
+       FROM cliref_fields f
+       JOIN cliref_entries e ON e.id = f.entry_id
+       JOIN cliref_pages cp ON cp.id = e.page_id
+       WHERE f.name = ? COLLATE NOCASE${sourcePath === undefined ? "" : " AND e.source_path = ?"}
+       ORDER BY e.source_path, f.field_kind = 'Read-only Argument',
+                trim(f.description_markdown, char(32, 9, 10, 13)) = '',
+                cp.source_order, f.source_order`,
+    )
+    .all(...(sourcePath === undefined ? [name] : [name, sourcePath])) as Array<{
+      name: string;
+      field_kind: string;
+      raw_type: string;
+      description_markdown: string;
+      source_path: string;
+      url: string;
+    }>;
+  return rows.map((row) => ({
+    name: row.name,
+    type: row.raw_type.replace(/\s+/g, " ").trim() || null,
+    default_val: null,
+    description: row.description_markdown,
+    section: row.field_kind,
+    section_anchor: null,
+    page_title: `CLI Reference: /${row.source_path}`,
+    page_url: row.url,
+    page_id: null,
+    confidence: commandPath ? "high" : "medium",
+    source: "cli-reference",
+  }));
+}
+
+/** The manual-prose half of {@link lookupProperty}: `properties` rows, graded against the menu. */
+function lookupManualProperty(name: string, commandPath?: string): PropertyLookupRow[] {
+  const rows = db
+    .prepare(
+      `SELECT ${PROPERTY_LOOKUP_COLUMNS}
+       FROM properties p
+       JOIN pages pg ON pg.id = p.page_id
+       LEFT JOIN sections s ON s.id = p.section_id
+       WHERE p.name = ? COLLATE NOCASE
+       ORDER BY pg.title, p.sort_order`,
+    )
+    .all(name) as PropertyLookupRowUngraded[];
+
+  // Without a requested menu there is nothing to align to, so the tier answers a different
+  // question and stays at the unscoped `medium` it has always reported.
+  if (!commandPath) {
+    return rows.map(({ section_id: _section_id, ...row }) => ({ ...row, confidence: "medium", source: "manual" }));
+  }
+
+  const linked = db
+    .prepare(
+      `SELECT DISTINCT c.page_id FROM commands c
+       WHERE c.path = ? AND c.page_id IS NOT NULL`,
+    )
+    .get(commandPath) as { page_id: number } | null;
+  const linkedPageId = linked?.page_id ?? null;
+  const onLinkedPage = (row: PropertyLookupRowUngraded) => row.page_id === linkedPageId;
+
+  const tiers = gradeRows(rows, commandPath, onLinkedPage);
+  // Best tier the linked page itself offers, or null when it contributes nothing. A linked row is
+  // always at least `medium` (page alignment guarantees it), so this also drops off-page `low`.
+  let bestLinkedRank: number | null = null;
+  for (const [i, row] of rows.entries()) {
+    if (!onLinkedPage(row)) continue;
+    const rank = tierRank(tiers[i]);
+    if (bestLinkedRank === null || rank < bestLinkedRank) bestLinkedRank = rank;
+  }
+  return rows
+    .map(({ section_id: _section_id, ...row }, i) => ({ ...row, confidence: tiers[i], source: "manual" as const }))
+    .filter(
+      (row, i) =>
+        bestLinkedRank === null || onLinkedPage(rows[i]) || tierRank(row.confidence) <= bestLinkedRank,
+    )
+    .sort(
+      (a, b) =>
+        tierRank(a.confidence) - tierRank(b.confidence) ||
+        Number(b.page_id === linkedPageId) - Number(a.page_id === linkedPageId),
+    );
+}
+
+/** Parse _attrs JSON and extract completion, stripping _attrs from output. */
+function enrichWithCompletion(row: unknown): Record<string, unknown> {
+  const r = row as Record<string, unknown>;
+  const attrs = r._attrs as string | null;
+  const result = { ...r };
+  delete result._attrs;
+  if (attrs) {
+    try {
+      const parsed = JSON.parse(attrs);
+      result.completion = parsed.completion ?? null;
+    } catch {
+      result.completion = null;
+    }
+  } else {
+    result.completion = null;
+  }
+  return result;
+}
+
+/** Browse the command tree at a given path. */
+export function browseCommands(
+  cmdPath: string,
+  arch?: string,
+): Array<{
+  path: string;
+  name: string;
+  type: string;
+  description: string | null;
+  page_title: string | null;
+  page_url: string | null;
+  dir_role: string | null;
+  data_type: string | null;
+  enum_values: string | null;
+  _arch: string | null;
+  completion: Record<string, { style: string; preference: number; desc?: string }> | null;
+}> {
+  const archFilter = arch ? " AND (sn._arch IS NULL OR sn._arch = ?)" : "";
+  // arch placeholder is in the JOIN clause (before WHERE), so it must come first
+  const params: string[] = [...(arch ? [arch] : []), cmdPath];
+
+  return db
+    .prepare(
+      `SELECT c.path, c.name, c.type, c.description,
+              p.title as page_title, p.url as page_url,
+              sn.dir_role, sn.data_type, sn.enum_values, sn._arch, sn._attrs
+       FROM commands c
+       LEFT JOIN pages p ON c.page_id = p.id
+       LEFT JOIN schema_nodes sn ON sn.path = c.path AND sn.type = c.type${archFilter}
+       WHERE c.parent_path = ?
+       ORDER BY c.type DESC, c.name`,
+    )
+    .all(...params)
+    .map(enrichWithCompletion) as ReturnType<typeof browseCommands>;
+}
+
+/** Search properties by FTS query. */
+export function searchProperties(
+  query: string,
+  limit = 10,
+): Array<{
+  name: string;
+  type: string | null;
+  default_val: string | null;
+  description: string;
+  section: string | null;
+  page_id: number;
+  page_title: string;
+  page_url: string;
+  excerpt: string;
+}> {
+  const terms = extractTerms(query);
+  if (terms.length === 0) return [];
+
+  let ftsQuery = buildFtsQuery(terms, "AND");
+  if (!ftsQuery) return [];
+  let results = runPropertiesFtsQuery(ftsQuery, limit);
+
+  // Fallback to OR if AND returns nothing and we have multiple terms
+  if (results.length === 0 && terms.length > 1) {
+    ftsQuery = buildFtsQuery(terms, "OR");
+    results = runPropertiesFtsQuery(ftsQuery, limit);
+  }
+  return results;
+}
+
+function runPropertiesFtsQuery(
+  ftsQuery: string,
+  limit: number,
+): Array<{
+  name: string;
+  type: string | null;
+  default_val: string | null;
+  description: string;
+  section: string | null;
+  page_id: number;
+  page_title: string;
+  page_url: string;
+  excerpt: string;
+}> {
+  if (!ftsQuery) return [];
+  try {
+    return db
+      .prepare(
+        `SELECT p.name, p.type, p.default_val, p.description, p.section,
+                pg.id as page_id, pg.title as page_title, pg.url as page_url,
+                snippet(properties_fts, 1, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 20) as excerpt
+         FROM properties_fts fts
+         JOIN properties p ON p.id = fts.rowid
+         JOIN pages pg ON pg.id = p.page_id
+         WHERE properties_fts MATCH ?
+         ORDER BY rank LIMIT ?`,
+      )
+      .all(ftsQuery, limit) as Array<{
+        name: string;
+        type: string | null;
+        default_val: string | null;
+        description: string;
+        section: string | null;
+        page_id: number;
+        page_title: string;
+        page_url: string;
+        excerpt: string;
+      }>;
+  } catch {
+    return [];
+  }
+}
+
+// ---- Glossary lookup ----
+
+export type GlossaryEntry = {
+  term: string;
+  definition: string;
+  aliases: string | null;
+  category: string;
+  search_hint: string;
+};
+
+/**
+ * Look up a term in the glossary. O(1) lookup by exact term or alias match.
+ * Returns null if the term isn't recognized domain jargon.
+ */
+export function lookupGlossary(input: string): GlossaryEntry | null {
+  const normalized = input.toLowerCase().trim();
+  if (!normalized) return null;
+
+  // Try exact term match
+  const exact = db
+    .prepare("SELECT term, definition, aliases, category, search_hint FROM glossary WHERE term = ?")
+    .get(normalized) as GlossaryEntry | null;
+  if (exact) return exact;
+
+  // Try alias match (aliases are comma-separated)
+  const aliasMatch = db
+    .prepare(
+      `SELECT term, definition, aliases, category, search_hint FROM glossary
+       WHERE ',' || REPLACE(aliases, ' ', '') || ',' LIKE '%,' || REPLACE(?, ' ', '') || ',%'`,
+    )
+    .get(normalized) as GlossaryEntry | null;
+  return aliasMatch;
+}
+
+/**
+ * List all glossary entries, optionally filtered by category.
+ */
+export function listGlossary(category?: string): GlossaryEntry[] {
+  if (category) {
+    return db
+      .prepare("SELECT term, definition, aliases, category, search_hint FROM glossary WHERE category = ? ORDER BY term")
+      .all(category) as GlossaryEntry[];
+  }
+  return db
+    .prepare("SELECT term, definition, aliases, category, search_hint FROM glossary ORDER BY term")
+    .all() as GlossaryEntry[];
+}
+
+export type CalloutResult = {
+  type: string;
+  content: string;
+  page_title: string;
+  page_url: string;
+  page_id: number;
+  excerpt: string;
+};
+
+/** Search callout content via FTS, optionally filtered by type. */
+export function searchCallouts(
+  query: string,
+  type?: string,
+  limit = 10,
+): CalloutResult[] {
+  const terms = extractTerms(query);
+
+  // Type-only browse: no search terms but type filter provided
+  if (terms.length === 0 && type) {
+    return db
+      .prepare(
+        `SELECT c.type, c.content, pg.title as page_title, pg.url as page_url,
+                pg.id as page_id, substr(c.content, 1, 200) as excerpt
+         FROM callouts c
+         JOIN pages pg ON pg.id = c.page_id
+         WHERE c.type = ?
+         ORDER BY c.page_id, c.sort_order LIMIT ?`,
+      )
+      .all(type, limit) as CalloutResult[];
+  }
+
+  if (terms.length === 0) return [];
+
+  let ftsQuery = buildFtsQuery(terms, "AND");
+  if (!ftsQuery) return [];
+  let results = runCalloutsFtsQuery(ftsQuery, type, limit);
+
+  // Fallback to OR if AND returns nothing and we have multiple terms
+  if (results.length === 0 && terms.length > 1) {
+    ftsQuery = buildFtsQuery(terms, "OR");
+    results = runCalloutsFtsQuery(ftsQuery, type, limit);
+  }
+
+  return results;
+}
+
+function runCalloutsFtsQuery(
+  ftsQuery: string,
+  type: string | undefined,
+  limit: number,
+): CalloutResult[] {
+  if (!ftsQuery) return [];
+  try {
+    const sql = type
+      ? `SELECT c.type, c.content, pg.title as page_title, pg.url as page_url, pg.id as page_id,
+                snippet(callouts_fts, 0, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 25) as excerpt
+         FROM callouts_fts fts
+         JOIN callouts c ON c.id = fts.rowid
+         JOIN pages pg ON pg.id = c.page_id
+         WHERE callouts_fts MATCH ? AND c.type = ?
+         ORDER BY rank LIMIT ?`
+      : `SELECT c.type, c.content, pg.title as page_title, pg.url as page_url, pg.id as page_id,
+                snippet(callouts_fts, 0, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 25) as excerpt
+         FROM callouts_fts fts
+         JOIN callouts c ON c.id = fts.rowid
+         JOIN pages pg ON pg.id = c.page_id
+         WHERE callouts_fts MATCH ?
+         ORDER BY rank LIMIT ?`;
+    return type
+      ? (db.prepare(sql).all(ftsQuery, type, limit) as CalloutResult[])
+      : (db.prepare(sql).all(ftsQuery, limit) as CalloutResult[]);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * All callouts for a given page, sorted by source order. TUI-facing helper
+ * for `cal` invoked inside a page context — replaces the broken
+ * `searchCallouts("", undefined, …)` empty-FTS path which always returns [].
+ *
+ * Page metadata (`page_title`, `page_url`) is included so the rendering path
+ * can reuse `renderCallouts()` without a second join.
+ */
+export function getPageCallouts(pageId: number, limit = 100): CalloutResult[] {
+  return db
+    .prepare(
+      `SELECT c.type, c.content, pg.title as page_title, pg.url as page_url,
+              pg.id as page_id, substr(c.content, 1, 200) as excerpt
+       FROM callouts c
+       JOIN pages pg ON pg.id = c.page_id
+       WHERE c.page_id = ?
+       ORDER BY c.sort_order LIMIT ?`,
+    )
+    .all(pageId, limit) as CalloutResult[];
+}
+
+/** Diff two RouterOS versions — which command paths were added/removed between them. */
+export type CommandDiffResult = {
+  from_version: string;
+  to_version: string;
+  path_prefix: string | null;
+  added: string[];
+  removed: string[];
+  added_count: number;
+  removed_count: number;
+  note: string | null;
+};
+
+export function diffCommandVersions(
+  fromVersion: string,
+  toVersion: string,
+  pathPrefix?: string,
+  arch?: string,
+): CommandDiffResult {
+  const allVersionRows = db
+    .prepare("SELECT DISTINCT version FROM ros_versions")
+    .all() as Array<{ version: string }>;
+  const knownVersions = allVersionRows.map((r) => r.version).sort(compareVersions);
+
+  const notes: string[] = [];
+  if (knownVersions.length > 0 && !knownVersions.includes(fromVersion)) {
+    notes.push(`Version ${fromVersion} is not in the tracked range (${knownVersions[0]}–${knownVersions[knownVersions.length - 1]}). Results may be incomplete.`);
+  }
+  if (knownVersions.length > 0 && !knownVersions.includes(toVersion)) {
+    notes.push(`Version ${toVersion} is not in the tracked range (${knownVersions[0]}–${knownVersions[knownVersions.length - 1]}). Results may be incomplete.`);
+  }
+
+  const prefix = pathPrefix || null;  // treat empty string same as undefined
+  // Match the prefix itself OR any sub-path under it
+  const prefixFilter = prefix ? " AND (command_path = ? OR command_path LIKE ? || '/%')" : "";
+  const prefixParams = (v: string) => prefix ? [v, prefix, prefix] : [v];
+
+  // When arch is specified, exclude paths belonging to the other arch
+  const otherArch = arch === "x86" ? "arm64" : arch === "arm64" ? "x86" : null;
+  const archExclude = otherArch
+    ? " AND cv_to.command_path NOT IN (SELECT path FROM schema_nodes WHERE _arch = ?)"
+    : "";
+  const archExcludeFrom = otherArch
+    ? " AND cv_from.command_path NOT IN (SELECT path FROM schema_nodes WHERE _arch = ?)"
+    : "";
+
+  type Row = { command_path: string };
+
+  const addedParams = [...prefixParams(toVersion), ...(otherArch ? [otherArch] : []), ...prefixParams(fromVersion)];
+  const addedRows = db
+    .prepare(
+      `SELECT DISTINCT cv_to.command_path
+       FROM command_versions cv_to
+       WHERE cv_to.ros_version = ?${prefixFilter}${archExclude}
+         AND cv_to.command_path NOT IN (
+           SELECT command_path FROM command_versions WHERE ros_version = ?${prefixFilter}
+         )
+       ORDER BY cv_to.command_path`,
+    )
+    .all(...addedParams) as Row[];
+
+  const removedParams = [...prefixParams(fromVersion), ...(otherArch ? [otherArch] : []), ...prefixParams(toVersion)];
+  const removedRows = db
+    .prepare(
+      `SELECT DISTINCT cv_from.command_path
+       FROM command_versions cv_from
+       WHERE cv_from.ros_version = ?${prefixFilter}${archExcludeFrom}
+         AND cv_from.command_path NOT IN (
+           SELECT command_path FROM command_versions WHERE ros_version = ?${prefixFilter}
+         )
+       ORDER BY cv_from.command_path`,
+    )
+    .all(...removedParams) as Row[];
+
+  if (arch) {
+    notes.push(`Filtered to ${arch} architecture (excluding ${otherArch}-only paths).`);
+  }
+
+  return {
+    from_version: fromVersion,
+    to_version: toVersion,
+    path_prefix: prefix,
+    added: addedRows.map((r) => r.command_path),
+    removed: removedRows.map((r) => r.command_path),
+    added_count: addedRows.length,
+    removed_count: removedRows.length,
+    note: notes.length > 0 ? notes.join(" ") : null,
+  };
+}
+
+/** Check which RouterOS versions include a given command path. */
+export function checkCommandVersions(
+  commandPath: string,
+): {
+  command_path: string;
+  versions: string[];
+  first_seen: string | null;
+  last_seen: string | null;
+  note: string | null;
+} {
+  const rows = db
+    .prepare(
+      `SELECT ros_version FROM command_versions
+       WHERE command_path = ?`,
+    )
+    .all(commandPath) as Array<{ ros_version: string }>;
+  const versions = rows.map((r) => r.ros_version).sort(compareVersions);
+
+  const allVersionRows = db
+    .prepare("SELECT DISTINCT version FROM ros_versions")
+    .all() as Array<{ version: string }>;
+  const allVersions = allVersionRows.map((r) => r.version).sort(compareVersions);
+  const minTracked = allVersions[0] ?? null;
+
+  const firstSeen = versions[0] ?? null;
+  const lastSeen = versions[versions.length - 1] ?? null;
+
+  // If first_seen equals our earliest tracked version, the command may predate our data
+  let note: string | null = null;
+  if (firstSeen && minTracked && firstSeen === minTracked) {
+    note = `Command exists in our earliest tracked version (${minTracked}). It likely existed in earlier versions too, but we have no data before ${minTracked}.`;
+  } else if (versions.length === 0) {
+    note = `No version data found. Our command tree covers ${minTracked ?? "7.9"}–7.23beta2. The command may exist outside this range, or the path may be wrong.`;
+  }
+
+  return {
+    command_path: commandPath,
+    versions,
+    first_seen: firstSeen,
+    last_seen: lastSeen,
+    note,
+  };
+}
+
+/** Compare RouterOS version strings numerically (e.g., "7.9" < "7.10.2" < "7.22"). */
+// compareVersions now lives in the dependency-free ./version-compare.ts so DB-only
+// consumers (src/export.ts) can order versions without importing the DB singleton.
+// Imported above for internal use; re-exported here so existing `from "./query.ts"`
+// importers are unaffected.
+export { compareVersions };
+
+/** Browse commands filtered by version (uses command_versions table). */
+export function browseCommandsAtVersion(
+  cmdPath: string,
+  version: string,
+  arch?: string,
+): Array<{
+  path: string;
+  name: string;
+  type: string;
+  description: string | null;
+  page_title: string | null;
+  page_url: string | null;
+  dir_role: string | null;
+  data_type: string | null;
+  enum_values: string | null;
+  _arch: string | null;
+  completion: Record<string, { style: string; preference: number; desc?: string }> | null;
+}> {
+  const archFilter = arch ? " AND (sn._arch IS NULL OR sn._arch = ?)" : "";
+  // arch placeholder is in the JOIN clause (before WHERE), so it must come first
+  const params: string[] = [...(arch ? [arch] : []), cmdPath, version];
+
+  return db
+    .prepare(
+      `SELECT c.path, c.name, c.type, c.description,
+              p.title as page_title, p.url as page_url,
+              sn.dir_role, sn.data_type, sn.enum_values, sn._arch, sn._attrs
+       FROM commands c
+       LEFT JOIN pages p ON c.page_id = p.id
+       JOIN command_versions cv ON cv.command_path = c.path
+       LEFT JOIN schema_nodes sn ON sn.path = c.path AND sn.type = c.type${archFilter}
+       WHERE c.parent_path = ? AND cv.ros_version = ?
+       ORDER BY c.type DESC, c.name`,
+    )
+    .all(...params)
+    .map(enrichWithCompletion) as ReturnType<typeof browseCommandsAtVersion>;
+}
+
+// ── Device lookup and search ──
+
+export type DeviceTestResult = {
+  test_type: string;
+  mode: string;
+  configuration: string;
+  packet_size: number;
+  throughput_kpps: number | null;
+  throughput_mbps: number | null;
+};
+
+/**
+ * Truncate benchmark rows for display while always keeping all 512-byte rows.
+ *
+ * Used by both TUI and MCP-facing adapters when they need a compact view.
+ * If the 512B bucket itself exceeds maxRows, return all 512B rows anyway.
+ */
+export function truncateDeviceTestResultsPrefer512<T extends { packet_size: number }>(
+  rows: T[],
+  maxRows: number,
+): { rows: T[]; omitted: number } {
+  if (rows.length === 0) return { rows: [], omitted: 0 };
+
+  const safeMax = Math.max(0, Math.floor(maxRows));
+  const rows512 = rows.filter((r) => r.packet_size === 512);
+  const non512 = rows.filter((r) => r.packet_size !== 512);
+
+  if (safeMax === 0) {
+    return { rows: rows512, omitted: rows.length - rows512.length };
+  }
+
+  if (rows.length <= safeMax) {
+    return { rows, omitted: 0 };
+  }
+
+  if (rows512.length === 0) {
+    return { rows: rows.slice(0, safeMax), omitted: rows.length - safeMax };
+  }
+
+  if (rows512.length >= safeMax) {
+    return { rows: rows512, omitted: rows.length - rows512.length };
+  }
+
+  const takeNon512 = safeMax - rows512.length;
+  const selected = [...rows512, ...non512.slice(0, takeNon512)];
+  return { rows: selected, omitted: rows.length - selected.length };
+}
+
+/** Map Unicode superscript digits to ASCII equivalents for product name matching.
+ *  MikroTik uses ² and ³ in product names (hAP ax³, hAP ac²), but users type ASCII. */
+const SUPERSCRIPT_TO_ASCII: [string, string][] = [
+  ['\u00B9', '1'], // ¹
+  ['\u00B2', '2'], // ²
+  ['\u00B3', '3'], // ³
+];
+
+/** SQL expression to normalize Unicode superscript digits in a column to ASCII.
+ *  Wraps the column in nested REPLACE calls. */
+const NORMALIZE_PRODUCT_NAME = (col: string) =>
+  SUPERSCRIPT_TO_ASCII.reduce(
+    (expr, [sup, ascii]) => `REPLACE(${expr}, '${sup}', '${ascii}')`,
+    col,
+  );
+
+/** Normalize a device query: replace Unicode superscript digits with ASCII. */
+export function normalizeDeviceQuery(query: string): string {
+  let result = query;
+  for (const [sup, ascii] of SUPERSCRIPT_TO_ASCII) {
+    result = result.replaceAll(sup, ascii);
+  }
+  return result;
+}
+
+export type DeviceResult = {
+  id: number;
+  product_name: string;
+  product_code: string | null;
+  architecture: string | null;
+  cpu: string | null;
+  cpu_cores: number | null;
+  cpu_frequency: string | null;
+  license_level: number | null;
+  operating_system: string | null;
+  ram: string | null;
+  ram_mb: number | null;
+  storage: string | null;
+  storage_mb: number | null;
+  dimensions: string | null;
+  poe_in: string | null;
+  poe_out: string | null;
+  max_power_w: number | null;
+  wireless_24_chains: number | null;
+  wireless_5_chains: number | null;
+  eth_fast: number | null;
+  eth_gigabit: number | null;
+  eth_2500: number | null;
+  sfp_ports: number | null;
+  sfp_plus_ports: number | null;
+  eth_multigig: number | null;
+  usb_ports: number | null;
+  sim_slots: number | null;
+  msrp_usd: number | null;
+  product_url: string | null;
+  block_diagram_url: string | null;
+  test_results?: DeviceTestResult[];
+  /** hardware_catalog overlay enrichment — attached to single-device (matrix-linked) results. */
+  hardware?: HardwareEnrichment;
+};
+
+/** Compact hardware_catalog overlay block on a single matrix-linked device result (B-0019/#49).
+ *  Carries category/lifecycle/aliases + provenance URLs; deliberately NOT a specs_json flatten.
+ *  URLs are provenance/human links — `note` steers agents to the device tool, not page-fetching. */
+export type HardwareEnrichment = {
+  rosetta_device_id: string;
+  category: string | null;
+  discontinued: boolean;
+  /** mikrotik.com/product page (usually richer than /hardware); null when no www code. */
+  product_page_url: string | null;
+  /** manual.mikrotik.com/hardware page (often boilerplate); null when no slug. */
+  hardware_page_url: string | null;
+  also_known_as: string[];
+  /** Genuine subnet deviations only (post-#48 filter); omitted when none. */
+  non_default_ips?: string[];
+  note: string;
+};
+
+/** A hardware_catalog entry that is NOT in the RouterOS product matrix (accessory / series /
+ *  discontinued / legacy). Surfaced labeled so an agent never treats a GPeR as a router. */
+export type CatalogResult = {
+  kind: "accessory" | "series" | "discontinued" | "device";
+  rosetta_device_id: string;
+  name: string;
+  category: string | null;
+  discontinued: boolean;
+  product_code: string | null;
+  product_page_url: string | null;
+  hardware_page_url: string | null;
+  note: string;
+};
+
+export type DeviceFilters = {
+  architecture?: string;
+  min_ram_mb?: number;
+  min_storage_mb?: number;
+  license_level?: number;
+  has_poe?: boolean;
+  has_wireless?: boolean;
+  has_lte?: boolean;
+};
+
+const DEVICE_SELECT = `SELECT id, product_name, product_code, architecture, cpu,
+    cpu_cores, cpu_frequency, license_level, operating_system,
+    ram, ram_mb, storage, storage_mb, dimensions, poe_in, poe_out,
+    max_power_w, wireless_24_chains, wireless_5_chains,
+    eth_fast, eth_gigabit, eth_2500, sfp_ports, sfp_plus_ports,
+    eth_multigig, usb_ports, sim_slots, msrp_usd,
+    product_url, block_diagram_url
+  FROM devices`;
+
+/** Get test results for a device by ID. */
+function getDeviceTestResults(deviceId: number): DeviceTestResult[] {
+  return db.prepare(
+    `SELECT test_type, mode, configuration, packet_size,
+            throughput_kpps, throughput_mbps
+     FROM device_test_results
+     WHERE device_id = ?
+     ORDER BY test_type, mode, configuration, packet_size DESC`
+  ).all(deviceId) as DeviceTestResult[];
+}
+
+/** Attach test results to device results (for single/exact lookups). */
+function attachTestResults(devices: DeviceResult[]): DeviceResult[] {
+  for (const dev of devices) {
+    dev.test_results = getDeviceTestResults(dev.id);
+  }
+  return devices;
+}
+
+/** Build FTS5 query for devices — appends prefix '*' to every term.
+ *  Model numbers like "RB1100" need prefix matching to find "RB1100AHx4".
+ *  No compound term handling (not relevant for device names). */
+function buildDeviceFtsQuery(terms: string[], mode: "AND" | "OR"): string {
+  if (terms.length === 0) return "";
+  const parts = terms.map((t) => `"${t}"*`);
+  return parts.join(mode === "AND" ? " AND " : " OR ");
+}
+
+/** Generate a disambiguation note when multiple devices matched a partial query.
+ *  Helps the MCP client present meaningful choices to the user. */
+function disambiguationNote(query: string, results: DeviceResult[]): string {
+  const names = results.map((r) => r.product_name);
+  // Find common prefix
+  const shortest = names.reduce((a, b) => (a.length < b.length ? a : b));
+  let prefix = "";
+  for (let i = 0; i < shortest.length; i++) {
+    if (names.every((n) => n[i]?.toLowerCase() === shortest[i]?.toLowerCase())) {
+      prefix += shortest[i];
+    } else break;
+  }
+  prefix = prefix.trim();
+  // Summarize key differences
+  const diffs: string[] = [];
+  const enclosures = new Set(names.map((n) => {
+    if (/\bOUT\b/i.test(n)) return "outdoor";
+    if (/\bIN\b/i.test(n)) return "indoor";
+    return null;
+  }).filter(Boolean));
+  if (enclosures.size > 1) diffs.push("enclosure (indoor/outdoor)");
+  const hasPoe = results.map((r) => !!(r.poe_in || r.poe_out));
+  if (hasPoe.includes(true) && hasPoe.includes(false)) diffs.push("PoE support");
+  const hasPoeOut = results.map((r) => !!r.poe_out);
+  if (!diffs.includes("PoE support") && hasPoeOut.includes(true) && hasPoeOut.includes(false)) diffs.push("PoE output");
+  const hasWireless = results.map((r) => !!(r.wireless_24_chains || r.wireless_5_chains));
+  if (hasWireless.includes(true) && hasWireless.includes(false)) diffs.push("wireless");
+  const lteCapable = results.map((r) => (r.sim_slots ?? 0) > 0);
+  if (lteCapable.includes(true) && lteCapable.includes(false)) diffs.push("LTE/cellular");
+  const family = prefix || query;
+  const diffStr = diffs.length > 0 ? ` Key differences: ${diffs.join(", ")}.` : "";
+  return `${results.length} devices match "${family}".${diffStr} Use the full product name for a specific device.`;
+}
+
+// ── hardware_catalog overlay (B-0019 / #49) ─────────────────────────────────
+//
+// The catalog is read at two points inside searchDevices(): an alias stage before
+// LIKE (exact-normalized, authoritative) and a catalog fallback after everything.
+// Matrix-linked hits get a `hardware` enrichment block; catalog-only entities are
+// returned as labeled CatalogResult rows. All of it lives here so MCP + TUI inherit
+// identically (query-core-not-adapter). No FTS/prose ingest — fields only.
+
+/** Normalize a token to the alias-table key: superscript→ASCII, then trim + lowercase.
+ *  Matches the normalization the ETL applied when writing device_aliases (normCode). */
+function normAliasKey(query: string): string {
+  return normalizeDeviceQuery(query).trim().toLowerCase();
+}
+
+/** Collapse a normalized alias key to its concatenated form: `+`→plus, `&`→and, strip every other
+ *  non-alphanumeric — so "hAP-ax3"/"hap ax3"/"hapax3" all probe the same row. Matches
+ *  canon() in assess-hardware.ts, which the ETL applied when deriving the source
+ *  `collapsed` alias rows (#67); keep the two in sync. */
+function collapseAliasKey(normalizedKey: string): string {
+  return normalizedKey.replace(/\+/g, "plus").replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+}
+
+/** Probe device_aliases by exact normalized key, then by collapsed key (#67).
+ *  Returns the owning rosetta_device_id, or undefined. Indexed point lookups, never fuzzy. */
+function probeAlias(token: string): string | undefined {
+  const stmt = db.prepare("SELECT rosetta_device_id FROM device_aliases WHERE alias = ?");
+  const normalizedKey = normAliasKey(token);
+  for (const key of new Set([normalizedKey, collapseAliasKey(normalizedKey)])) {
+    if (!key) continue;
+    const hit = stmt.get(key) as { rosetta_device_id: string } | undefined;
+    if (hit) return hit.rosetta_device_id;
+  }
+  return undefined;
+}
+
+/** Alias source → priority (lower = more authoritative), mirroring the ETL rank matrix.
+ *  Used only to order `also_known_as`; read-time resolution never ranks (alias is the PK). */
+const ALIAS_SOURCE_RANK: Record<string, number> = {
+  "matrix.csv": 1,
+  "www-declared-code": 2,
+  "www-code": 2,
+  "www-compare-id": 2,
+  "hardware-slug": 3,
+  "hardware-link": 4,
+  "hardware-table": 5,
+};
+
+/** device_overview columns this overlay reads. */
+type OverviewRow = {
+  rosetta_device_id: string;
+  name: string;
+  category: string | null;
+  discontinued: number | null;
+  device_id: number | null;
+  product_name: string | null;
+  product_code: string | null;
+  source_hardware_slug: string | null;
+  source_www_code: string | null;
+  specs_json: string | null;
+};
+
+const OVERVIEW_SELECT = `SELECT rosetta_device_id, name, category, discontinued, device_id,
+    product_name, product_code, source_hardware_slug, source_www_code, specs_json
+  FROM device_overview`;
+
+/** mikrotik.com/product URL — sourceWwwCode is exactly the path assess-www.ts fetches. */
+function productPageUrl(wwwCode: string | null): string | null {
+  return wwwCode ? `https://mikrotik.com/product/${encodeURIComponent(wwwCode)}` : null;
+}
+
+/** manual.mikrotik.com/hardware URL from the /hardware page slug. */
+function hardwarePageUrl(slug: string | null): string | null {
+  return slug ? `https://manual.mikrotik.com/hardware/${slug}` : null;
+}
+
+/** Sources that carry alternate *product names/codes* an agent would recognize. Excludes
+ *  `hardware-slug`/`hardware-table` — those are URL-slug / spec-table artifacts (e.g. the
+ *  disambiguation slug `hap-ax-2` for hAP ax³), not names anyone calls the device. */
+const AKA_NAME_SOURCES = new Set(["matrix.csv", "www-declared-code", "www-code", "www-compare-id", "hardware-link"]);
+
+/** Top aliases for a device, most-authoritative first, excluding the canonical name/code and
+ *  slug/table artifacts. Empty is fine — the result already carries product_name + product_code. */
+function alsoKnownAs(ov: OverviewRow, cap = 4): string[] {
+  const rows = db
+    .prepare("SELECT alias, source FROM device_aliases WHERE rosetta_device_id = ?")
+    .all(ov.rosetta_device_id) as Array<{ alias: string; source: string }>;
+  // Normalize the canonical names the same way aliases were normalized (superscript→ASCII,
+  // trim, lowercase) so e.g. "hAP ax³"'s own normalized name "hap ax3" is excluded, not leaked.
+  const canonical = new Set(
+    [ov.product_name, ov.product_code, ov.name].filter(Boolean).map((s) => normAliasKey(s as string)),
+  );
+  const ranked = rows
+    .filter((r) => AKA_NAME_SOURCES.has(r.source) && !canonical.has(normAliasKey(r.alias)))
+    .sort((a, b) => (ALIAS_SOURCE_RANK[a.source] ?? 9) - (ALIAS_SOURCE_RANK[b.source] ?? 9));
+  const out: string[] = [];
+  for (const r of ranked) {
+    if (out.includes(r.alias)) continue;
+    out.push(r.alias);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+/** Parse genuine non-default IPs from specs_json (already filtered at ETL, #48). */
+function nonDefaultIps(specsJson: string | null): string[] | undefined {
+  if (!specsJson) return undefined;
+  try {
+    const ips = (JSON.parse(specsJson) as { _non_default_ips?: unknown })._non_default_ips;
+    if (Array.isArray(ips) && ips.length > 0) return ips.map(String);
+  } catch { /* malformed specs_json — no IPs */ }
+  return undefined;
+}
+
+/** Build the `hardware` enrichment block from a device_overview row. */
+function buildEnrichment(ov: OverviewRow): HardwareEnrichment {
+  const ips = nonDefaultIps(ov.specs_json);
+  return {
+    rosetta_device_id: ov.rosetta_device_id,
+    category: ov.category,
+    discontinued: !!ov.discontinued,
+    product_page_url: productPageUrl(ov.source_www_code),
+    hardware_page_url: hardwarePageUrl(ov.source_hardware_slug),
+    also_known_as: alsoKnownAs(ov),
+    ...(ips ? { non_default_ips: ips } : {}),
+    note: "This result is the full record; product_page_url and hardware_page_url are for citation — no need to fetch them. rosetta_device_id is a stable handle for this device.",
+  };
+}
+
+/** Attach a `hardware` block to a single matrix-linked device result (mutates in place). */
+function enrichSingle(dev: DeviceResult): void {
+  const ov = db.prepare(`${OVERVIEW_SELECT} WHERE device_id = ? LIMIT 1`).get(dev.id) as OverviewRow | undefined;
+  if (ov) dev.hardware = buildEnrichment(ov);
+}
+
+/** Read-time kind derivation for a catalog-only entity (no matrix row). */
+function deriveKind(ov: OverviewRow): CatalogResult["kind"] {
+  const cat = (ov.category ?? "").toLowerCase();
+  if (cat === "accessories" || cat === "antennas" || cat === "interfaces") return "accessory";
+  if (ov.device_id == null && (ov.source_hardware_slug ?? "").endsWith("-series")) return "series";
+  if (ov.discontinued) return "discontinued";
+  return "device";
+}
+
+/** Convert a catalog-only overview row into a labeled thin result. */
+function catalogRowToResult(ov: OverviewRow): CatalogResult {
+  const kind = deriveKind(ov);
+  let productCode = ov.product_code;
+  if (!productCode && ov.specs_json) {
+    try { productCode = (JSON.parse(ov.specs_json) as { "Product code"?: string })["Product code"] ?? null; }
+    catch { /* ignore */ }
+  }
+  return {
+    kind,
+    rosetta_device_id: ov.rosetta_device_id,
+    name: ov.name,
+    category: ov.category,
+    discontinued: !!ov.discontinued,
+    // source_www_code is a URL path segment (e.g. "hap_ax3"), not a product code — leave null if absent.
+    product_code: productCode ?? null,
+    product_page_url: productPageUrl(ov.source_www_code),
+    hardware_page_url: hardwarePageUrl(ov.source_hardware_slug),
+    note: `Not in the RouterOS product matrix — no spec columns. ${kind} entry from manual.mikrotik.com/hardware. Use routeros_device_lookup for matrix devices.`,
+  };
+}
+
+/** Load a full matrix DeviceResult by devices.id (for alias hits resolved via the catalog). */
+function loadDeviceById(deviceId: number): DeviceResult | undefined {
+  return db.prepare(`${DEVICE_SELECT} WHERE id = ?`).get(deviceId) as DeviceResult | undefined;
+}
+
+/** category + discontinued for a set of device ids, for related.devices enrichment. */
+export function catalogMetaForDeviceIds(ids: number[]): Map<number, { category: string | null; discontinued: boolean }> {
+  const out = new Map<number, { category: string | null; discontinued: boolean }>();
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db
+    .prepare(`SELECT device_id, category, discontinued FROM device_overview WHERE device_id IN (${placeholders})`)
+    .all(...ids) as Array<{ device_id: number; category: string | null; discontinued: number | null }>;
+  for (const r of rows) out.set(r.device_id, { category: r.category, discontinued: !!r.discontinued });
+  return out;
+}
+
+export type SearchDevicesResult = {
+  results: DeviceResult[];
+  /** Catalog-only (non-matrix) entities — accessories, series, discontinued/legacy. */
+  catalog?: CatalogResult[];
+  mode: "exact" | "fts" | "like" | "filter" | "fts+or" | "alias" | "catalog";
+  total: number;
+  has_more: boolean;
+  note?: string;
+  /** The query token that resolved via device_aliases (mode "alias"). */
+  matched_alias?: string;
+};
+
+/** Look up a device by exact name, alias, code, then LIKE/FTS + filters, then catalog fallback.
+ *  A single matrix-linked result is enriched with a `hardware` overlay block here (one place). */
+export function searchDevices(
+  query: string,
+  filters: DeviceFilters = {},
+  limit = 10,
+): SearchDevicesResult {
+  const res = searchDevicesInner(query, filters, limit);
+  // Enrich single-device (matrix-linked) responses. The alias stage builds its own block
+  // from the resolving row; every other single-result path is enriched here.
+  if (res.results.length === 1 && !res.results[0].hardware) enrichSingle(res.results[0]);
+  return res;
+}
+
+function searchDevicesInner(
+  query: string,
+  filters: DeviceFilters = {},
+  limit = 10,
+): SearchDevicesResult {
+  // Normalize Unicode superscripts → ASCII digits for all matching stages.
+  // Users type "ax3" for "ax³", "ac2" for "ac²" — normalize once, use everywhere.
+  const q = normalizeDeviceQuery(query);
+  const normalizedName = NORMALIZE_PRODUCT_NAME('product_name');
+
+  // 1. Try exact match on product_name or product_code.
+  //    Compares normalized query against both raw and superscript-normalized product_name.
+  if (q) {
+    const exact = db
+      .prepare(`${DEVICE_SELECT} WHERE product_name = ? COLLATE NOCASE OR product_code = ? COLLATE NOCASE OR ${normalizedName} = ? COLLATE NOCASE`)
+      .all(q, q, q) as DeviceResult[];
+    if (exact.length > 0) {
+      attachTestResults(exact);
+      return { results: exact, mode: "exact", total: exact.length, has_more: false };
+    }
+  }
+
+  // 1.5 Alias stage: exact-normalized device_aliases hit, then collapsed-key fallback
+  //     (authoritative, never fuzzy). Catches codes/slugs/old names that stage 1 misses
+  //     (RB750Gr3→hEX, cap_ac→cAP ac) and concatenated spellings ("hapax3"→hAP ax3, #67).
+  //     A matrix-linked alias returns the canonical device enriched; a catalog-only alias
+  //     returns a labeled thin row. `alias` is the PK, so there is nothing to rank at read time.
+  if (q && Object.keys(filters).length === 0) {
+    const matchedAlias = query.trim();
+    const deviceId = probeAlias(query);
+    if (deviceId) {
+      const ov = db.prepare(`${OVERVIEW_SELECT} WHERE rosetta_device_id = ?`).get(deviceId) as OverviewRow | undefined;
+      if (ov?.device_id != null) {
+        const dev = loadDeviceById(ov.device_id);
+        if (dev) {
+          attachTestResults([dev]);
+          dev.hardware = buildEnrichment(ov);
+          return { results: [dev], mode: "alias", total: 1, has_more: false, matched_alias: matchedAlias };
+        }
+      }
+      if (ov) {
+        return { results: [], catalog: [catalogRowToResult(ov)], mode: "alias", total: 1, has_more: false, matched_alias: matchedAlias };
+      }
+    }
+  }
+
+  // 2. LIKE-based prefix/substring match on product_name and product_code.
+  //    Splits on whitespace, dashes, and underscores so that dash-separated
+  //    queries like "rb5009-out" still find "RB5009UPr+S+OUT".
+  //    For 144 rows this is instant and catches model number substrings
+  //    that FTS5 token matching misses (e.g. "RB1100" → "RB1100AHx4").
+  //    Also normalizes product_name in SQL so "ax3" matches "ax³".
+  if (q) {
+    const rawTerms = q.trim().split(/[\s\-_]+/);
+    const longTerms = rawTerms.filter((t) => t.length >= 2);
+    // Preserve single-digit terms (version numbers like "3" in "hap ax 3")
+    // but only when accompanied by longer terms to avoid overly broad matches.
+    const digitTerms = rawTerms.filter((t) => t.length === 1 && /^\d$/.test(t));
+    const likeTerms = (longTerms.length > 0 ? [...longTerms, ...digitTerms] : longTerms)
+      .map((t) => `%${t}%`);
+    if (likeTerms.length > 0) {
+      const likeConditions = likeTerms.map(
+        () => `(${normalizedName} LIKE ? COLLATE NOCASE OR d.product_code LIKE ? COLLATE NOCASE)`,
+      );
+      const likeParams = likeTerms.flatMap((t) => [t, t]);
+      // Fetch limit+1 to detect truncation
+      const likeSql = `${DEVICE_SELECT} d WHERE ${likeConditions.join(" AND ")} ORDER BY d.product_name LIMIT ?`;
+      const likeResults = db.prepare(likeSql).all(...likeParams, limit + 1) as DeviceResult[];
+      if (likeResults.length > 0) {
+        const hasMore = likeResults.length > limit;
+        const trimmed = hasMore ? likeResults.slice(0, limit) : likeResults;
+        // Attach test results for small result sets (likely specific device lookups)
+        if (trimmed.length <= 5) attachTestResults(trimmed);
+        // Single match in any mode gets test results
+        else if (trimmed.length === 1) attachTestResults(trimmed);
+        const note = trimmed.length > 1 ? disambiguationNote(q, trimmed) : undefined;
+        return { results: trimmed, mode: "like", total: trimmed.length, has_more: hasMore, note };
+      }
+    }
+  }
+
+  // (There used to be a stage 2b here: a slug-normalized LIKE over devices.product_url for
+  // concatenated spellings like "hapax3". It was dead in production — no extractor populates
+  // product_url — and its job is done authoritatively by the `collapsed` alias rows + the
+  // collapseAliasKey() fallback in stage 1.5 (#67).)
+
+  // 3. FTS + structured filters
+  const whereClauses: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (filters.architecture) {
+    whereClauses.push("d.architecture = ?");
+    params.push(filters.architecture);
+  }
+  if (filters.min_ram_mb) {
+    whereClauses.push("d.ram_mb >= ?");
+    params.push(filters.min_ram_mb);
+  }
+  if (filters.min_storage_mb) {
+    whereClauses.push("d.storage_mb >= ?");
+    params.push(filters.min_storage_mb);
+  }
+  if (filters.license_level) {
+    whereClauses.push("d.license_level = ?");
+    params.push(filters.license_level);
+  }
+  if (filters.has_poe) {
+    whereClauses.push("(d.poe_in IS NOT NULL OR d.poe_out IS NOT NULL)");
+  }
+  if (filters.has_wireless) {
+    whereClauses.push("(d.wireless_24_chains IS NOT NULL OR d.wireless_5_chains IS NOT NULL)");
+  }
+  if (filters.has_lte) {
+    whereClauses.push("d.sim_slots > 0");
+  }
+
+  const terms = q ? extractTerms(q) : [];
+
+  if (terms.length > 0) {
+    // FTS with filters — use prefix matching for device model numbers
+    const ftsQuery = buildDeviceFtsQuery(terms, "AND");
+    if (ftsQuery) {
+      const filterWhere = whereClauses.length > 0 ? ` AND ${whereClauses.join(" AND ")}` : "";
+      const sql = `SELECT d.id, d.product_name, d.product_code, d.architecture, d.cpu,
+          d.cpu_cores, d.cpu_frequency, d.license_level, d.operating_system,
+          d.ram, d.ram_mb, d.storage, d.storage_mb, d.dimensions, d.poe_in, d.poe_out,
+          d.max_power_w, d.wireless_24_chains, d.wireless_5_chains,
+          d.eth_fast, d.eth_gigabit, d.eth_2500, d.sfp_ports, d.sfp_plus_ports,
+          d.eth_multigig, d.usb_ports, d.sim_slots, d.msrp_usd,
+          d.product_url, d.block_diagram_url
+        FROM devices_fts fts
+        JOIN devices d ON d.id = fts.rowid
+        WHERE devices_fts MATCH ?${filterWhere}
+        ORDER BY rank LIMIT ?`;
+      try {
+        const results = db.prepare(sql).all(ftsQuery, ...params, limit + 1) as DeviceResult[];
+        if (results.length > 0) {
+          const hasMore = results.length > limit;
+          const trimmed = hasMore ? results.slice(0, limit) : results;
+          // Single FTS match gets test results (same behavior as exact)
+          if (trimmed.length === 1) attachTestResults(trimmed);
+          return { results: trimmed, mode: "fts", total: trimmed.length, has_more: hasMore };
+        }
+      } catch { /* fall through to OR */ }
+
+      // Fallback to OR
+      if (terms.length > 1) {
+        const orQuery = buildDeviceFtsQuery(terms, "OR");
+        try {
+          const results = db.prepare(sql).all(orQuery, ...params, limit + 1) as DeviceResult[];
+          if (results.length > 0) {
+            const hasMore = results.length > limit;
+            const trimmed = hasMore ? results.slice(0, limit) : results;
+            if (trimmed.length === 1) attachTestResults(trimmed);
+            return { results: trimmed, mode: "fts+or", total: trimmed.length, has_more: hasMore };
+          }
+        } catch { /* fall through */ }
+      }
+    }
+  }
+
+  // 4. Filter-only (no FTS query)
+  if (whereClauses.length > 0) {
+    const sql = `${DEVICE_SELECT} d WHERE ${whereClauses.join(" AND ")} ORDER BY d.product_name LIMIT ?`;
+    const results = db.prepare(sql).all(...params, limit + 1) as DeviceResult[];
+    const hasMore = results.length > limit;
+    const trimmed = hasMore ? results.slice(0, limit) : results;
+    return { results: trimmed, mode: "filter", total: trimmed.length, has_more: hasMore };
+  }
+
+  // 5. Catalog fallback: nothing matched in `devices` — try the wider hardware_catalog
+  //    (accessories, series, discontinued/legacy entries the matrix doesn't carry). Returns
+  //    labeled thin CatalogResult rows so an agent never mistakes an accessory for a router.
+  if (q && Object.keys(filters).length === 0) {
+    const rawTerms = q.trim().split(/[\s\-_]+/).filter((t) => t.length >= 2);
+    if (rawTerms.length > 0) {
+      const conditions = rawTerms.map(() => "(LOWER(hc.name) LIKE ? OR EXISTS (SELECT 1 FROM device_aliases da WHERE da.rosetta_device_id = hc.rosetta_device_id AND da.alias LIKE ?))");
+      const params = rawTerms.flatMap((t) => [`%${t.toLowerCase()}%`, `%${t.toLowerCase()}%`]);
+      // device_id IS NULL: only genuinely catalog-only entities. A matrix-linked row must never
+      // render as a thin "Not in the RouterOS product matrix" result — those go via the device path.
+      const sql = `${OVERVIEW_SELECT} hc WHERE hc.device_id IS NULL AND ${conditions.join(" AND ")} ORDER BY hc.name LIMIT ?`;
+      const rows = db.prepare(sql).all(...params, limit + 1) as OverviewRow[];
+      if (rows.length > 0) {
+        const hasMore = rows.length > limit;
+        const trimmed = hasMore ? rows.slice(0, limit) : rows;
+        return { results: [], catalog: trimmed.map(catalogRowToResult), mode: "catalog", total: trimmed.length, has_more: hasMore };
+      }
+    }
+  }
+
+  return { results: [], mode: "fts", total: 0, has_more: false };
+}
+
+// ── Cross-device test result queries ──
+
+export type DeviceTestRow = {
+  product_name: string;
+  product_code: string | null;
+  architecture: string;
+  test_type: string;
+  mode: string;
+  configuration: string;
+  packet_size: number;
+  throughput_kpps: number | null;
+  throughput_mbps: number | null;
+};
+
+type DeviceTestFilters = {
+  device?: string;
+  test_type?: string;
+  mode?: string;
+  configuration?: string;
+  packet_size?: number;
+  sort_by?: "mbps" | "kpps";
+};
+
+function buildTestWhereClause(filters: DeviceTestFilters): { whereClause: string; params: (string | number)[] } {
+  const where: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (filters.device) {
+    where.push("d.product_name LIKE ?");
+    params.push(`%${filters.device}%`);
+  }
+  if (filters.test_type) {
+    where.push("t.test_type = ?");
+    params.push(filters.test_type);
+  }
+  if (filters.mode) {
+    where.push("t.mode = ?");
+    params.push(filters.mode);
+  }
+  if (filters.configuration) {
+    where.push("t.configuration LIKE ?");
+    params.push(`%${filters.configuration}%`);
+  }
+  if (filters.packet_size) {
+    where.push("t.packet_size = ?");
+    params.push(filters.packet_size);
+  }
+
+  return {
+    whereClause: where.length > 0 ? `WHERE ${where.join(" AND ")}` : "",
+    params,
+  };
+}
+
+export function searchDeviceTests(
+  filters: DeviceTestFilters,
+  limit = 50,
+): { results: DeviceTestRow[]; total: number } {
+  const { whereClause, params } = buildTestWhereClause(filters);
+  const orderCol = filters.sort_by === "kpps" ? "t.throughput_kpps" : "t.throughput_mbps";
+
+  // Total count (before limit)
+  const totalSql = `SELECT COUNT(*) AS c FROM device_test_results t
+    JOIN devices d ON d.id = t.device_id ${whereClause}`;
+  const total = Number((db.prepare(totalSql).get(...params) as { c: number }).c);
+
+  // When the caller did NOT pin a packet size, prioritise 512-byte results.
+  // 512B is the conventional "mid-size" benchmark RouterOS admins compare on
+  // — it best represents real-world traffic mixes. Without this, the default
+  // throughput-DESC sort surfaces 1518B "best case" rows first, crowding out
+  // the comparison values within the LIMIT. Within each priority bucket we
+  // still sort by throughput DESC so the fastest devices float to the top.
+  const orderBy = filters.packet_size === undefined
+    ? `(CASE WHEN t.packet_size = 512 THEN 0 ELSE 1 END), ${orderCol} DESC NULLS LAST`
+    : `${orderCol} DESC NULLS LAST`;
+
+  const sql = `SELECT d.product_name, d.product_code, d.architecture,
+      t.test_type, t.mode, t.configuration, t.packet_size,
+      t.throughput_kpps, t.throughput_mbps
+    FROM device_test_results t
+    JOIN devices d ON d.id = t.device_id
+    ${whereClause}
+    ORDER BY ${orderBy}
+    LIMIT ?`;
+
+  const results = db.prepare(sql).all(...params, limit) as DeviceTestRow[];
+  return { results, total };
+}
+
+type DeviceTestCsvRow = {
+  product_name: string;
+  product_code: string | null;
+  architecture: string | null;
+  cpu: string | null;
+  cpu_cores: number | null;
+  cpu_frequency: string | null;
+  test_type: string;
+  mode: string;
+  configuration: string;
+  packet_size: number;
+  throughput_kpps: number | null;
+  throughput_mbps: number | null;
+  product_url: string | null;
+};
+
+export function exportDeviceTestsCsv(): string {
+  const rows = db.prepare(`SELECT d.product_name, d.product_code, d.architecture,
+      d.cpu, d.cpu_cores, d.cpu_frequency,
+      t.test_type, t.mode, t.configuration, t.packet_size,
+      t.throughput_kpps, t.throughput_mbps,
+      d.product_url
+    FROM device_test_results t
+    JOIN devices d ON d.id = t.device_id
+    ORDER BY d.product_name, t.test_type, t.mode, t.configuration, t.packet_size DESC`).all() as DeviceTestCsvRow[];
+
+  return rowsToCsv(rows, [
+    "product_name",
+    "product_code",
+    "architecture",
+    "cpu",
+    "cpu_cores",
+    "cpu_frequency",
+    "test_type",
+    "mode",
+    "configuration",
+    "packet_size",
+    "throughput_kpps",
+    "throughput_mbps",
+    "product_url",
+  ]);
+}
+
+type DeviceCsvRow = {
+  product_name: string;
+  product_code: string | null;
+  architecture: string | null;
+  cpu: string | null;
+  cpu_cores: number | null;
+  cpu_frequency: string | null;
+  license_level: number | null;
+  operating_system: string | null;
+  ram: string | null;
+  ram_mb: number | null;
+  storage: string | null;
+  storage_mb: number | null;
+  dimensions: string | null;
+  poe_in: string | null;
+  poe_out: string | null;
+  max_power_w: number | null;
+  wireless_24_chains: number | null;
+  wireless_5_chains: number | null;
+  eth_fast: number | null;
+  eth_gigabit: number | null;
+  eth_2500: number | null;
+  sfp_ports: number | null;
+  sfp_plus_ports: number | null;
+  eth_multigig: number | null;
+  usb_ports: number | null;
+  sim_slots: number | null;
+  msrp_usd: number | null;
+  product_url: string | null;
+  block_diagram_url: string | null;
+};
+
+export function exportDevicesCsv(): string {
+  const rows = db.prepare(`${DEVICE_SELECT} ORDER BY product_name`).all() as DeviceCsvRow[];
+
+  return rowsToCsv(rows, [
+    "product_name",
+    "product_code",
+    "architecture",
+    "cpu",
+    "cpu_cores",
+    "cpu_frequency",
+    "license_level",
+    "operating_system",
+    "ram",
+    "ram_mb",
+    "storage",
+    "storage_mb",
+    "dimensions",
+    "poe_in",
+    "poe_out",
+    "max_power_w",
+    "wireless_24_chains",
+    "wireless_5_chains",
+    "eth_fast",
+    "eth_gigabit",
+    "eth_2500",
+    "sfp_ports",
+    "sfp_plus_ports",
+    "eth_multigig",
+    "usb_ports",
+    "sim_slots",
+    "msrp_usd",
+    "product_url",
+    "block_diagram_url",
+  ]);
+}
+
+/** Get distinct values for test result fields (for discovery). */
+export function getTestResultMeta(): {
+  test_types: string[];
+  modes: string[];
+  configurations: string[];
+  packet_sizes: number[];
+} {
+  const col = (sql: string) => (db.prepare(sql).all() as Array<{ v: string }>).map((r) => r.v);
+  return {
+    test_types: col("SELECT DISTINCT test_type AS v FROM device_test_results ORDER BY v"),
+    modes: col("SELECT DISTINCT mode AS v FROM device_test_results ORDER BY v"),
+    configurations: col("SELECT DISTINCT configuration AS v FROM device_test_results ORDER BY v"),
+    packet_sizes: (db.prepare("SELECT DISTINCT packet_size AS v FROM device_test_results ORDER BY v DESC").all() as Array<{ v: number }>).map((r) => r.v),
+  };
+}
+
+const VERSION_CHANNELS = ["stable", "long-term", "testing", "development"] as const;
+
+// ── Changelog search ──
+
+export type ChangelogResult = {
+  version: string;
+  released: string | null;
+  category: string;
+  is_breaking: number;
+  description: string;
+  excerpt: string;
+  sort_order: number;
+};
+
+/** Get all versions that have changelog data, sorted numerically. */
+function getChangelogVersions(): string[] {
+  const rows = db
+    .prepare("SELECT DISTINCT version FROM changelogs")
+    .all() as Array<{ version: string }>;
+  return rows.map((r) => r.version).sort(compareVersions);
+}
+
+/**
+ * Filter versions to those within a range.
+ * Default: (fromVersion, toVersion] — fromVersion exclusive, toVersion inclusive.
+ * Pass inclusiveFrom=true for [fromVersion, toVersion] (both ends inclusive).
+ */
+function filterVersionRange(
+  versions: string[],
+  fromVersion?: string,
+  toVersion?: string,
+  inclusiveFrom = false,
+): string[] {
+  return versions.filter((v) => {
+    if (fromVersion) {
+      const cmp = compareVersions(v, fromVersion);
+      if (inclusiveFrom ? cmp < 0 : cmp <= 0) return false;
+    }
+    if (toVersion && compareVersions(v, toVersion) > 0) return false;
+    return true;
+  });
+}
+
+function isMajorMinorVersion(version: string): boolean {
+  return /^\d+\.\d+$/.test(version);
+}
+
+function resolveChangelogVersionList(version: string): string[] {
+  const all = getChangelogVersions();
+  if (all.includes(version)) return [version];
+  if (isMajorMinorVersion(version)) {
+    const patchPrefix = `${version}.`;
+    const patchVersions = all.filter((v) => v.startsWith(patchPrefix));
+    if (patchVersions.length > 0) return patchVersions;
+  }
+  return [version];
+}
+
+function extractChangelogTerms(query: string, version?: string): string[] {
+  const terms = extractTerms(query);
+  if (!version) return terms;
+
+  const versionParts = new Set(version.match(/\d+/g) ?? []);
+  return terms.filter((term) => !CHANGELOG_GENERIC_TERMS.has(term) && !versionParts.has(term));
+}
+
+/** Search changelogs with FTS, version range, category, and breaking-only filters. */
+export function searchChangelogs(
+  query: string,
+  options: {
+    version?: string;
+    fromVersion?: string;
+    toVersion?: string;
+    inclusiveFrom?: boolean;
+    sortAscending?: boolean;
+    category?: string;
+    breakingOnly?: boolean;
+    limit?: number;
+  } = {},
+): ChangelogResult[] {
+  const limit = options.limit ?? 20;
+  const terms = extractChangelogTerms(query, options.version);
+
+  // Build version filter
+  let versionList: string[] | null = null;
+  if (options.version) {
+    versionList = resolveChangelogVersionList(options.version);
+  } else if (options.fromVersion || options.toVersion) {
+    const all = getChangelogVersions();
+    versionList = filterVersionRange(all, options.fromVersion, options.toVersion, options.inclusiveFrom);
+    if (versionList.length === 0) return [];
+  }
+
+  let results: ChangelogResult[];
+
+  // No FTS query — browse by filters only
+  if (terms.length === 0) {
+    results = browseChangelogs(versionList, options.category, options.breakingOnly, limit);
+  } else {
+    // FTS search with AND, then fallback to OR
+    let ftsQuery = buildFtsQuery(terms, "AND");
+    if (!ftsQuery) return [];
+    results = runChangelogFtsQuery(ftsQuery, versionList, options.category, options.breakingOnly, limit);
+
+    if (results.length === 0 && terms.length > 1) {
+      ftsQuery = buildFtsQuery(terms, "OR");
+      results = runChangelogFtsQuery(ftsQuery, versionList, options.category, options.breakingOnly, limit);
+    }
+  }
+
+  // Re-sort by version when caller wants chronological order (oldest first)
+  if (options.sortAscending) {
+    results.sort((a, b) => compareVersions(a.version, b.version) || a.sort_order - b.sort_order);
+  }
+
+  return results;
+}
+
+/** Browse changelogs without FTS — just filters. */
+function browseChangelogs(
+  versionList: string[] | null,
+  category: string | undefined,
+  breakingOnly: boolean | undefined,
+  limit: number,
+): ChangelogResult[] {
+  const where: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (versionList) {
+    where.push(`c.version IN (${versionList.map(() => "?").join(",")})`);
+    params.push(...versionList);
+  }
+  if (category) {
+    where.push("c.category = ?");
+    params.push(category);
+  }
+  if (breakingOnly) {
+    where.push("c.is_breaking = 1");
+  }
+
+  if (where.length === 0) {
+    // No filters at all — return recent entries
+    where.push("1=1");
+  }
+
+  const sql = `SELECT c.version, c.released, c.category, c.is_breaking,
+      c.description, substr(c.description, 1, 200) as excerpt, c.sort_order
+    FROM changelogs c
+    WHERE ${where.join(" AND ")}
+    ORDER BY c.sort_order
+    LIMIT ?`;
+
+  const rows = db.prepare(sql).all(...params, limit) as ChangelogResult[];
+  // Sort by version numerically (SQL sorts lexicographically: 7.9 > 7.22)
+  return rows.sort((a, b) => compareVersions(b.version, a.version) || a.description.localeCompare(b.description));
+}
+
+function runChangelogFtsQuery(
+  ftsQuery: string,
+  versionList: string[] | null,
+  category: string | undefined,
+  breakingOnly: boolean | undefined,
+  limit: number,
+): ChangelogResult[] {
+  if (!ftsQuery) return [];
+  try {
+    const where: string[] = ["changelogs_fts MATCH ?"];
+    const params: (string | number)[] = [ftsQuery];
+
+    if (versionList) {
+      where.push(`c.version IN (${versionList.map(() => "?").join(",")})`);
+      params.push(...versionList);
+    }
+    if (category) {
+      where.push("c.category = ?");
+      params.push(category);
+    }
+    if (breakingOnly) {
+      where.push("c.is_breaking = 1");
+    }
+
+    const sql = `SELECT c.version, c.released, c.category, c.is_breaking,
+        c.description, c.sort_order,
+        snippet(changelogs_fts, 1, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 25) as excerpt
+      FROM changelogs_fts fts
+      JOIN changelogs c ON c.id = fts.rowid
+      WHERE ${where.join(" AND ")}
+      ORDER BY rank
+      LIMIT ?`;
+
+    return db.prepare(sql).all(...params, limit) as ChangelogResult[];
+  } catch {
+    return [];
+  }
+}
+
+// ── Video/transcript search ──
+
+export type VideoSearchResult = {
+  video_id: string;
+  title: string;
+  url: string;
+  upload_date: string | null;
+  chapter_title: string | null;
+  start_s: number;
+  excerpt: string;
+};
+
+/**
+ * Search YouTube videos, matching both the transcript AND the video title/description
+ * (issue #89). Title-bearing words like "changelog" never appear in the narration, so a
+ * segment-only search buries correctly-titled videos; `videos_fts` (title + description,
+ * already trigger-maintained — no schema change) is consulted alongside `video_segments_fts`.
+ *
+ * Ranking is strong-before-weak: a title-AND hit, then a transcript-AND hit, then the
+ * OR fallbacks in the same order. Title matches lead because the title is the curated
+ * summary of the video, so a query word found only there is a strong relevance signal.
+ * Results dedupe by video (first occurrence wins) and cap at `limit`.
+ */
+export function searchVideos(query: string, limit = 5): VideoSearchResult[] {
+  const terms = extractTerms(query);
+  if (terms.length === 0) return [];
+
+  const andQuery = buildFtsQuery(terms, "AND");
+  if (!andQuery) return [];
+  const orQuery = terms.length > 1 ? buildFtsQuery(terms, "OR") : "";
+
+  const merged: VideoSearchResult[] = [];
+  const seen = new Set<string>();
+  const add = (rows: VideoSearchResult[]) => {
+    for (const r of rows) {
+      if (merged.length >= limit) return;
+      if (seen.has(r.video_id)) continue;
+      seen.add(r.video_id);
+      merged.push(r);
+    }
+  };
+
+  // Strong matches: every term present, title before transcript.
+  add(runVideosTitleQuery(andQuery, limit));
+  if (merged.length < limit) add(runVideosFtsQuery(andQuery, limit));
+  // Weak fallback (multi-term only): any term present, same title-before-transcript order.
+  if (merged.length < limit && orQuery) add(runVideosTitleQuery(orQuery, limit));
+  if (merged.length < limit && orQuery) add(runVideosFtsQuery(orQuery, limit));
+
+  return merged;
+}
+
+function runVideosFtsQuery(ftsQuery: string, limit: number): VideoSearchResult[] {
+  if (!ftsQuery) return [];
+  try {
+    // A video with several matching segments would otherwise consume multiple of the
+    // top-`limit` rows and, after the caller dedupes by video, hide eligible videos ranked
+    // just below the cutoff (issue #89 — "firewall filter" yielded 7 videos from 10 rows).
+    // fts5's snippet() can't run alongside a window function, so this is two bounded steps:
+    // (1) pick the best-ranked segment PER VIDEO, then (2) fetch the excerpt for just those.
+    const rows = db
+      .prepare(
+        `SELECT seg_id, video_id, title, url, upload_date, chapter_title, start_s
+         FROM (
+           SELECT video_segments_fts.rowid AS seg_id, v.video_id AS video_id, v.title AS title,
+                  v.url AS url, v.upload_date AS upload_date, vs.chapter_title AS chapter_title,
+                  vs.start_s AS start_s, video_segments_fts.rank AS r,
+                  ROW_NUMBER() OVER (PARTITION BY v.id ORDER BY video_segments_fts.rank) AS rn
+           FROM video_segments_fts
+           JOIN video_segments vs ON vs.id = video_segments_fts.rowid
+           JOIN videos v ON v.id = vs.video_id
+           WHERE video_segments_fts MATCH ?
+         )
+         WHERE rn = 1
+         ORDER BY r
+         LIMIT ?`,
+      )
+      .all(ftsQuery, limit) as Array<VideoSearchResult & { seg_id: number }>;
+    if (rows.length === 0) return [];
+
+    const segIds = rows.map((r) => r.seg_id);
+    const excerpts = db
+      .prepare(
+        `SELECT rowid AS seg_id,
+                snippet(video_segments_fts, 1, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 25) AS excerpt
+         FROM video_segments_fts
+         WHERE video_segments_fts MATCH ? AND rowid IN (${segIds.map(() => "?").join(",")})`,
+      )
+      .all(ftsQuery, ...segIds) as Array<{ seg_id: number; excerpt: string }>;
+    const byId = new Map(excerpts.map((e) => [e.seg_id, e.excerpt]));
+
+    return rows.map(({ seg_id, ...rest }) => ({ ...rest, excerpt: byId.get(seg_id) ?? "" }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Match the video title/description via `videos_fts` (issue #89). A title-only word like
+ * "changelog" is unsearchable through the transcript index, so this surfaces it. The row
+ * shape stays identical to a transcript hit by attaching the video's first segment for
+ * `chapter_title`/`start_s` (LEFT JOIN — a video with no transcript still returns, with
+ * NULL chapter and start 0); the excerpt is a snippet of the matched title/description.
+ */
+function runVideosTitleQuery(ftsQuery: string, limit: number): VideoSearchResult[] {
+  if (!ftsQuery) return [];
+  try {
+    return db
+      .prepare(
+        `SELECT v.video_id, v.title, v.url, v.upload_date,
+                vs.chapter_title, COALESCE(vs.start_s, 0) AS start_s,
+                snippet(videos_fts, -1, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 25) AS excerpt
+         FROM videos_fts fts
+         JOIN videos v ON v.id = fts.rowid
+         LEFT JOIN video_segments vs
+           ON vs.id = (SELECT id FROM video_segments WHERE video_id = v.id ORDER BY sort_order LIMIT 1)
+         WHERE videos_fts MATCH ?
+         ORDER BY rank
+         LIMIT ?`,
+      )
+      .all(ftsQuery, limit) as VideoSearchResult[];
+  } catch {
+    return [];
+  }
+}
+
+// ── Current versions ──
+
+// ── Dude wiki search ──
+
+export type DudeSearchResult = {
+  id: number;
+  title: string;
+  path: string;
+  version: string;
+  url: string;
+  word_count: number | null;
+  image_count: number;
+  excerpt: string;
+};
+
+export type DudeImageResult = {
+  id: number;
+  filename: string;
+  alt_text: string | null;
+  caption: string | null;
+  local_path: string;
+  original_url: string | null;
+  wayback_url: string | null;
+};
+
+export type DudePageResult = {
+  id: number;
+  slug: string;
+  title: string;
+  path: string;
+  version: string;
+  url: string;
+  wayback_url: string;
+  text: string;
+  code: string | null;
+  last_edited: string | null;
+  word_count: number | null;
+  images: DudeImageResult[];
+  truncated?: { text_total: number; code_total: number };
+};
+
+/** Search archived Dude wiki pages via FTS, with AND→OR fallback. */
+export function searchDude(query: string, limit = 8): DudeSearchResult[] {
+  const terms = extractTerms(query);
+  if (terms.length === 0) return [];
+
+  let ftsQuery = buildFtsQuery(terms, "AND");
+  if (!ftsQuery) return [];
+  let results = runDudeFtsQuery(ftsQuery, limit);
+
+  if (results.length === 0 && terms.length > 1) {
+    ftsQuery = buildFtsQuery(terms, "OR");
+    results = runDudeFtsQuery(ftsQuery, limit);
+  }
+
+  return results;
+}
+
+function runDudeFtsQuery(ftsQuery: string, limit: number): DudeSearchResult[] {
+  if (!ftsQuery) return [];
+  try {
+    return db
+      .prepare(
+        `SELECT dp.id, dp.title, dp.path, dp.version, dp.url, dp.word_count,
+                (SELECT COUNT(*) FROM dude_images di WHERE di.page_id = dp.id) as image_count,
+                snippet(dude_pages_fts, 2, '${EXCERPT_MARK_START}', '${EXCERPT_MARK_END}', '...', 25) as excerpt
+         FROM dude_pages_fts fts
+         JOIN dude_pages dp ON dp.id = fts.rowid
+         WHERE dude_pages_fts MATCH ?
+         ORDER BY bm25(dude_pages_fts, 3.0, 2.0, 1.0, 0.5),
+                  CASE dp.version WHEN 'v6' THEN 0 ELSE 1 END,
+                  dp.title
+         LIMIT ?`,
+      )
+      .all(ftsQuery, limit) as DudeSearchResult[];
+  } catch {
+    return [];
+  }
+}
+
+/** Get a Dude wiki page by ID or title, with associated images.
+ *  maxLength: if set, truncates text+code combined and adds a truncated field. */
+export function getDudePage(idOrTitle: number | string, maxLength?: number): DudePageResult | null {
+  const row =
+    typeof idOrTitle === "number"
+      ? db.prepare("SELECT * FROM dude_pages WHERE id = ?").get(idOrTitle)
+      : db.prepare("SELECT * FROM dude_pages WHERE title = ? COLLATE NOCASE OR slug = ? COLLATE NOCASE").get(idOrTitle, idOrTitle);
+  if (!row) return null;
+  const page = row as DudePageResult;
+  page.images = db
+    .prepare("SELECT id, filename, alt_text, caption, local_path, original_url, wayback_url FROM dude_images WHERE page_id = ? ORDER BY sort_order")
+    .all(page.id) as DudeImageResult[];
+
+  if (maxLength) {
+    const textLen = page.text.length;
+    const codeLen = page.code?.length ?? 0;
+    if (textLen + codeLen > maxLength) {
+      const codeBudget = Math.min(codeLen, Math.floor(maxLength * 0.2));
+      const textBudget = maxLength - codeBudget;
+      page.truncated = { text_total: textLen, code_total: codeLen };
+      page.text = textLen > textBudget ? `${page.text.slice(0, textBudget)}\n\n[... truncated — ${textLen} chars total, showing first ${textBudget}]` : page.text;
+      if (page.code && codeLen > codeBudget) {
+        page.code = `${page.code.slice(0, codeBudget)}\n# [... truncated — ${codeLen} chars total]`;
+      }
+    }
+  }
+
+  return page;
+}
+
+// ── Skills (agent guides from tikoci/routeros-skills) ──
+
+const SKILLS_PROVENANCE = `⚠️ PROVENANCE: Community-created content from tikoci/routeros-skills —
+NOT official MikroTik documentation. AI-generated, human-reviewed. May contain errors.
+Verify claims using routeros_search and routeros_get_page for official documentation.`;
+
+export type SkillSummary = {
+  name: string;
+  description: string;
+  word_count: number;
+  ref_count: number;
+  source_url: string;
+};
+
+export type SkillReference = {
+  path: string;
+  filename: string;
+  content: string;
+  word_count: number;
+};
+
+export type SkillDetail = {
+  name: string;
+  description: string;
+  content: string;
+  provenance: string;
+  source_repo: string;
+  source_sha: string | null;
+  source_url: string;
+  word_count: number;
+  extracted_at: string | null;
+  references: SkillReference[];
+};
+
+/** List all available skills with reference counts. */
+export function listSkills(): SkillSummary[] {
+  return db
+    .prepare(
+      `SELECT s.name, s.description, s.word_count, s.source_url,
+              (SELECT COUNT(*) FROM skill_references sr WHERE sr.skill_id = s.id) as ref_count
+       FROM skills s
+       ORDER BY s.name`,
+    )
+    .all() as SkillSummary[];
+}
+
+/** Get a single skill by name, including its references and provenance header. */
+export function getSkill(name: string): SkillDetail | null {
+  const row = db
+    .prepare("SELECT * FROM skills WHERE name = ? COLLATE NOCASE")
+    .get(name) as Record<string, unknown> | null;
+  if (!row) return null;
+
+  const refs = db
+    .prepare(
+      `SELECT path, filename, content, word_count
+       FROM skill_references
+       WHERE skill_id = ?
+       ORDER BY path`,
+    )
+    .all(row.id as number) as SkillReference[];
+
+  return {
+    name: row.name as string,
+    description: row.description as string,
+    content: row.content as string,
+    provenance: `${SKILLS_PROVENANCE}\nSource: ${row.source_url as string}`,
+    source_repo: row.source_repo as string,
+    source_sha: row.source_sha as string | null,
+    source_url: row.source_url as string,
+    word_count: row.word_count as number,
+    extracted_at: row.extracted_at as string | null,
+    references: refs,
+  };
+}
+
+/** Get a single reference file from a skill. */
+export function getSkillReference(skillName: string, refFilename: string): SkillReference | null {
+  const row = db
+    .prepare(
+      `SELECT sr.path, sr.filename, sr.content, sr.word_count
+       FROM skill_references sr
+       JOIN skills s ON s.id = sr.skill_id
+       WHERE s.name = ? COLLATE NOCASE AND sr.filename = ? COLLATE NOCASE`,
+    )
+    .get(skillName, refFilename) as SkillReference | null;
+  return row;
+}
+
+const VERSION_BASE_URL = "https://upgrade.mikrotik.com/routeros/NEWESTa7";
+
+/** Fetch current RouterOS versions from MikroTik's upgrade server. */
+const WINBOX_URL = "https://upgrade.mikrotik.com/routeros/winbox/LATEST.4";
+
+export async function fetchCurrentVersions(): Promise<{
+  channels: Record<string, string | null>;
+  winbox: string | null;
+  fetched_at: string;
+}> {
+  const channels: Record<string, string | null> = {};
+  const fetchOne = async (url: string): Promise<string | null> => {
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (!resp.ok) return null;
+      const text = await resp.text();
+      return text.trim().split(/\s+/)[0] || null;
+    } catch {
+      return null;
+    }
+  };
+  const [, winbox] = await Promise.all([
+    Promise.all(
+      VERSION_CHANNELS.map(async (channel) => {
+        channels[channel] = await fetchOne(`${VERSION_BASE_URL}.${channel}`);
+      }),
+    ),
+    fetchOne(WINBOX_URL),
+  ]);
+  return { channels, winbox, fetched_at: new Date().toISOString() };
+}

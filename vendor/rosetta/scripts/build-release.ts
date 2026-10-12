@@ -1,0 +1,156 @@
+/**
+ * build-release.ts — Cross-compile MCP server binaries for all platforms.
+ *
+ * Usage: bun run scripts/build-release.ts [version]
+ *   version defaults to package.json version prefixed with "v"
+ *
+ * Produces:
+ *   dist/<platform>/rosetta[.exe]  — compiled binary
+ *   dist/rosetta-<platform>.zip    — release ZIP (binary + README)
+ *   dist/ros-help.db.gz                  — compressed database (if DB exists)
+ *
+ * Then upload with:
+ *   gh release create <version> dist/*.zip dist/ros-help.db.gz
+ */
+
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const DIST = path.join(ROOT, "dist");
+const ENTRY = path.join(ROOT, "src/mcp.ts");
+const REPO_URL = "tikoci/rosetta";
+
+// Release tags carry exactly one leading v; the runtime version does not.
+const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf-8"));
+const requestedVersion = process.argv[2] || pkg.version;
+const runtimeVersion = requestedVersion.replace(/^v+/, "");
+const releaseTag = `v${runtimeVersion}`;
+
+interface Target {
+  name: string;
+  bunTarget: string;
+  exe: string;
+}
+
+const targets: Target[] = [
+  { name: "macos-arm64", bunTarget: "bun-darwin-arm64", exe: "rosetta" },
+  { name: "macos-x64", bunTarget: "bun-darwin-x64", exe: "rosetta" },
+  { name: "windows-x64", bunTarget: "bun-windows-x64", exe: "rosetta.exe" },
+  { name: "linux-x64", bunTarget: "bun-linux-x64", exe: "rosetta" },
+];
+
+const defines = [
+  "--define", `VERSION=${JSON.stringify(runtimeVersion)}`,
+  "--define", `REPO_URL=${JSON.stringify(REPO_URL)}`,
+  "--define", "IS_COMPILED=true",
+];
+
+// Clean dist/
+if (existsSync(DIST)) rmSync(DIST, { recursive: true });
+mkdirSync(DIST, { recursive: true });
+
+console.log(`Building rosetta ${releaseTag}`);
+console.log();
+
+// Build README for inclusion in ZIP
+const readmeTxt = `rosetta ${releaseTag}
+RouterOS documentation MCP server
+
+Quick Start:
+  1. Run:  ./rosetta --setup
+     (On macOS: if blocked by Gatekeeper, go to System Settings > Privacy & Security > Allow)
+     (On Windows: if SmartScreen warns, click "More info" > "Run anyway")
+  2. This downloads the documentation database (~50 MB compressed)
+  3. Follow the printed instructions to configure your MCP client
+  4. Restart your AI assistant
+
+For more information: https://github.com/${REPO_URL}
+`;
+
+// Compile each target
+for (const target of targets) {
+  const dir = path.join(DIST, target.name);
+  mkdirSync(dir, { recursive: true });
+
+  const outfile = path.join(dir, target.exe);
+  console.log(`Compiling ${target.name} (${target.bunTarget})...`);
+
+  const buildArgs = [
+    "build", "--compile",
+    "--minify", "--bytecode",
+    `--target=${target.bunTarget}`,
+    ...defines,
+    ENTRY,
+    "--outfile", outfile,
+  ];
+
+  const buildResult = spawnSync("bun", buildArgs, { cwd: ROOT, stdio: "inherit" });
+  if (buildResult.status !== 0) {
+    console.error(`  ✗ Failed to compile ${target.name}`);
+    continue;
+  }
+
+  // Write README into target dir
+  writeFileSync(path.join(dir, "README.txt"), readmeTxt);
+
+  // Create ZIP
+  const zipName = `rosetta-${target.name}.zip`;
+  const zipPath = path.join(DIST, zipName);
+  console.log(`  Packaging ${zipName}...`);
+
+  const zipResult = spawnSync(
+    "zip", ["-j", zipPath, outfile, path.join(dir, "README.txt")],
+    { cwd: ROOT, stdio: "inherit" },
+  );
+  if (zipResult.status !== 0) {
+    console.error(`  ✗ Failed to create ${zipName}`);
+    continue;
+  }
+
+  console.log(`  ✓ ${zipName}`);
+  console.log();
+}
+
+// Compress database if it exists
+const dbPath = path.join(ROOT, "ros-help.db");
+if (existsSync(dbPath)) {
+  console.log("Compressing database...");
+  const dbData = readFileSync(dbPath);
+  const compressed = Bun.gzipSync(dbData);
+  const gzPath = path.join(DIST, "ros-help.db.gz");
+  writeFileSync(gzPath, compressed);
+  const origMB = (dbData.byteLength / 1024 / 1024).toFixed(1);
+  const compMB = (compressed.byteLength / 1024 / 1024).toFixed(1);
+  console.log(`  ✓ ros-help.db.gz (${origMB} MB → ${compMB} MB)`);
+  console.log();
+}
+
+// Summary
+console.log("─".repeat(60));
+console.log("Release artifacts:");
+console.log();
+const artifacts = [];
+for (const target of targets) {
+  const zipName = `rosetta-${target.name}.zip`;
+  if (existsSync(path.join(DIST, zipName))) {
+    console.log(`  dist/${zipName}`);
+    artifacts.push(`dist/${zipName}`);
+  }
+}
+if (existsSync(path.join(DIST, "ros-help.db.gz"))) {
+  console.log(`  dist/ros-help.db.gz`);
+  artifacts.push("dist/ros-help.db.gz");
+}
+
+console.log();
+console.log("To publish:");
+console.log(`  gh release create ${releaseTag} ${artifacts.join(" ")} --title "${releaseTag}" --generate-notes`);
+console.log();

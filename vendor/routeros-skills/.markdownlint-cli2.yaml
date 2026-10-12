@@ -1,0 +1,25 @@
+# markdownlint-cli2 configuration (ignores and globs)
+# https://github.com/DavidAnson/markdownlint-cli2
+#
+# Rules live in .markdownlint.yaml (also read by IDE extensions).
+# This file handles CLI-specific settings: which files to skip.
+#
+# IMPORTANT: SKILL.md files and skill dirs are NOT ignored here — in this repo
+# the skills are the deliverable (public docs rendered on GitHub), so they are
+# the primary lint targets. Only true LLM instruction files and vendored dirs skip.
+
+ignores:
+  - "node_modules/**"
+  - "**/node_modules/**"
+  # Git internals: remote-tracking ref/log files inherit the branch name, and
+  # the AI-findings autofix bot names branches after the file they touch
+  # (e.g. ai-findings-autofix/...-SKILL.md), so `.git/**` can contain paths
+  # ending in `.md`. Fresh CI checkouts don't have these refs, but a local
+  # `make lint` after fetching them would otherwise fail on git internals.
+  - ".git/**"
+  # LLM instruction files — different audience, intentionally loose structure.
+  # None live in this repo today; listed defensively in case one is added.
+  - "CLAUDE.md"
+  - "AGENTS.md"
+  - ".github/copilot-instructions.md"
+  - ".github/instructions/**"

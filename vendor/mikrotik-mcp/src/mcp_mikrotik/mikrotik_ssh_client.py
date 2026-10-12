@@ -1,0 +1,176 @@
+import io
+import logging
+import os
+from typing import Optional
+
+import paramiko
+
+from .sensitive import redact_if_enabled
+
+logger = logging.getLogger(__name__)
+
+class MikroTikSSHClient:
+    """SSH client for MikroTik devices."""
+
+    def __init__(
+        self,
+        host: str,
+        username: str,
+        password: str,
+        key_filename: Optional[str],
+        port: int = 22,
+        known_hosts_path: Optional[str] = None,
+    ):
+        self.host = host
+        self.username = username
+        self.password = password
+        self.port = port
+        self.client = None
+        self.channel = None
+        self.key_filename = key_filename
+        self.known_hosts_path = known_hosts_path
+
+    @staticmethod
+    def _decode_output(data: bytes) -> str:
+        """Decode raw SSH output bytes with a multi-encoding fallback chain.
+
+        RouterOS devices may return output encoded in UTF-8, CP1252 (Windows
+        Western European), or ISO 8859-1 (Latin-1) depending on the locale
+        configured on the device.  Strict UTF-8 decoding raises
+        UnicodeDecodeError for characters such as Swedish å/ä/ö (issue #58).
+
+        Fallback order:
+          1. UTF-8       — covers ASCII and most modern configurations
+          2. CP1252      — covers Windows Western European characters (å ä ö …)
+          3. Latin-1     — always succeeds; covers all single-byte code points
+        """
+        if not data:
+            return ""
+        for encoding in ("utf-8", "cp1252", "latin-1"):
+            try:
+                return data.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        # Unreachable in practice (latin-1 never raises), but kept as a
+        # safety net: replace unrecognised bytes rather than crashing.
+        return data.decode("utf-8", errors="replace")
+
+    def connect(self):
+        """Establish SSH connection to MikroTik device."""
+        try:
+            if not self.known_hosts_path:
+                raise FileNotFoundError(
+                    "A dedicated known_hosts file is required "
+                    "(set MIKROTIK_KNOWN_HOSTS_PATH)"
+                )
+            known_hosts_path = os.path.abspath(
+                os.path.expanduser(self.known_hosts_path)
+            )
+            if not os.path.isfile(known_hosts_path):
+                raise FileNotFoundError(
+                    f"known_hosts file does not exist: {known_hosts_path}"
+                )
+
+            self.client = paramiko.SSHClient()
+            self.client.load_host_keys(known_hosts_path)
+            self.client.set_missing_host_key_policy(paramiko.RejectPolicy())
+            self.client.connect(
+                hostname=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                key_filename=self.key_filename,
+                look_for_keys=False,
+                allow_agent=False,
+                timeout=10
+            )
+            return True
+        except Exception as e:
+            logger.error("Failed to connect to MikroTik: %s", redact_if_enabled(str(e)))
+            # A rejected login still leaves paramiko's transport running: it
+            # keeps a thread and a socket, and paramiko holds a strong
+            # reference to it, so it is never collected.  Close it here rather
+            # than abandoning a half-open connection.
+            try:
+                self.client.close()
+            except Exception:
+                pass
+            self.client = None
+            return False
+
+    def execute_command(self, command: str) -> str:
+        """Execute a command on MikroTik device using exec_command."""
+        if not self.client:
+            raise Exception("Not connected to MikroTik device")
+
+        try:
+            stdin, stdout, stderr = self.client.exec_command(command)
+
+            output = self._decode_output(stdout.read())
+            error = self._decode_output(stderr.read())
+
+            if error and not output:
+                return error
+
+            return output
+        except Exception as e:
+            logger.error("Error executing command: %s", redact_if_enabled(str(e)))
+            raise
+
+    def _open_sftp(self):
+        """Open an SFTP session, translating RouterOS's policy rejection.
+
+        RouterOS accepts the SSH session but closes the channel when the
+        "sftp" subsystem is requested by a user whose group lacks the "ftp"
+        policy — paramiko surfaces that as SSHException("Channel closed.").
+        Plain exec commands do not need the policy, so the rest of the tools
+        keep working on the same credentials, which makes the bare message
+        look like a transport bug (issue #113).  Translate it into an
+        actionable error; every other SSHException passes through unchanged.
+        """
+        try:
+            return self.client.open_sftp()
+        except paramiko.SSHException as e:
+            if "channel closed" in str(e).lower():
+                raise ConnectionError(
+                    "The device rejected the SFTP subsystem ('Channel closed'). "
+                    "RouterOS serves file transfers over SFTP only when the SSH "
+                    "user's group has the 'ftp' policy; ordinary commands do not "
+                    "need it, which is why other tools still work. Check with "
+                    "'/user group print' and add the policy with "
+                    "'/user group set <group> policy=ftp,<existing policies>'."
+                ) from e
+            raise
+
+    def download_file(self, remote_filename: str) -> bytes:
+        """Download a file from the device over SFTP and return its raw bytes.
+
+        RouterOS exposes its file store over the SSH/SFTP subsystem, so binary
+        backups and text exports alike can be transferred without mangling.
+        """
+        if not self.client:
+            raise Exception("Not connected to MikroTik device")
+
+        sftp = self._open_sftp()
+        try:
+            buffer = io.BytesIO()
+            sftp.getfo(remote_filename, buffer)
+            return buffer.getvalue()
+        finally:
+            sftp.close()
+
+    def upload_file(self, remote_filename: str, data: bytes) -> None:
+        """Upload raw bytes to a file on the device over SFTP."""
+        if not self.client:
+            raise Exception("Not connected to MikroTik device")
+
+        sftp = self._open_sftp()
+        try:
+            sftp.putfo(io.BytesIO(data), remote_filename)
+        finally:
+            sftp.close()
+
+    def disconnect(self):
+        """Close SSH connection."""
+        if self.client:
+            self.client.close()

@@ -1,0 +1,81 @@
+
+:local sysname [/system identity get name];
+:local scriptname "doUpdateExternalDNS";
+:global globalScriptBeforeRun;
+$globalScriptBeforeRun $scriptname;
+
+:global globalNoteMe;
+:local itsOk true;
+:local payLoad false;
+:local state "";
+
+:local content
+:local IPv4
+:global LastIPv4
+
+# parsing the current IPv4 result
+/ip cloud force-update;
+:delay 7s;
+:set IPv4 [/ip cloud get public-address];
+
+:if ([:len $IPv4] > 0) do={
+        :if ([ :typeof [ :toip $IPv4 ] ] != "ip" ) do={
+
+        :set state "No cloud-DNS IP recieved";
+         $globalNoteMe value=$state;
+        :set itsOk false;
+   
+        }
+    }
+
+:if (($LastIPv4 != $IPv4) || ($force = true)) do={
+
+    :set state "External IP changed: current - ($IPv4), last - ($LastIPv4)";
+    $globalNoteMe value=$state;
+
+    /ip firewall address-list remove [find list~"alist-nat-external-ip"];
+    /ip firewall address-list add list="alist-nat-external-ip" address=$IPv4;
+   
+    /ip dns static remove [/ip dns static find name=ftpserver.org];
+    /ip dns static add name=ftpserver.org address=$IPv4;
+ 
+    :set LastIPv4 $IPv4;
+    :set payLoad true; 
+
+    :local count [:len [/system script find name="doSuperviseCHRviaSSH"]];
+    :if ($count > 0) do={
+       
+        :set state "Refreshing VPN server (CHR) IPSEC policies";
+        $globalNoteMe value=$state;
+        /system script run doSuperviseCHRviaSSH;
+    
+     }
+   }
+
+:local inf ""
+:if ($itsOk and $payLoad ) do={
+  :set inf "$scriptname on $sysname: external IP address change detected, refreshed"
+}
+
+:if ($itsOk and !$payLoad ) do={
+  :set inf "$scriptname on $sysname: no external IP address update needed"
+}
+
+:if (!$itsOk) do={
+  :set inf "Error When $scriptname on $sysname: $state"  
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+
+  :global globalTgMessage;
+  $globalTgMessage value=$inf;
+  :error $inf; 
+  
+}
+
+
+
+
+

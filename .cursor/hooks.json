@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeMCPExecution": [
+      {
+        "command": ".cursor/hooks/block-write-mcp.py",
+        "timeout": 5,
+        "failClosed": true
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/block-remote-shell.py",
+        "timeout": 5,
+        "failClosed": true
+      }
+    ]
+  }
+}

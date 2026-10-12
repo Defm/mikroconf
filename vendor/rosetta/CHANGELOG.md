@@ -1,0 +1,785 @@
+# Changelog
+
+All notable user-visible changes to `@tikoci/rosetta` are recorded here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); project
+uses [Semantic Versioning](https://semver.org/).
+
+> **Agentic rule.** Any change with a user-visible effect (CLI, MCP tool shape,
+> DB schema, CI behaviour, install flow) adds an entry under **[Unreleased]**
+> in the same PR / commit. Promoting `[Unreleased]` to a dated version header
+> is a manual step, done by hand alongside the `package.json` version bump
+> before dispatching a latest-channel release (see `MANUAL.md` "Release
+> Workflow") — CI no longer auto-bumps versions or auto-promotes CHANGELOG on
+> any channel. Prerelease (`-next`) release runs never promote
+> `[Unreleased]` either, since they don't represent the next stable version.
+> CI-only auto-bumps and pure refactors with no external effect are
+> intentionally omitted — git history is authoritative for those.
+>
+> **Not a git log.** Don't list every commit. One bullet per behaviour change,
+> grouped under `Added` / `Changed` / `Fixed` / `Removed` / `Deprecated` /
+> `Security`. Details and rationale belong in `DESIGN.md`; the "what's next"
+> backlog belongs in `BACKLOG.md`.
+
+## [Unreleased]
+
+## [0.11.3] — 2026-10-05
+
+### Fixed
+
+- **A release can no longer ship with a RouterOS version missing (#178).** One transient GitHub Pages 503 could fail a single version's command extraction while the build carried on, leaving `routeros_command_version_check` and `routeros_command_diff` wrong for that version. restraml fetches now retry server errors, a failed version fails the build, and the release gate checks that every listed version has command data.
+- **`bunx @tikoci/rosetta` runs under Bun in one process (#175).** Every launch printed "Note: rosetta requires the Bun runtime. Attempting to run via bun..." and then started a second process, because `bunx` runs a file with a `node` shebang under Node. The entry point now has a `bun` shebang. `npx` without Bun now fails with `env: bun: No such file or directory`; it was never supported.
+- **A slow npm registry no longer skips the install smoke (#176).** The npm dist-tag read-back now runs as its own job with a 15-minute budget. The three-OS `bunx` install and upgrade smoke jobs no longer wait for it, and they can be dispatched on their own (`release-smoke.yml`) against an already-published version.
+- **Dotted Wi-Fi settings get documentation (#58/#61 BL-3).** `channel.width`, `security.authentication-types`, `configuration.mode` and `configuration.manager` on `/interface/wifi` returned `unknown-arg`. The manual's Wi-Fi page documents all four under their sub-menus, for example `width` under `/interface/wifi/channel`. The CLI Reference lists the first three there, without descriptions, and doesn't list `configuration.manager`. A dotted name with no answer at its own menu is now looked up as its last segment under the sub-menu the other segments name. Across the command tree, answered dotted settings rose from 140 to 271 of 539, 128 of them with manual descriptions. `unknown-arg` also no longer claims that MikroTik's documentation doesn't list a setting. It says rosetta matched nothing, which is a lookup gap and not proof that the argument is invalid.
+- **Release notes report accurate stats.** "RouterOS Versions" counted (version, architecture) rows plus metadata-only versions (103). It now counts versions with command data (67). "Commands" is labelled as command entries only. "Docs date" no longer shows the retired 2026-05-26 export date, because the manual is extracted live at each build.
+- **Package database coexistence (#145).** Each exact package version now uses its own default `~/.rosetta/ros-help-<version>.db`, so versions in use never replace each other's files; idle copies are cleaned up automatically (#151). Same-tag asset recovery remains a manual refresh; normal corrected content should ship as a new patch (#80).
+- **Automatic database cleanup (#151).** Package-mode databases are now opened read-only in rollback-journal mode, and each client holds a SQLite read lock for its lifetime. On startup rosetta keeps the versions in use plus the most recently used idle one, and deletes older `~/.rosetta/ros-help-<version>.db` copies. It never deletes a database a running client holds. The pre-0.11.3 shared `ros-help.db` is never deleted automatically: its file times don't change while an older client queries it, so they can't prove no older client is still running (#165). Once it has looked unused for 14 days, the startup log says to delete it by hand. A refresh that would replace a database a live client holds is refused with a clear message. `DB_PATH` / `--db` overrides naming a managed `ros-help-<semver>.db` inside `~/.rosetta/` are rejected. When a newer version's database is present, the MCP server instructions and `routeros_stats` (`newer_local_versions`) say so, to flag stale MCP configs.
+- **First launch with an overridden DB path (#146).** Missing parent directories are created before acquiring the download lock. Startup and browser recovery diagnostics preserve the running build and destination and no longer blame unrelated first-run failures on other clients.
+- **Synthetic `_lead` sections return only the introduction**, including their own code and word count, when selected by anchor or heading. Large pages such as WiFi CAPsMAN no longer expand a short lead into a whole-page table of contents (#144).
+- **KNOT LR8 / LR9 kit lookups no longer return the base KNOT (#154).** MikroTik's new `/hardware/knot-lr8-kit` and `knot-lr9-kit` pages link the base `knot` product as well as their own, and that cross-link alone matched the KNOT matrix row. These pages turned `knot-lr8-kit` / `knot-lr9-kit` into aliases of the current base board. The hardware assessment now drops a claim made only through a link when another page owns that device by its own slug or title. Both kits resolve as their own discontinued devices.
+- **Hardware catalog: devices without a /hardware page now carry their www specs, and NetMetal ac² is no longer an alias of NetMetal ax (#155).** Curated `device-exceptions.toml` www codes (KNOT Gateway HL9/LR8, LtAP LTE7 kit, Chateau LTE12 (2025), FTC21-ups, CubeSA 60Pro ac, R11e-LTE7) are now fetched and attached to their catalog rows. MikroTik's `/hardware/netmetal-ac` page links `netmetal_ax` as its product page, and that link alone used to fold the discontinued NetMetal ac² into NetMetal ax. It now resolves as its own discontinued device, and NetMetal ax cites its own `/hardware/netmetal-ax` page.
+- **CLI-Reference crosswalk baseline matches the real build again.** #159 added a `routing/route/rule` manual-only row that the CLI-Reference does not have (the manual's `routing/route` page has only a `routing/route` section; `routing/rule` is its own page and links exactly). That kept `V-cliref-link-drift` failing in every QA rehearsal. The baseline was regenerated from a live extract: 962 exact, 100 manual-only, 1,062 entries. When the gate fails now, it lists the added and removed baseline rows instead of only saying the file is stale.
+- **"How do I set up …" searches find focused pages again.** The particle "up" in "set up" was a required search term, so pages that never use the word were dropped. After MikroTik split the DHCP manual into separate pages, "how do I set up a DHCP server" stopped returning DHCP Server; it is now the top result. "up" still counts when it is not part of "set up" (e.g. "interface up event").
+- **Property lookups and command explanations fall back to the CLI Reference (#169).** MikroTik moved the property tables for DNS, DHCP, NAT, IP addresses, routes, users, the scheduler, NTP, `/system/note` and other menus out of the manual pages into its CLI Reference. On the fresh 0.11.3 corpus, `routeros_explain_command` warned `unknown-arg` for 54 of 70 arguments across 30 everyday commands, and `routeros_lookup_property name=show-at-login` found nothing. When the manual has nothing better than `low` for a menu, both tools now answer from the CLI-Reference overlay: `high` for the exact menu (or a command's own entry, such as `/tool/fetch`), `medium` without a command path. Every property row now has `source` (`manual` or `cli-reference`). CLI-Reference rows have a null `page_id` and link the CLI Reference page. Explanations don't treat a read-only CLI-Reference field as a settable argument. The same 30 commands now leave 1 of 70 unknown, and QA fails a release DB that leaves more than 7 (`V-explain-grounding`).
+- **Tool descriptions report the command-data version range from the database.** `routeros_explain_command`, `routeros_command_tree`, `routeros_command_version_check`, `routeros_command_diff`, `routeros_stats` and `routeros_current_versions` said "7.9–7.23beta2" and "aligned with long-term ~7.22". The database actually served 7.9–7.25rc1, and agents read the descriptions. The range now comes from `command_versions` at startup. It skips the metadata-only `ros_versions` rows (7.1.1, 7.8) that make `routeros_stats`' own `ros_version_min` read 7.1.1. The README coverage table is refreshed from the next.114 release DB, and no longer claims the CLI Reference isn't ingested.
+- **A described CLI-Reference row now beats a manual row below `high` (B-0025).** `/ip/firewall/filter chain` was described as "Bridge firewall chain", and its `action` list lacked `reject` and `fasttrack-connection`. Both came from the bridge-firewall section, which ranked `medium` for the IP firewall. The exact CLI-Reference definitions now lead, and the manual rows follow as candidates. 101 menu settings change. A CLI-Reference row with no description still never displaces a manual description: 54% of settable CLI-Reference fields are blank, mostly Wi-Fi, where the manual holds the only text. When `routeros_explain_command` can only offer a blank CLI-Reference row, it keeps the menu and type and adds a new `no-description` warning. The warning says the argument is listed for that menu, so it exists, and that only MikroTik's description is missing; it is not a sign the argument is invalid. `unknown-arg` now reads "not found", meaning neither the CLI Reference nor a menu-aligned manual page lists the argument. QA now also gates `no-description` and wrong-menu manual answers on the fixed command set, and reports a per-menu census of CLI-Reference description coverage on each release.
+- **Command explanations omit unrelated, low-confidence property annotations** and warn per argument when no menu-aligned documentation is available. High/medium annotations and property lookup candidates remain available (#147, part of #58).
+- **Live extractor runs no longer mix in stale cached pages, and `--from-cache` reproduces the last live run (#160).** `make extract-cliref` reused any page already in `manual/cli-reference/`, and fetched only the pages it hadn't cached. A July copy of `routing__route.md` kept a section MikroTik had since removed, so a local "live" build disagreed with CI's empty-cache build (#159). `extract-dude` did the same unless `--force` was passed. Both now re-fetch every page on a live run. Caches were also never pruned: a page MikroTik deleted stayed cached and `--from-cache` kept extracting it (#154). After a complete live run (no `--limit`, no fetch errors), `extract-docusaurus`, `extract-cliref`, `assess-hardware`, `assess-www` and `extract-dude` now delete the cached pages that run did not discover, keeping `_sitemap.txt` / `_llms.txt`. `extract-dude --force` now only re-downloads images already in `dude/images/`. `assess-www` no longer caches a 429/5xx answer as a confirmed 404, and `extract-dude --from-cache` no longer downloads images.
+- **`/interface/bridge/vlan` links to "Bridge VLAN Table", not "VLANs on Wireless" (#131).** The command linker now credits a hyphenated page slug that spells out two or more trailing command segments in order, so `bridge-vlan-table` beats the prefix match `vlan` ↔ `vlans-on-wireless`. The 14 linked `/interface/bridge/vlan` rows move to "Bridge VLAN Table", and the 12 `/ip/packing` rows, previously unlinked, now link to "IP Packing". No other command link changes on the 0.11.3-next.116 corpus. This affects which page `routeros_command_tree`, `routeros_get_page` and browse point at for these menus. Property lookups are unchanged: neither page has property rows.
+
+### Added
+
+- **GitHub Release notes start with what changed (#22).** A stable release's notes open with its CHANGELOG section. A `-next` release's notes open with the `[Unreleased]` section, headed "Changes since *last release* (unreleased)". The database stats and build info follow. A `-next` release fails if `CHANGELOG.md` has no `[Unreleased]` heading, rather than reporting that nothing changed.
+- **`YTDLP_ARGS` for the video transcript extractor (#156).** Extra yt-dlp arguments, such as `--cookies-from-browser firefox`, now pass through to every yt-dlp call when YouTube rate-limits an anonymous scrape. The transcript cache is refreshed to 746 videos (24 new).
+
+### Changed
+
+- **Product matrix refreshed to the 2026-10-03 snapshot (#121).** `devices` and the hardware overlay now read `matrix/2026-10-03/matrix.csv` (155 products). It adds KNOT Gateway HL9 / LR8 and drops Groove 52, LHG XL 5 ac, and SXTsq 5 ac, which MikroTik no longer lists. MikroTik has since published /hardware pages for LAMP 5G R16, LHGG LTE7 kit, SXTsq Embedded LTE4 Global, and SXTsq 5 ax, so these now resolve without curated exceptions. The KNOT and wAP LoRa kits now link their own /hardware and product pages instead of a shared base-board page.
+- **Release content floors follow MikroTik's continued CLI-Reference migration.** Since 0.11.2, 26 more manual pages (DNS, NTP, user, services, packet sniffer, Back To Home/cloud, scheduler, …) have replaced their inline property tables with links to `/docs/cli-reference/`. Today's corpus has 2,745 table-linked properties, compared with 3,357 in 0.11.2. The `V-db-min-content` floors are now ≥600 tables, ≥6,100 data rows, and ≥2,450 linked properties, which keeps the same roughly 10% headroom. The moved fields remain in the CLI-Reference overlay.
+- **Two npm channels: `latest` and `next` (#152).** Prereleases now publish as `X.Y.Z-next.N` to the `next` dist-tag only, and `@next` is never behind `latest`: a stable release also moves `next` (and the OCI `:next` tag) unless a newer prerelease is already there. The `alpha` / `beta` / `rc` dist-tags and OCI tags are retired; a config pinned to one should switch to `@next`. The release workflow rejects any other prerelease identifier and fails if `next` would end up behind `latest`.
+
+## [0.11.2] — 2026-09-06
+
+### Added
+
+- **CLI-Reference overlay (`cliref_*` tables + `rosetta export` datasets, issue #124).** A source-faithful, version-less overlay of `manual.mikrotik.com/docs/cli-reference/*`: `cliref_pages` / `cliref_entries` / `cliref_fields` / `cliref_flags` retain each page's byte-exact Markdown (+ SHA-256), verbatim entry/field/flag descriptions, occurrence order, and line spans. Entries carry the manual-only facts a CHR `/console/inspect` cannot self-report (`package` / `conditions` / `syscap`). A stored `cliref_entry_schema_links` crosswalk resolves each entry to its `schema_nodes` command node (exact / single-internal-segment alias / manual-only), and the `cliref_field_inspect_links` **view** derives the zero-to-many field→argument mapping. `rosetta export` gains seven `cli-reference/*` outputs (six TSVs + byte-exact `source/<slug>.md`). Build via `make extract-cliref` + `make link-cliref`.
+- **`schema_nodes.inspect_type`.** Preserves RouterOS' raw `/console/inspect` class (`path` | `dir` | `cmd` | `arg`) that the existing `type` column normalizes (raw `path` → `dir`). Additive; existing `type` consumers are unchanged.
+- **Released DBs now carry the CLI-Reference overlay, with CI gates (issue #127).** `release.yml`'s build runs `extract-cliref` + `link-cliref`, so published DBs and the `cli-reference/*` export datasets are populated (previously the overlay only built locally). Two new blocking gates run in `qa.yml` db-content against the built DB: **`V-cliref-link-drift`** byte-compares the entry→inspect crosswalk against a committed, reviewable `cli-reference-links.tsv` (24 alias + 120 manual-only rows) and rejects any alias naming a segment outside the known allowlist; **`V-cliref-db-integrity`** asserts structural + semantic invariants (integrity/FK/orphans/enums/occurrence-order uniqueness, and the field view exposing only settable `Argument`→`arg` mappings). The `db-content` floor now also requires populated `cliref_*` tables + crosswalk. Regenerate the baseline after a corpus refresh with `make link-cliref-baseline`.
+
+### Fixed
+
+- **Release binaries and OCI images now compile with clean version/repository constants and a pinned Bun toolchain (#142).** The release build had wrapped `--define` values in literal shell quotes, producing versions such as `"v0.11.2"`, malformed GitHub download URLs, and doubled `vv0.11.2` freshness comparisons once the quotes were removed; the floating `oven/bun:1` builder also advanced to a compiler that produced a Linux HTTP binary failing at startup. Release compilation now injects bare semantic versions with correctly quoted JavaScript literals and uses the last OCI-smoke-tested Bun version.
+- **Multi-term documentation searches no longer stop at a small incidental AND-only result set (#26).** When strict matching returns fewer pages than requested, `routeros_search` and the browse TUI now preserve those precise matches first, then fill the remaining slots from deduplicated OR results. This keeps short topic landing pages discoverable after upstream reference tables move out of their prose, restoring the WireGuard release-gate query without weakening the retrieval baseline.
+- **Property tables wider than two columns stored the wrong cell as the description (issue #132).** `parseProperties` hardcoded `cells[1]`, so the five `| Property | Type | Default | Description |` tables in the corpus (Apps, VETH) had their **Type** cell stored as the description with `type`/`default_val` left NULL — 52 rows, e.g. `/interface/veth/add address` returning "IPv4/IPv6 address" instead of its prose, at `high` confidence. Columns are now resolved by header name (`Property`/`Parameter`, optional `Type`, optional `Default`, `Description`), and the Markdown pipe escape `&#124;` is decoded once the cell is split (`page_tables.raw_markdown` stays byte-exact). Requiring an explicit `Description` column also drops **14 rows that were never properties** — a `device-mode` feature matrix (`| **Feature / Property** | **Home** | ... |`) whose "descriptions" were the Home column's `Yes`/`No`. Apps' two `auto-update` records are retained: they only looked duplicated because the shift replaced both descriptions with the same Type cell.
+- **CLI-Reference discovery silently dropped every branching menu's own Directory page (issue #137).** MikroTik decomposed the CLI Reference from module pages into per-command leaf pages, and serves a branching menu (`app`, `caps-man/interface`, `interface/ethernet/switch/port`, …) as a trailing-slash *category* URL in `sitemap.xml` — which has no Markdown of its own. The menu's Directory entry is published at `<dir>/<basename>.md` and listed only in `llms.txt`, so sitemap-only discovery lost **256 of 1,070 pages** — and the field-heavy quarter of them: `cliref_fields` came out at 5,944 instead of 10,938. Those menus, their gates, and their argument tables were absent from the DB, from `cli-reference/*` export datasets, and from anything reading the overlay. Discovery is now the union of both inventories, and the new blocking **`V-cliref-discovery`** gate fails the build if any sitemap category dir stops contributing its Directory leaf. Rebuilt corpus: 1,070 pages / 1,077 entries / 10,938 fields / 976 flags / 967 crosswalk links (was 228 / 1,051 / 10,118 / 948 / 931).
+- **CLI-Reference crosswalk linked three commands to the wrong inspect node (issue #136).** `KNOWN_ALIAS_SEGMENTS` treated "this word is a doc-internal module name" as a global property, but it is positional: `poe` and `qos` are *real* menu segments published elsewhere in the same source. `interface/ethernet/poe/monitor` was linked to `/interface/ethernet/monitor` (PoE-out fields vs SFP/link fields — disjoint sets), and `interface/ethernet/switch/qos/port{,/reset-counters}` to their non-QoS namesakes. The failure was silent because the alias branch only runs when the exact path is missing from `schema_nodes` — precisely the hardware-gated commands nobody can check from a CHR. A segment is now never dropped when the prefix ending at it is itself a published entry; all three become correctly manual-only. With the source reshape above, the crosswalk is **967 exact / 0 alias / 110 manual-only**.
+- **CLI-Reference extractor truncated `<ArgTableRow>` attributes at a `>` inside a quoted value.** A `typ` like `iface_enum { <l2tp>:0xfffffffe }` (e.g. on `interface/pppoe-server`) contains a literal `>`, which the row parser mistook for the tag close — the field's `raw_type` was silently stored empty with a garbled description. The tag matcher now skips over whole quoted attribute values, so those fields carry their full type.
+
+### Changed
+
+- **Release content floors now match MikroTik's CLI-Reference migration.** The live manual moved large inline property-reference sections (including OpenVPN, IPsec, and switch QoS) out of prose pages and into `/docs/cli-reference/`, reducing the generic prose-table corpus while the separate CLI-Reference overlay remains populated. `V-db-min-content` keeps blocking degenerate builds with revised generic-table floors; the CLI-Reference discovery, field-count, link-drift, and integrity gates remain unchanged. The reviewed crosswalk baseline also follows the current 7.24.2 sources: seven formerly manual-only commands now resolve exactly, no-longer-published root/MSRP entries are removed, and `/interface/ethernet/switch/rule/reset-counters` remains explicitly manual-only.
+- **Schema version 10 → 11** for the CLI-Reference overlay tables/view and `schema_nodes.inspect_type`.
+- **`routeros_lookup_property` confidence now grades the row, not the query branch (B-0024 step 4).** Previously `high` meant only "this row is on the page `commands.page_id` links to" and `low` meant "the scoped branch found nothing" — the label described which SQL ran, so every property on a linked page was equally `high` and a correct row found by the global fallback was always `low`. Each row is now scored against the requested menu using the menu paths named in its own documentation section, and results come back best tier first: `high` = the section is about that menu (it names the menu, and of the menus it names that one owns most of its properties) and the command tree does not contradict it; `medium` = the section names a neighbouring menu, names the requested one only in passing while documenting another, or only the page matches; `low` = nothing but the property name links the row to the menu. Without `command_path` every row stays `medium` — there is no menu to align to.
+- **`routeros_lookup_property` no longer lets a mislinked page hide the right answer.** Candidates are drawn from every page documenting the property rather than only the page `commands.page_id` links to, with page alignment applied per row. Off-page rows are kept only when their tier is at least as good as the best the linked page offers, and linked-page rows win ties within a tier, so a correct link returns the same tight, same-ordered result as before. Previously `/interface/bridge/host` + `vid` returned two rows from the IGMP-snooping page it is mislinked to and never surfaced the "Static Entries" section that names `/interface/bridge/host` outright; the same suppression hit `/interface/wifi/provisioning` + `radio-mac`. Measured over the 14,832 (menu, property) pairs the command tree says are real: **31.5% of the labels that shipped as `high` survive**, 2,295 demote to `medium`, **1,940 rows escape a wrongly-`low` label** (835 to `high`), and **153 rows that were suppressed entirely are now returned** (80 `high`). Regenerate with `bun run src/eval/command-prose-join.ts`. This is what makes `/interface/bridge/port` + `pvid` rank the two bridge-port sections above the unrelated Apps row (#131) and `/ip/dhcp-server` + `address-pool` rank the DHCP server table above the DHCPv6 one (#58).
+
+## [0.11.1] — 2026-07-20
+
+### Fixed
+
+- **`hAP ax2` and `hAP ax3` linked to the wrong `/hardware` manual pages.** MikroTik shifted the slugs by one upstream: the hAP ax² page moved `/hardware/hap-ax` → `/hardware/hap-ax-2`, and the hAP ax³ page moved `/hardware/hap-ax-2` → `/hardware/hap-ax-3`. The committed device map still held the pre-shift slugs, which were correct when generated, so afterwards `hAP ax3` resolved to `/hardware/hap-ax-2` — a URL that now serves **hAP ax²** — and `hAP ax2` pointed at a slug that no longer exists. Refreshing the hardware assessment corrects both rows.
+
+### Changed
+
+- **YouTube transcript corpus refreshed — 658 → 722 videos, ~2,316 non-empty transcript segments.** The per-video duration cap rose from 1500s to 1600s so longer first-party channel videos qualify; recent MikroTik feature videos run past the old 25-minute cut, including the "Hermes explained" video (1528s) that discusses running an AI agent against RouterOS. `MUM_TITLE_PATTERNS` remains the direct filter for conference talks — the duration cap is only a coarse backstop for the untitled long tail. A residual handful of videos still fail per sweep on transient YouTube throttling rather than missing captions, and converge over subsequent reruns; they are deliberately **not** recorded in `transcripts/known-bad.json`, which is reserved for videos with genuinely no English captions.
+- **Product matrix snapshot refreshed to `matrix/2026-07-20/`** — no products added or removed; `Cube 60Pro ac` and `CubeSA 60Pro ac` correct `PoE out` from `18-48 V` to `18-57 V`.
+- **Hardware overlay artifacts re-scraped from live sources** (`ros-hardware-assessment.json`, `ros-www-assessment.json`, `device-map.tsv`), clearing the drift the scheduled Device Map Refresh reported. The `ros-www-assessment.json` diff is large but content-neutral: the same 288 products with identical values, reordered because the committed copy predated the candidate-sorting change — regenerating with current code canonicalizes it once rather than repeatedly.
+
+## [0.11.0] — 2026-07-20
+
+### Added
+
+- **The resolved DB now reports whether it can be trusted to ground claims about the code querying it** (issue #94, B-0022 export-audit umbrella). `routeros_stats` gains a `provenance` block — resolved `db_path`, invocation `mode`, the `db_meta` stamps (`release_tag`/`source_commit`/`built_at`/`schema_version`), and a **grounding verdict** (`ok` / `schema_mismatch` / `internal_inconsistent` / `tag_behind` / `unstamped`) — so one call self-checks the DB against the checkout instead of shelling into sqlite (the TUI `stats` screen shows it too, via shared `getDbStats`). A new `make db-doctor` / `bun run db:doctor` prints the same verdict and exits non-zero when not `ok` (CI/pre-commit-ready); `make db-sync` / `bun run db:sync` fetches the latest CI release DB — the documented grounding source of truth — into the resolved path (atomic, safe while a server holds the file open). In a dev checkout, MCP startup now emits a loud but **non-fatal** banner when the served DB has drifted (e.g. a corpus whose `PRAGMA user_version` was bumped in place so its stamped provenance no longer describes its bytes); it never fetches, so a contributor's local build is never clobbered. The load-bearing new signal is `internal_inconsistent` (`db_meta.schema_version` ≠ pragma), which every prior check missed. Durable guidance lives in `.github/instructions/local-db-grounding.instructions.md`.
+
+- **New `rosetta export <dir>` command writes a DB-only dataset directory for local audit** (issue #101, the B-0022 export track). Produces `manifest.toml` plus seven flat TSVs — `changelog.tsv`, `callouts.tsv`, `properties.tsv` (joined to pages with a resolved `section_anchor`), `videos.tsv` (metadata + per-video transcript segment/word/byte counts), `commands.tsv`, and the paired `pages.tsv` (one row per page) / `sections.tsv` (one row per section, pivot-able) — from the runtime SQLite database alone — dataset generation reads only the resolved DB, with no caches or re-extraction (startup may still download/refresh the DB, as every command does). The serialization contract is a reversible Postgres-COPY-style escape (`\t`/`\n`/`\r`/`\\` backstopped on every value, whole-field `\N` for SQL NULL as distinct from the empty string) with stable ordering so a rebuild on the same DB is byte-identical, and `manifest.toml` carries `db_meta` provenance, per-file row counts, and honest disclosures of what the DB cannot provide (transcript provenance #21, per-version architecture #91). A column the DB cannot produce is omitted and disclosed, never recovered from a source artifact.
+
+- **`rosetta export` now emits `tables.tsv`, an inventory of every captured doc table** (issue #111, under the #104 B-0022 export track). One row per `page_tables` record (855 on the rc.99 corpus) with page/section provenance, the table's shape (`column_count`/`data_row_count`/`is_ragged`), source size (`raw_bytes`, UTF-8 length of the stored Markdown), and a `table_url` that deep-links to the section containing the table (`url#anchor`; the bare page URL when no section resolves, since Docusaurus has no per-table anchor). This is the "what tables exist and where" list — it answers most table-audit questions without exporting the cell data itself (the per-fragment cell files remain E4). Reuses the settled TSV/manifest contract and is pruned/owned the same way as every other dataset.
+- **`tables.tsv` gains an `is_property_source` flag and reorders its columns human-readable-first** (issue #118, rounding out the 0.11.0 export track for B-0077). `is_property_source` is `1` if and only if a row in the `properties` table (the data `routeros_lookup_property` surfaces) has a `source_table_row_id` resolving back to that table — i.e. extraction *actually produced properties from it*, not merely that it looks property-shaped, so a property-headed table the extractor gates skipped (issue #100) is honestly `0`. This lets a human reviewer see at a glance which captured tables are already recognized as property sources versus candidates B-0077 still needs to pick up. Columns are reordered so identity (`title`, `source_heading`) and the shape/size stats sit up front and the two long URL columns (`table_url`, `url`) sit last; since `tables.tsv` first ships in this same 0.11.0 release, no already-released consumer is affected.
+
+- **Every Docusaurus pipe table is now retained as normalized, queryable data in schema v10** (issue #92). `page_tables` keeps raw Markdown plus page order, nearest h1–h6 heading, enclosing h1–h3 `section_id`, width, and raggedness; `page_table_rows`/`page_table_cells` preserve every header/data cell at its actual width with escaped pipes decoded. Table-derived `properties` now point to their exact source row through `source_table_row_id`, while bullet-derived and historical properties remain honestly NULL. Property output is byte-for-byte unchanged; the shared fence-aware parser also corrects the B-0022 census counting error caused by an ordered-list code fence in `zerotier.md` (the rc.98 corpus contains 855 tables / 8,287 data rows, not 852 / 8,258).
+
+- **README.md and DESIGN.md now describe the live Docusaurus corpus as current, not a pending migration** (issue #77). README's intro and "What's Inside" table dropped the "still needs a major migration away from the retired Confluence export" framing and refreshed prose-corpus figures for the actual Docusaurus build (363 pages/~653K words, 4,402 properties, 943 callouts), and gained a "Hardware overlay" row for `hardware_catalog`/`device_aliases` (255 devices incl. legacy/EOL + accessories, ~750 alias mappings) that was previously absent from the feature list entirely. DESIGN.md's "Corpus Snapshot" section is retitled "Historical Corpus Snapshot (legacy Confluence)" to stop reading as current-state to a skimmer; its already-caveated legacy figures are otherwise untouched.
+- **YouTube transcript cache refreshed — 538 → 658 videos, ~2,090 non-empty transcript segments.** `make extract-videos` picked up a large backlog of previously-unswept videos (not just the handful published since the last 2026-07-07 sweep), converging over several incremental reruns as transient yt-dlp/YouTube request failures cleared on retry. Three genuinely non-English videos (Finnish, Russian, Japanese) that fail every run because YouTube has no English auto-captions for them are now recorded in `transcripts/known-bad.json` so future sweeps don't keep re-attempting them.
+
+- **Retrieval-quality net hardened for the 0.11 corpus swap — golden set 24 → 35, plus a direct-surface eval matrix (issue #53).** The Phase 0 golden set (`fixtures/eval/queries.json`) grows by 11 hand-verified queries: +2 natural-language (`pppoe`, `dns`), +4 property, +3 changelog (fixed-CVE / feature-introduced / version-scoped), +2 video — closing the zero-coverage gap on property/changelog/video retrieval that the Confluence→Docusaurus swap left untested. `src/eval/retrieval.ts` gains a per-query `surface` field: `search` (default) still drives the durable `routeros_search` recall/MRR/classifier gate (the entry point most exposed to the swap), while `property`/`changelog`/`video` dispatch to the dedicated tools (`lookupProperty`/`searchChangelogs`/`searchVideos`) and feed a **separate, informational `surface_matrix`** (per-surface hit@5) kept out of the gated aggregates so those stay sensitive — a starting coverage board to grow over time. Golden `_thresholds` recomputed for the larger set (0.88/0.82/0.75/0.90; the old 0.85/0.70/0.65 had drifted loose over 27 search queries — the 2pp regression check vs `baseline.json` remains the tight forward guard). Both `baseline.json` and the **stale April-2026 Confluence-era `self-supervised-baseline.json`** regenerated against the live Docusaurus corpus. Grounded audit (0.10.0 vs current compare-and-contrast via the new one-off `src/eval/corpus-compare.ts`, blocking self-eval rehearsal, and an ETL Bug Ledger) recorded in `briefings/B-0020-0.11-retrieval-quality-audit.md`: **no net retrieval regression from the corpus swap** (14/16 topic-hit on both corpora; existing golden set 91.7% Recall@5 on Docusaurus), and #26's two "regressions" confirmed to miss on 0.10.0 too (pre-existing query-core weakness, not swap-induced). Queries that legitimately fail today stay pointed at the correct answer and fail loudly — no fixture was loosened to green the board.
+- **Hardware overlay Phase 2A — `hardware_catalog`/`device_aliases` now drive device lookup and enrichment (MCP + TUI).** `routeros_device_lookup` and `routeros_search` resolve devices from free-form input far more accurately: an **alias stage** (exact-normalized, authoritative — never fuzzy) maps product codes, old names, and www/hardware slugs the matrix name misses to the canonical device (`cap_ac`→cAP ac, `RB750Gr3`→hEX), reported as `mode: "alias"` with the `matched_alias`. A single matrix-linked result now carries a compact **`hardware` overlay block** — `rosetta_device_id` (stable, persistable key), `category`, `discontinued`, `also_known_as` (name-like aliases only; slug/table artifacts excluded), genuine `non_default_ips`, and reconstructed `product_page_url` (mikrotik.com/product) + `hardware_page_url` — whose `note` steers agents to the device tool rather than fetching a page. Non-matrix entities (accessories, series, legacy/EOL) surface in a new `catalog` array as labeled thin rows with a `kind` field (`accessory`/`series`/`discontinued`/`device`), so an agent never mistakes a GPeR for a router. The classifier gains catalog-prominent families (Chateau, Audience, OmniTik, PowerBox, KNOT, Cube, DISC) plus a whole-input alias probe in `searchAll` for bare codes the regexes miss; `routeros_search`'s `related.devices` now carries `category`/`discontinued`; the browse TUI device card shows the overlay and a thin-row variant for catalog entities, and its stats screen lists the two overlay tables. No `/hardware` prose enters the FTS corpus (fields only). Reads the clean data from the #47/#48 cleanup. See `briefings/B-0019-hardware-overlay-phase2-mcp-tui-surfacing.md` and issue #49.
+- **New Docusaurus `/docs` prose extractor (`extract-docusaurus.ts`) replaces `extract-html.ts` as the default prose source.** Discovers pages via `sitemap.xml`, fetches raw Markdown from manual.mikrotik.com, and populates `pages`/`sections`/`properties`/`callouts` — 360 in-scope `/docs` pages as of 2026-07-07 (CLI Reference and `/hardware` remain out of scope, tracked as follow-up work). `make extract`/`make extract-full` now run it by default; the legacy Confluence pipeline survives as `make extract-legacy-confluence` for rebuilding historical release DBs.
+- **New `pages.rosetta_id` column** (schema v6) gives Docusaurus-sourced pages a stable, URL-derived identifier alongside the existing integer `id` — see `DESIGN.md` and `briefings/B-0012-docusaurus-manual-migration.md` "H7 — Identity / rosetta-id design".
+- **npm prerelease dist-tag channel.** Testers can now opt into an in-progress build via `bunx @tikoci/rosetta@next` (newest prerelease of any stage) or `@alpha`/`@beta`/`@rc` (pinned to one stage), without moving the default `latest` channel. Channel is driven entirely by `package.json`'s committed version (a `-alpha`/`-beta`/`-rc` suffix means prerelease); OCI image tags (`:alpha`/`:beta`/`:rc`/`:next`) mirror the same scheme, and the bare `:latest` OCI tag now never moves on a prerelease release run. See `README.md` "Prerelease channels" and `MANUAL.md` "Release Workflow".
+- **`bun test --coverage` now runs on every release build**, summarized in the workflow's step summary and uploaded as a `coverage-lcov` artifact — informational only, not a gate.
+- **New `hardware_catalog` + `device_aliases` tables + `device_overview` view (schema v8) overlay `manual.mikrotik.com/hardware` and `mikrotik.com/product/<code>` onto the existing `devices` data.** `hardware_catalog` is a superset of `devices` — it also covers accessories and legacy/EOL SKUs `matrix.csv` doesn't track, carries a never-null display `name`, an optional `device_id` link back (renamed from `devices_id` to match `device_test_results.device_id`) for the ~156 rows matrix.csv already knows about, and lands each device's non-default management IP and FCC/IC regulatory IDs into `specs_json`; `devices` itself is unchanged. `device_aliases` resolves every observed slug/code/name variant (matrix.csv, `/hardware` slug/link/table code, www requested/declared/compare code) back to one rosetta-curated `rosetta_device_id`, with priority-ranked, collision-counted assignment so no code is silently claimed by the wrong device. `device_overview` is the documented read surface (catalog + devices spec columns + alias counts). A www product is only accepted as a device's spec source when its own identity agrees with the device's code/slug family (killing cross-sell misattribution such as a mounting bracket's specs landing on a cube page), attaches to at most one row outside a tiny justified shared-kit allowlist, and a declared-code matching tier resolves ROSE Data server and both KNOT Embedded LTE4 rows. Built by the new `src/extract-hardware-catalog.ts`, now wired into `make extract`/`make extract-full` and the `release.yml` extraction pipeline (ordered after `extract-devices`, which wipes both tables) so the catalog + aliases **ship in the published DB**; a release is blocked if the DB carries fewer than 200 `hardware_catalog` or 600 `device_aliases` rows. It emits a committed, deterministic `fixtures/hardware-catalog/catalog.json` (sorted rows + aliases + drop ledger — the change-review diff gate), enforces hard output invariants (declared code present in own aliases; one www product per row; every input entity attached or dropped-with-reason), and fails loudly — DB untouched — on category-taxonomy drift, a www page-template change, matrix coverage regressing, a previously-resolved device disappearing, an alias-collision/drop surge, or a www 404-rate swing. See `briefings/B-0017-hardware-overlay-device-resolution.md` and issue #35. MCP/TUI surfacing of this data is deferred to a follow-up (B-0017 "Phased implementation plan," phase 2).
+
+- **New scheduled `Device Map Refresh` workflow (`device-map-refresh.yml`) watches for upstream hardware-page drift.** Weekly cron (+ manual dispatch) does a LIVE re-scrape of manual.mikrotik.com `/hardware` and mikrotik.com `/product` via `make assess-hardware assess-www device-map` — the network path `test.yml`'s per-PR drift gate deliberately never runs. It *detects* drift only: when the regenerated artifacts differ from the committed snapshot (or a device no longer resolves without a `device-exceptions.toml` entry), it fails the run (red check + scheduled-failure notification), uploads the regenerated artifacts, and opens/refreshes a single tracking issue with a diff-stat summary; the full diff is in the run logs. A human then resolves it through the normal flow — regenerate locally, review per `briefings/B-0018` "How to audit", open a standard PR that runs the required `device-map-check` gate. Closes the "how do we notice MikroTik added/moved/removed a page" half of B-0018's audit loop that the committed-snapshot coherence check can't cover on its own.
+- **Reviewable device→URL map + drift gate (`make device-map`).** `device-map.tsv` (one row per matrix device → `/hardware` + www URLs, with a `needs_review` column) and `hardware-unmatched.tsv` (the reverse audit view: `/hardware` pages with no matrix device), backed by a curated `device-exceptions.toml` and a blocking drift gate (`make device-map-check`) that fails when a device stops auto-resolving without an exception, a curated exception goes stale, or a committed artifact drifts from freshly computed output — now run on every PR via `test.yml` (no network; validates only the committed snapshot). Human/MikroTik-readable legend in `briefings/B-0018-product-naming-three-source-map.md`.
+- **New `QA` workflow (`qa.yml`) rehearses the release-locked quality gates without publishing** (issue #40, B-0014 Option B). A `workflow_dispatch` + `workflow_call` workflow that runs the checks previously provable only inside `release.yml` — DB content floors (incl. the hardware-overlay `hardware_catalog`/`device_aliases` floors), MCP contract, golden + self-supervised retrieval eval, docs-count, device-map drift, and `db_meta` provenance — against a freshly built (`db_source: local-build`) or published DB, on any ref, with **no npm publish, OCI push, or GitHub Release**. Focused dispatch via `test_scope` (single gate or `all`), `db_source`, `full_versions`, and `eval_self_blocking` (flip the self-supervised eval to a hard gate on demand). This is the intended way to verify release-pipeline changes — such as the hardware-overlay extraction wired in this same release — before an actual dispatch. **`release.yml` now calls this workflow directly** (issue #42): its single `build-and-release` job was split into `build` → `qa` (`uses: ./.github/workflows/qa.yml` with `db_source=artifact`) → `publish`, so the gates that fence a release are byte-for-byte the ones a `qa.yml` dispatch runs against the exact DB about to ship — one definition, no drift (the old cross-file floor guard is gone). See `MANUAL.md` "Release Workflow" / "Rehearsing release quality gates without publishing" and `VALIDATION.md` `V-qa-rehearsal`.
+
+### Changed
+
+- **`rosetta export` now replaces a prior export safely — manifest-owned prune-then-publish + a `--force` gate** (issue #108, part of #95). `manifest.toml` becomes the ownership record as well as the index: re-running into a directory that holds a manifest rosetta wrote rewrites the current file set and **prunes** any file the old manifest listed that the new run no longer produces (cleaning directories that empties), so a renamed page slug or dropped product from an earlier run no longer lingers — the stale-file hazard the variable `products/**` / `pages/<slug>/**` sets (E3/E4) introduce. It only ever deletes files a prior rosetta manifest named, so files you added yourself are untouched; a **new/empty** directory just gets written; a **non-empty directory with no rosetta manifest** is refused unless `--force` (or, on a TTY, an interactive confirm), so the command can never clobber a directory it did not create. `[[files]].name` is a directory-relative path, so the manifest already describes directory-nested files. Within a run the order is prune → write datasets → write the manifest last, so a name reused across runs transitions cleanly between file and directory and a crash never leaves a manifest naming half-written data (the directory is a regenerable audit surface, not a transactional store — a crash can still leave a mix of generations until the next run reconciles). Writes and prunes are contained to the export root both lexically and through symlinks, so a tampered manifest or a planted symlink can never act outside it. `MANUAL.md` documents the scheme; the DB-only boundary is unchanged (the export still reads only the DB handle, plus a single read-back of its own prior manifest).
+- **`rosetta export` output shape refined so the two page-level files read cleanly and the section rollup reconciles** (issue #106, post-#103 per-TSV review; part of #95). The per-section file is renamed `pages.tsv` → **`sections.tsv`** and the per-page rollup `pages_summary.tsv` → **`pages.tsv`**, so each filename now matches its source table like every other dataset (`changelog`←`changelogs`, `callouts`←`callouts`, …); grouping `sections.tsv` by `page_id` in a spreadsheet pivots up to (near-)the `pages.tsv` word count, the small residual being heading-text lines that live in no fragment (disclosed in the manifest). `callouts.tsv` gains `rosetta_id` (page) and resolved `section_anchor` columns so a reader identifies the owning page/section by name without joining back to the DB — the same pairing `properties.tsv` already emits — with the long `content` field moved last. `changelog.tsv` moves `sort_order` before `description` for the same long-column-last reason. No schema change, no re-extraction, no MCP/TUI change; the export still reads the DB alone and rebuilds byte-identically. `MANUAL.md` updated.
+- **Section coverage of a page is now (near-)total — a synthetic lead ("H0") fragment captures pre-first-heading prose** (`briefings/B-0023-page-section-normalization.md`, part of #95). `parseSections` split the page body only on h1–h3, so the lead-in prose before the first heading — an AI-summary blockquote, an intro paragraph, and the *entire* body of pages whose only heading is the title — belonged to no `sections` row: 11.7% of the corpus by word, and 40 whole pages, had no section to resolve to and didn't roll up to the page total. Each page with non-empty lead prose now gets a lead fragment (`level = 0`, reserved `anchor_id = "_lead"`, heading = the page title) holding that content, so section words cover ~98% of page words (the residual is heading-text lines, which belong to no fragment) and every table/callout/property before the first heading resolves to a real `section_id` instead of NULL (measured on the local corpus: tables/properties/callouts with no section context all drop to 0). A page whose only pre-heading line is the title mints no lead fragment (no empty fragments). No schema DDL change (the `sections` table already stores `level`/`anchor_id`), no MCP tool-surface change; the `rosetta export` `pages.tsv`/`sections.tsv` rollup and the `section_id` disclosure reflect the fuller coverage.
+- **`hardware-unmatched.tsv` reframed as a classified inventory — new `kind` column.** Every `/hardware` page with no matrix device is now labeled `device` / `accessory` / `module` / `series-or-doc` (67/12/8/15 of the current 102) by a shared, rule-based classifier (`src/hardware-kind.ts`), so the reverse-audit set is a typed inventory rather than an undifferentiated pile: `kind = device` isolates real off-matrix routers worth filing as matrix gaps, while `series-or-doc`/`accessory`/`module` are expected non-devices to skip. Classification carries a single per-slug override today (`nray-series` → `device`; one kit, not a family — see the wiring entry below), and the logic is shared so a future `include-accessories`-style filter or "include module" cross-link reuses it instead of re-deriving. Regenerated deterministically by `make device-map`; validated by the existing `device-map-check` gate. See `briefings/B-0018-product-naming-three-source-map.md`.
+- **`hardware-unmatched.tsv` now shows the ETL www-spec mapping status — new `www_code`/`www_specs` columns.** Each off-matrix `/hardware` page now records which `mikrotik.com/product` code the catalog actually pulled specs from and how many real fields it captured, read from the committed `fixtures/hardware-catalog/catalog.json` so the file view matches the DB rather than approximating it (no DB or network dependency in the drift gate). A blank `www_code` means the ETL mapped no marketing product to that page: filtering `kind = device` + blank `www_code` yields the concrete **spec-backfill worklist** (15 real devices as of 2026-07-13 — `dynadish-6`, `sxt-2`, `chateau-lte6`, the `ltap-lr8-*` LoRa kits, …), each of which usually *does* have a product page `assess-www` simply never fetched. `make device-map` reads `catalog.json` when present (blank columns + a console note if absent); the feedback mechanism to close the gaps is tracked in #70. See `briefings/B-0018-product-naming-three-source-map.md`.
+- **Curated `hardware-www-map.toml` wired into the ETL — off-matrix spec gaps closed (device gaps 15 → 4; #70 first task).** The maintainer answer-key of `/hardware`-slug → `mikrotik.com/product` codes the auto-resolver can't derive (e.g. `sxt-2`→`RBSXTG-2HnDr2-168`, `dynadish-6`→`dynadish_6`) now feeds two ETL points through a shared loader (`src/hardware-www-map.ts`): `assess-www` seeds every code into its candidate fetch, and `extract-hardware-catalog` force-attaches single-code products to their row past the identity-agreement gate (a human vouched for them). 14 off-matrix devices that shipped with no specs — `sxt-2`, `dynadish-6`, `cube-60g-ac`, `chateau-lte6`/`-lte12`, `intercell`, `lhg-xl-2`, `wireless-wire-cube`, … — now carry full spec sheets in `hardware_catalog`; the reverse-audit spec-backfill worklist (`kind = device` + blank `www_code`) drops from 15 to 4, the remainder being genuinely un-single-attachable (`seed_only` module/kit pages whose identity is owned by the kits that embed them, and series-style multi-variant pages — both still fetched for the deferred surfacing work). All 65 curated codes were cross-checked against `mikrotik.com/sitemap.xml`. `nray-series` reclassified `series-or-doc`→`device` (one kit, not a family). Baseline canaries updated for the +52 seeded products (dropped-www 30→67, all accounted in the drop ledger; matrix coverage unchanged). See `briefings/B-0018-product-naming-three-source-map.md` and issue #70.
+- **Hardware-overlay data-quality follow-ups (B-0017 items 1–2), before Phase 2 surfacing.** Two extract-time filters clean `device_aliases`/`hardware_catalog` so any consumer can trust them without re-deriving classifications: (1) a `hardware-link` alias whose token names a **dropped** www product is dropped as cross-sell pollution (e.g. `qm_x`→sxtsq-5-ax, `mant_lte_5o`→chateau-lte12) — a device's `/hardware` page merely *linking* an accessory no longer leaves that accessory code as the device's alias; standalone series pages (`hw-*-series`) stay exempt since they legitimately claim member/kit codes (`wap_60g`→hw-wap-60g-series). (2) `specs_json._non_default_ips` now keeps only genuine subnet deviations (outside `192.168.88.0/24`) — same-subnet `.88.x` secondaries are filtered, shrinking the field from 63 rows to 11 (the `192.168.188.1` embedded-LTE cluster + intercell + woobm-usb). Both are proven by new `checkInvariants` probes (#8/#9) and anchor tests; `fixtures/hardware-catalog/catalog.json` moves once (20 cross-sell aliases removed, 16 collisions cleared). See `briefings/B-0017-hardware-overlay-device-resolution.md` "Lingering data-quality items" and issue #47.
+- **`/hardware` ↔ matrix.csv matcher correctness fixes** (feeds `hardware_catalog`). Canonical matching (`canon`/`canonNoRev`/`canonForms`) with `code > slug > table` precedence, cross-page table suppression, a shared-`&`-base guard, a bogus-accessory-link filter, and an own-slug collision guard (kept only when corroborated or title-agreeing). Fixes previously wrong binds — Chateau LTE7/LTE12 → `chateau-lte6-us`; `R11e-LR8`/`-LR9` → `wAP LR2 kit` (a `canonNoRev` over-strip); `/hardware/hap-ax-2` (titled hAP ax³) also claiming hAP ax2 — and regenerates `ros-hardware-assessment.json` + the `hardware_catalog` overlay accordingly. Anchor-tested in `src/assess-hardware.test.ts`. See `briefings/B-0018-product-naming-three-source-map.md`.
+- **Relative Markdown links inside property descriptions now resolve to live `manual.mikrotik.com` URLs** instead of being left as broken relative paths once extracted out of their source page.
+- **`release.yml` CI now builds the DB from the live Docusaurus extractor, not the legacy Confluence HTML export.** The `html_url` workflow input is gone; a new `extract-docusaurus.ts --check-counts --strict` step proves the docs-count invariant on every release run instead of only in manual/local runs. Rebuilding a historical pre-migration DB remains possible via the local-only `make extract-legacy-confluence` target — it is no longer reachable from CI.
+- **Work tracking moved from in-repo `tasks/T-*.md` files to GitHub Issues.** Issues start as discussion and earn the `agent-ready` label once acceptance criteria settle; `umbrella` marks theme-tracking issues and `blocked` marks named waits. PRs close issues via `Closes #N`, and partial landings must spawn follow-up issues before merge (new `issue-pr-linking.instructions.md`). `tasks/` is now a frozen archive; the 17 remaining active task files were closed with per-file disposition notes (superseded / won't-fix / migrated to an issue) in tasks/done/T-*.md. See issue #18.
+- **Release version bumps are now a manual step for every channel, including `latest`.** CI's old `bump-version` job (blind `PATCH + 1`, auto-committed straight to `main`) is gone entirely — it couldn't reason across the new prerelease channels. A new preflight fails a latest-channel release if `CHANGELOG.md` lacks a `## [<version>]` heading for the bare `package.json` version being released, so CHANGELOG promotion can't be skipped by accident. See `MANUAL.md` "Version bumps are a manual step".
+- **`make lint` (and `test.yml`'s Lint step, now `make lint`) covers Markdown and spelling, not just Biome.** Adds `markdownlint-cli2` (config in `.markdownlint-cli2.yaml`, rules shared with the IDE via `.markdownlint.yaml`; LLM instruction files, `briefings/`, `tasks/`, `fixtures/`, and the `manual/` cache excluded) and `cspell` (`cspell.json` + a seeded `project-words.txt` RouterOS/tikoci dictionary) as `bun run lint:md` / `lint:spell`, so local `make lint` and CI check the same three things. `release.yml`'s fast-fail Lint stays Biome-only.
+
+### Fixed
+
+- **A latent test-suite hazard that presented as a CI flake is now blocked structurally, not just caught on unlucky file order (issue #98).** A `*.test.ts` that sets `process.env.DB_PATH = ":memory:"` but *statically* imports a module transitively reaching `db.ts` opens the real on-disk `ros-help.db` — the static import is hoisted above the env assignment, so `db.ts`'s module-scope `new sqlite(DB_PATH)` runs before `:memory:` is set. `query.test.ts`'s `V-db-wipe-guard` only trips on this when the offending file happens to load `db.ts` first, and bun's test-file order is not stable, so it hid across many green runs and did not reproduce locally. The live occurrence (a static import in `extract-docusaurus.test.ts`) was fixed in PR #97; new `src/source-hygiene.test.ts` (`V-test-db-import-static-guard`) now makes the `extractor-import-side-effects` rule *enforced* — it scans every `DB_PATH`-setting test file and fails at author time if any statically value-imports a db.ts-reaching module (statement-level `import type` is erased and stays allowed). Folded in a companion `V-source-no-control-chars` scan: no source `.ts` under `src/` or `scripts/` may carry a NUL or other disallowed C0/DEL control byte — the class where a stray NUL (also fixed in #97) makes `file` report the source as `data` and grep silently match nothing while tests/typecheck/biome all pass. Both are DB-less structural scans with no runtime cost.
+- **Video search now matches the video title, not just the transcript — correctly-titled changelog videos no longer get buried** (issue #89). `searchVideos()` queried only `video_segments_fts` (chapter title + transcript), so a query word that lives only in the human-curated title — "changelog" is never spoken in the narration — was unmatchable, and a video like *"RouterOS 7.23 changelog — VRF offloading, …"* ranked #15 on `changelog 7.23 routeros`, below the display cutoff. It now also consults the already-trigger-maintained `videos_fts` (title + description; **no schema change**), ranking strong-before-weak: title-AND, then transcript-AND, then the OR fallbacks in the same order, deduped by video. On the live corpus that target video moves from #15 to **#1**, and `changelog 7.NN routeros` resolves to the matching release video for each version. Deliberately scoped to the FTS match surface: the shared `extractTerms`/stop-word handling that shreds dotted versions (`7.23` → `7`,`23`) and drops `routeros` is left untouched here — recognizing RouterOS version strings as first-class query tokens across `routeros_search` is tracked as separate, broader work.
+- **The shared version comparator now orders same-base prereleases instead of collapsing them** (issue #107). `compareVersions()` in `src/version-compare.ts` stripped `beta\d*`/`rc\d*` wholesale, so `7.24beta1`, `7.24beta2`, `7.24beta3` all compared **equal** (likewise `7.20rc1` vs `7.20rc2`) — deterministic only because callers (`changelog.tsv`, `command_versions`/`routeros_command_diff` ordering) bolt on a secondary sort key. The comparator now folds the prerelease *number* into the sort so the order is strict and total for one base: `beta1 < beta2 < beta3 < rc1 < 7.24` (a bare `beta`/`rc` with no number sorts below its numbered siblings). Every caller improves at once; the module stays dependency-free so the DB-only `export.ts` boundary is unaffected. The honesty disclosure this bug forced into `rosetta export`'s `changelog.tsv` manifest is removed, and a focused `src/version-compare.test.ts` pins the precedence.
+- **Agent-facing corpus counts no longer carry stale Confluence-era numbers** (issue #88). `src/mcp.ts`'s schema-guide resource and `routeros_search`'s tool-description "Documentation: 317 pages from March 2026 Confluence export" line, plus `MANUAL.md`'s Tables reference, still advertised frozen Confluence figures (`pages` 317, `properties` 4,860, `callouts` 1,034) and drifted command/version counts (`command_versions` 1.67M vs an actual ~2.2M) even though the live Docusaurus extractor has been the default prose source since the `T-0035` cutover. Rather than re-baking exact numbers that drift every extraction, these surfaces now state **order-of-magnitude** counts, correct the Docusaurus provenance wording, and point at `routeros_stats` (already the live single source of truth) for exact figures — so the counts can't go silently wrong again. The `#87` caveat note in `MANUAL.md` is dropped.
+- **165 properties were silently destroyed on every build; `properties` and `callouts` now carry a real `section_id` (issue #90, schema v9).** `properties.section` stored **heading text**, and `UNIQUE(page_id, name, section)` plus `INSERT OR IGNORE` dropped any property whose page repeated a heading — the shipped `v0.11.0-rc.97` DB holds 4,416 of 4,581 parsed properties, and nothing logged the gap (the extractor's own "Properties:" line counted *attempted* inserts, so it reported rows the DB did not contain). `ppp-aaa` alone lost most of its user/profile properties to its four `Properties` headings. A corpus-wide measurement showed the obvious fix is insufficient: keying on `section_id` still destroys 87 rows, because the manual documents one property name several times *within a single section* (`dot1x` defines `interface` twice under `Server` — once for the server table, once for the client one), so section is not an identity at all. **The constraint is therefore removed**, not re-keyed; extractors now assert parsed == stored and fail the build on any gap (`V-extractor-no-silent-drops`). All 4,575 parsed properties are stored, and the 141 distinct properties the constraint had been eating — `name` = "Name used for authentication" and friends — are searchable for the first time. `properties.section_id` and the brand-new `callouts.section_id` (callouts previously had no section attribution whatsoever) resolve for 99.7% and 89% of rows respectively; the remainder are genuinely above any heading and stay NULL rather than being forced into a section. Property→section attribution rises from 72% resolvable to 99.7%. A property under an h4–h6 folds to its enclosing h1–h3 section, so `sections` remains the retrieval unit and `routeros_get_page` is unchanged; `section` keeps the raw h4 text, so the finer heading stays recoverable.
+- **`routeros_lookup_property` and `routeros_search`'s `related.properties` now return `section_anchor`, which finally makes same-named properties tellable apart** (issue #90). Storing every property surfaces a fact the old constraint hid by deleting it: 111 name/section groups (276 rows) are *indistinguishable* by `section`, because it holds heading text that repeats — a `lookup_property(name="name")` on PPP AAA returns three rows all reading "Properties", meaning the profile name, the login name, and the active-user name. `section_anchor` carries the section's `anchor_id` (`properties`, `properties-1`, `properties-2`), which is unique within a page and feeds straight back into `routeros_get_page(page, section=…)` to read that exact fragment — the workflow the tool description now spells out. Null when a property sits above any heading.
+- **`bunx`/global-install DB staleness across same-schema releases (e.g. `0.11.0-beta.92` → `beta.93`, or any future patch that doesn't bump `SCHEMA_VERSION`) is now self-healing** (issues #76, #23). `ensureDbReady()`'s redownload check widens from "schema version differs" to also compare `db_meta.release_tag` against the running package's own version — the new `checkDbFreshness()` (`src/setup.ts`) — since `dbDownloadUrls()` already resolves a version-pinned DB per exact release and `stamp-db-meta.ts` already stamps the matching tag; the missing piece was that `ensureDbReady` never looked at it. A local repro (documented on #76) confirmed bunx re-resolves the registry manifest fresh, unconditionally, on every invocation, so the running package version is always current — only the cached DB could go stale. Dev-mode checkouts are exempt (a locally-extracted DB's `release_tag` is expected to drift from `package.json`'s in-progress version and must never trigger a network fetch). A release-tag-only mismatch (schema still current) that fails to redownload — e.g. offline — degrades gracefully to the existing, still-queryable DB with a warning instead of crashing startup; only a genuine schema mismatch remains a hard failure.
+- **New `ROSETTA_OFFLINE=1` environment variable** short-circuits all DB freshness network attempts instead of letting them time out. A release-tag-only mismatch falls back to the existing DB with a warning (same as an unintentional offline failure); a genuine schema mismatch, or no DB at all, still fails hard — offline can't fix either. See `MANUAL.md` "How Updates Work".
+- **New `bunx-upgrade-smoke` release CI job** closes the gap `bunx-smoke` couldn't cover: it only ever installs onto an empty cache, so it never exercised the actual upgrade path. The new job seeds a real `bunx`-installed DB from the previously-published version on the same dist-tag, then invokes the just-published version bare (no `--refresh`) and asserts the startup banner shows the new release — proving `checkDbFreshness` actually self-heals a live install, not just its unit tests. Also exercises `ROSETTA_OFFLINE=1` against that same stale DB to prove the graceful-degradation path end to end. Runs on macOS/Linux/Windows; skipped when there's no prior publish yet on that channel (issues #76, #23).
+- **Device search resolves concatenated product-name spellings — `hapax3` now finds hAP ax³** (issue #67). The whole separator-free class (`hexs`, `capax`, `chateaulte12`, `fiberboxplus`, …) previously fell through every stage: `device_aliases` stored `hap ax3`/`hap_ax3` but never the concatenation, and the `searchDevices` stage written for exactly this case (a slug-normalized LIKE over `devices.product_url`) was dead in production — no extractor populates `product_url`, only the test fixtures did. `extract-hardware-catalog.ts` now derives a `canon()`-collapsed alias (source `collapsed`, lowest rank, zero cross-device collisions) from every surviving *name-bearing* alias, plus a standalone `hw-<slug>` row's own page slug (its only identity — how `chateaulte12` finds the catalog-only original Chateau LTE12); `hardware-table` codes and matrix-linked rows' page slugs stay uncollapsed so hAP ax³'s disambiguation slug `hap-ax-2` can't claim `hapax2` from the real hAP ax². Read side, both alias probes (`searchDevices` stage 1.5 and `searchAll`'s whole-input probe) fall back to the collapsed query key, so any separator spelling (`hap.ax3`, `hap-ax3`) resolves as `mode: "alias"`; a new per-token probe in `searchAll` surfaces a device mentioned inside prose ("hapax3 wifi settings") for tokens that look like model spellings (digit or code separator — bare English words that double as product names stay regex-gated on their styled form). Derived spellings resolve lookups but never appear in `also_known_as`; the dead `product_url` LIKE stage is removed. MCP + TUI both inherit via the query core.
+- **Category/index pages no longer arrive content-free — leaked `<DocCardList />` is now expanded into a real child-link list** (issue #65). manual.mikrotik.com's Docusaurus `.md` (`llms.txt`) output emits the `@theme/DocCardList` component unrendered, so ~50 index pages (e.g. `bgp.md`) reached the corpus as a bare tag plus its `import` line with their entire child-page navigation missing — the one MDX leak that is real data loss rather than cosmetic scaffolding. `extract-docusaurus.ts` now reconstructs the list from the rosetta-id path tree it already holds (a pre-parse pass, so links flow into `pages.text`/`sections` like ordinary prose), rendering each direct child as `- [Title](url) — summary` sorted by title. Honest fallback: a `<DocCardList />` with no discoverable children is left untouched rather than silently erased. Upstream MDX passthrough (imports, `WideTable`, `Tabs`, `:::` admonitions) is characterized in #65 and intentionally left as-is — readable or no data loss. Reported to MikroTik; this is the local stopgap.
+- **Classifier no longer turns natural-language prose into a bogus command path** (issue #59, BL-4 from `briefings/B-0020`). A no-slash question whose first word happens to be a top-level menu (`port forward to an internal server`, `port 8291 access`) was greedily pathified by the canonicalizer into `/port/forward/to/an/internal/server` at *medium* confidence, because `detectCommandPath` in `src/classify.ts` runs the (DB-less, tree-unaware) canonicalizer on any input starting with a top-level word. The no-slash branch now only treats the input as navigation when **every** trailing token is a bare menu segment (`^[a-z][a-z0-9-]*$`, not a prose stopword like `to`/`an`/`from`); a stopword or non-identifier token means it's a question and it's left for FTS instead. Legit space-separated navigation is unaffected (`ip firewall filter`, `interface wifi`, `routing bgp`, `port`). Pinned by a classifier-only golden anchor (`cmd-path-nl-not-a-path`, using a new `expected_classified` `null` = "must be absent" convention). Being a pure heuristic without command-tree access, two clean prose tokens can still slip through (`port forwarding`→`/port/forwarding`); a tree-validated post-check in query-core is the deeper fix, deferred. Retrieving the NAT/port-forwarding page for such verbose NL is the separate #26 FTS-candidate-pool weakness, not this bug.
+- **Command→page linkage now ranks candidates instead of picking an arbitrary one, fixing wrong-page property lookups on core menus** (issue #58, BL-1/BL-2 from `briefings/B-0020`). `link-commands.ts` collected every page that merely *mentions* a command path in a code block, then linked `commands.page_id` to `candidatePageIds[0]` — the first in insertion order — so on the Docusaurus corpus **433 of 493 linked dirs (88%) pointed at an unrelated page** (`/ip/firewall/filter`→l3-hardware-offloading, `/ip/dhcp-server`→hotspot, `/ip/service`→containers). The pick is now the *authoritative* page: the one whose own `/docs/` slug (or breadcrumb) trails the command path (new pure, unit-tested `src/link-ranking.ts` — contiguous trailing-segment match anchored at the leaf, prefix-tolerant so `/ip/dhcp-server`↔`.../dhcp` still matches; property count only tie-breaks among aligned pages). A command with **no** aligned page is left unlinked rather than mis-linked, so `routeros_lookup_property` falls back to an honest low-confidence global search instead of resolving *high*-confidence to the wrong page. Effect: aligned links ~2× (60→111), and real properties that exist now resolve high-confidence to the correct page (`/ip/dhcp-server lease-time`, `/ip/ipsec/peer exchange-mode`, `/ip/dns servers`) while the existing clean anchors (`prop-wireguard-listen-port`, `prop-vxlan-vni`) stay green. Properties the new manual documents only as prose (firewall `action`, BGP `distance`) and dotted/nested wifi properties remain unresolved — a separate property-extraction/CLI-Reference-overlay concern tracked apart from linkage.
+- **Flaky CI: two timer/IO-bound `src/setup.test.ts` cases (`waitForUsableDb returns true…`, `probeDb closes statements…`) no longer trip bun's default 5s per-test timeout under GitHub shared-runner contention** (issue #32). Both resolve in a few hundred ms locally but do real `setTimeout`/`bun:sqlite` file I/O; each now gets an explicit 15s bun-level timeout (well above its own 2s internal deadline) so runner jitter can't fail them without weakening any assertion.
+
+- **`release.yml`'s first real `0.11.0-alpha` dispatch (2026-07-09) failed at "Run tests (fast-fail)" despite 0 failing tests** (649 pass / 0 fail). Root cause: `bunfig.toml` carried a long-dormant `[test].coverageThreshold = { lines: 0.70, functions: 0.80 }` (present since April 2026, never actually exercised because `test.yml` never ran `bun test` with `--coverage`) — the first time `--coverage` ran anywhere in CI was `T-0037`'s new step, and real coverage (55.64% lines / 62.78% functions) tripped the dormant threshold, failing the whole release despite every test passing. `bunfig.toml`'s threshold is removed — coverage reporting is informational only, per `VALIDATION.md` `V-coverage-reported`, and should never gate on its own. Also hardened `release.yml`'s error reporting so a real future failure of this kind is self-explanatory instead of a bare "Process completed with exit code 1": the "Run tests (fast-fail)", "MCP contract tests (real DB)", and "MCP retrieval eval (Phase 0)" steps now each emit an explicit `::error::` annotation distinguishing an actual test failure from a nonzero exit with no failing tests reported.
+- **Phase 0 golden-query retrieval eval (`src/eval/retrieval.ts`, `fixtures/eval/queries.json`) now matches on `pages.rosetta_id` instead of the numeric `pages.id`.** `extract-docusaurus.ts` re-mints `pages.id` as a fresh rowid on every run, so the golden set's old Confluence-era numeric ids could never match again after the `T-0036` cutover — this is what failed `release.yml`'s "MCP retrieval eval (Phase 0)" step on `T-0037`'s first real dispatch (all 12 `nl-question` queries scored 0% recall) even though `routeros_search` was actually finding the right page for 10 of the 12. `fixtures/eval/baseline.json` regenerated against the live Docusaurus corpus. Two real ranking regressions the fixture fix uncovered (a firewall-filter query and a BGP-peering query both miss their real page) are left failing visibly in the eval's per-query output rather than papered over — tracked by `tasks/T-0038-docusaurus-retrieval-ranking-regressions.md`.
+- **Release skill and command-tree extraction now use authenticated GitHub API requests with retry handling.** This avoids shared-runner unauthenticated rate-limit failures while fetching `tikoci/routeros-skills` and discovering restraml versions during `release.yml`; the `extract-skills-from-cache` Makefile comment now correctly describes it as a local/offline rebuild path, not the release CI path. The shared retry helper (`src/github.ts`) now also backs off on GitHub's secondary/abuse-detection `403 + Retry-After` responses (not just primary-quota exhaustion) and no longer misreads a missing `x-ratelimit-reset` header as an immediate-retry signal; skill file bodies are fetched with the documented `application/vnd.github.v3.raw` accept header.
+- **`extract-docusaurus.ts`'s `parseProperties()` now also parses bullet-list property definitions** (`- **name** (type[; default: x]) : description`), not just Markdown tables. Characterizing the 32 pages a naive bold-bullet grep flags (issue #20) showed the overwhelming majority are non-property prose (command menus, chain/enum-value lists, JSON API fields, naming-convention explainers) that must stay excluded, not force-fit; the real gain is scoped to 4 pages whose bullet lists are genuine property definitions: `queues.md` (+51), `scheduler.md` (+6, including one real upstream doc typo now correctly flagged `malformedEmphasis` instead of silently mis-parsed), `clock.md` (+2), and `queues/htb-hierarchical-token-bucket.md` (+3) — +62 properties corpus-wide (4509 → 4571), with zero new false positives across all 365 in-scope pages.
+- **FTS `snippet()` excerpt highlighting no longer collides with native Markdown bold in the Docusaurus corpus** (issue #24). Since `T-0035`, indexed prose is raw Markdown and can already contain `**bold**`; wrapping a match in the same `**` marker produced visibly broken output like `****hAP****`. All 7 `snippet()` call sites (`pages`, `properties`, `callouts` x2, `changelogs`, `video_segments`, `dude_pages`) now share one exported sentinel-marker pair (`query.ts`'s `EXCERPT_MARK_START`/`EXCERPT_MARK_END`, `>>>`/`<<<`) — corpus-safe, since the only literal occurrences across all 365 in-scope pages are confined to fenced code blocks (`api.md`'s wire-protocol notation), never in prose. Also fixed 3 adjacent TUI rendering bugs in `browse.ts` found in the same footprint: the pages-excerpt bold conversion was correct but dead code (query.ts still emitted `**`); callouts/changelogs/videos/dude-pages excerpt rendering had no bold-off pairing (bold never turned back off once triggered); and `renderProperties` accepted but never rendered its own `excerpt` field, always showing the plain unhighlighted description.
+
+### Removed
+
+- **CI's automatic `package.json`/`CHANGELOG.md` version-bump commit** (the `bump-version` job in `release.yml`) — superseded by the manual version-bump step above.
+
+## [0.10.0] — 2026-07-08
+
+### Changed
+
+- **v0.10.x will be last release(s) based on Confluence HTML doc extraction.** v0.11.x and beyond will use new manual.mikrotik.com as source for MikroTik documentation pages.
+
+### Fixed
+
+- **Only changelog and version bump.** Promote to an even-number release. Otherwise, identical to 0.9.3.
+
+## [0.9.3] — 2026-07-07
+
+### Changed
+
+- **YouTube transcript cache refreshed for the final Confluence-corpus release.** The committed transcript cache now covers 538 MikroTik channel videos through June 19, 2026, and remains the source release CI imports via `extract-videos-from-cache`.
+- **Product matrix snapshot refreshed for the final Confluence-corpus release.** The default device extractor now consumes the July 7, 2026 browser-exported matrix snapshot with 156 products.
+- **Release docs now identify local-only source refreshes.** `MANUAL.md` distinguishes cache inputs that CI consumes from live sources CI already refreshes, including the product-matrix browser export caveat.
+
+## [0.9.2] — 2026-06-18
+
+### Changed
+
+- **Docs now flag MikroTik's manual.mikrotik.com migration.** Project docs record that future RouterOS manual updates are Docusaurus-based, not Confluence HTML exports, and outline the extraction/MCP/TUI redesign options.
+
+### Fixed
+
+- **Schema-mismatch setup guidance now points MCP users at a fresh bunx resolution.** The refresh message tells users to restart the MCP client or run `bunx @tikoci/rosetta@latest --refresh` when their cached package is older than the published DB.
+
+### Removed
+
+- **Stale `ros-toc.json` PDF-era artifact removed.** The current HTML extraction pipeline is the source of RouterOS page metadata, and no runtime code consumed the empty-title TOC file.
+
+## [0.9.1] — 2026-05-26
+
+### Fixed
+
+- **Release npm publish now fails fast on missing or unauthorized `NPM_TOKEN`.** The release workflow verifies npm package availability and read-write package access before extraction, artifact publishing, OCI pushes, or GitHub Release creation; partial release retries can update existing GitHub Release assets before publishing to the explicit npm registry.
+- **Release skill extraction now authenticates GitHub API reads.** The `extract-skills.ts` GitHub API calls use `GITHUB_TOKEN`/`GH_TOKEN` when available, and release CI passes `github.token` to avoid unauthenticated API 403s while fetching `tikoci/routeros-skills`.
+
+## [0.8.13] — 2026-05-03
+
+### Added
+
+- **`make verify` target.** Runs typecheck + lint + tests + MCP contract tests + Phase 0 retrieval eval in one command. Requires a populated DB (`make extract` first). Covers V-typecheck, V-lint, V-unit, V-tool-registry, V-tool-shapes, V-tool-budget, V-retrieval-floor. Skips the clean-tree check that `make preflight` enforces.
+
+### Changed
+
+- **CLAUDE.md is now a thin routing index, and agent rules live in narrow `.github/instructions/*.instructions.md` files.** Canonical reference material moved to `MANUAL.md` and `DESIGN.md`, legacy broad instruction files became routing stubs, and Copilot-facing guidance now points at the scoped rule files instead of duplicating the whole project reference.
+- **TUI/MCP parity and CLI help/manual parity are now CI-enforced.** New `src/browse-parity.test.ts` proves every MCP tool has a matching `.routeros_*` browse dot-command, and new `src/cli-help.test.ts` locks `MANUAL.md`'s CLI Flags table to `bun src/mcp.ts --help`. The `--help` output now documents `browse <cmd> [args]`, `browse --once <cmd>`, and TLS env var names explicitly.
+- **MCP contract tests and Phase 0 retrieval eval are now blocking in release CI.** Both were previously `continue-on-error: true` pending a first green CI run; both have now passed — `continue-on-error` removed and step names updated (dropped `(non-blocking)` suffix).
+- **Work tracking restructured.** `BACKLOG.md` slimmed to an inbox + triggers list. Active work now lives in `tasks/T-NNNN-*.md` (frontmatter: status, depends_on, conflicts_with, validation, acceptance). Research and decision notes live in `briefings/B-NNNN-*.md`. New `VALIDATION.md` matrix names every load-bearing invariant and the CI step that proves it. Three new `.github/skills/` (`pick-next-task`, `promote-idea`, `verify-task`) wrap the conventions. `CLAUDE.md` and `.github/copilot-instructions.md` doc-rule tables updated to match.
+- **Task verification docs now distinguish current proofs from planned ones.** `tasks/README.md` and the `verify-task` skill no longer assume a `make verify` target already exists, `VALIDATION.md` now points `V-db-min-content` at the real inline release step, and `V-retrieval-self` is recorded honestly as a tracked gap until release CI actually runs the self-supervised eval.
+- **The test workflow now exercises the real stdio MCP client path.** `.github/workflows/test.yml` runs `src/mcp-stdio-client.test.ts`, which spawns `bun src/mcp.ts` through `@modelcontextprotocol/sdk`'s `StdioClientTransport`, proves the 14-tool registry/resources surface over stdio, and catches stdout framing pollution.
+- **Release `bunx-smoke` matrix now includes `windows-latest`.** Catches the EBUSY / readonly-WAL / temp-file class of bugs on Windows. Step uses `RUNNER_TEMP` instead of `mktemp` (not available in Git Bash) and sets `shell: bash` as the job default.
+- **Release CI now runs the Phase 1 self-supervised retrieval eval (non-blocking).** After the existing Phase 0 hand-curated eval step, `release.yml` now executes `src/eval/self-supervised.ts` against the freshly built full DB and appends the pass/fail result to the workflow summary. Results are visible but non-blocking until a stable baseline is established.
+
+### Removed
+
+- **`make release`, `make build-release`, `make bump-version` removed from Makefile.** All release artifact production now goes through the GitHub Actions `release.yml` workflow. The Makefile retains ETL targets and developer checks (`make preflight`, `make verify`).
+
+### Security
+
+- **CodeQL ignore scope now anchors the root `skills/` cache explicitly.** `.github/codeql/codeql-config.yml` now ignores `/skills/**` instead of an unanchored `skills/**`, keeping the committed `.github/skills/` workflow docs distinct from the extracted root-level skill cache.
+
+## [0.8.12] — 2026-05-02
+
+### Fixed
+
+- **Windows package-mode DB installation no longer renames a SQLite-opened temp
+  file.** Download validation now finalizes every SQLite statement before close,
+  and `replaceDbFile` retries transient `EBUSY` / `EEXIST` / `EPERM` rename
+  failures for up to 30 seconds to cover delayed handle release, antivirus, or
+  indexers.
+- **Abandoned `.tmp.*` DB artifacts are removed immediately when no active
+  download lock exists**, so failed Windows installs do not keep accumulating
+  274 MB temp databases between launches.
+
+## [0.8.11] — 2026-05-02
+
+### Fixed
+
+- **Stale `.tmp.*` cleanup now runs on every startup**, not only when a download
+  is triggered. This removes accumulated 274 MB temp files from previous failed
+  downloads even when the DB is already healthy.
+- **Windows rename now handles `EBUSY`** in addition to `EEXIST`/`EPERM` in the
+  `replaceDbFile` fallback path, providing better defense against antivirus or
+  indexer locks on the destination.
+- **Schema-mismatch recovery messages no longer reference `bun pm cache rm`** or
+  use shell `&&` syntax. The actionable command is now
+  `bunx @tikoci/rosetta@latest --refresh`, which works cross-platform and
+  handles both package and DB refresh in one step.
+
+## [0.8.10] — 2026-05-02
+
+### Security
+
+- **CodeQL + Dependency Review wired up.** New
+  [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) runs the
+  `security-and-quality` suite (security-extended + code-quality queries)
+  against `javascript-typescript` and `actions` on push, PR, and a weekly
+  cron. [`.github/codeql/codeql-config.yml`](.github/codeql/codeql-config.yml)
+  excludes vendored/generated content (`box/`, `dude/`, `transcripts/`,
+  `matrix/`, `skills/`, `fixtures/`, `dist/`, `images/`) so scans focus on
+  shipped/runtime TypeScript, extractors, the bin shim, release scripts, and
+  workflow YAML; test/eval harnesses are excluded to avoid temp-file/file-race
+  noise outside shipped code. New
+  [`.github/workflows/dependency-review.yml`](.github/workflows/dependency-review.yml)
+  blocks PRs introducing high-severity dependency advisories. New
+  [`.github/dependabot.yml`](.github/dependabot.yml) opens weekly grouped
+  update PRs for `github-actions` and `bun` ecosystems. The Test workflow
+  gains an "AI findings probe" step that polls candidate Code Quality
+  endpoints and prints a CI notice (no-op until GitHub ships a stable API).
+  Repo-level Dependabot security updates, secret scanning with push protection,
+  and private vulnerability reporting are enabled.
+  See `SECURITY.md` for the configured posture summary.
+
+### Changed
+
+- **Documentation/instruction cleanup:** agent-facing instructions, release/extraction docs,
+  and BACKLOG structure now match the current CI pipeline, MCP resource surface,
+  and `DESIGN.md` source-of-truth for cross-tikoci command validation strategy.
+- **MCP search/property confidence metadata:** `routeros_search.classified`
+  now includes `command_path_confidence`, and `routeros_lookup_property`
+  rows include `confidence` (`high`/`medium`/`low`) to distinguish scoped
+  command-page matches from global fallbacks.
+- **CI release hygiene:** the `Release` workflow input formerly named
+  `force` is now `republish_assets`, making clear that it reuploads GitHub
+  Release assets / OCI tags while skipping immutable npm publication. Release
+  CI also runs `bun test` in the early fast-fail gate before downloading the
+  HTML export while preserving the post-extraction DB-wipe guard.
+- **DB retention:** release builds now run `make gc-versions` after command
+  linking to prune `schema_node_presence` to active RouterOS channel heads
+  (stable, long-term, testing, development). Full command-version history and
+  changelogs remain untouched.
+- **Tool descriptions: `routeros_stats` and `routeros_current_versions`
+  now follow the workflow-arrow (→) convention.** `stats` suggests
+  `→ routeros_search`; `current_versions` suggests
+  `→ routeros_search_changelogs` with a `from_version`/`to_version`
+  hint. The Phase 2 contract test's `KNOWN_EXCEPTIONS` allow-list is
+  removed — every registered tool now carries a follow-up arrow.
+
+### Fixed
+
+- **bunx/package startup no longer races the shared `~/.rosetta/ros-help.db`.**
+  Package-mode DB preparation now uses a sidecar lock so concurrent MCP clients
+  wait for the first download instead of competing to rename the file on
+  Windows. Waiters no longer probe-lock the canonical DB while another process
+  is replacing it, startup aborts instead of falling through to a schema-only
+  empty DB when recovery fails, probes no longer create a missing canonical DB
+  as a side effect, and stale `.tmp` / `-wal` / `-shm` artifacts are cleaned up
+  instead of accumulating in `~/.rosetta/`.
+- **Video transcript VTT cleanup:** malformed cue markup is dropped without
+  leaking tag fragments into extracted transcript text.
+- **Release workflow npm propagation log:** the bunx smoke-test polling loop
+  now reports the correct attempt number while waiting for the npm registry.
+
+### Added
+
+- **`routeros_explain_command` MCP tool:** read-only CLI command explanation
+  with canonical path/verb, argument property matches, warnings, docs,
+  changelogs, version check, and TUI dot-command parity.
+- **`canonicalize.ts`: pluggable verb resolver, `extractMentions()`,
+  per-command confidence flag (issue #5 — H4, H6, H8).**
+  - `CanonicalizeOptions { isVerb?: (token, parentPath) => boolean }` lets
+    callers plug in a path-aware verb classifier. rosetta wires a DB-backed
+    resolver against the `commands` table so `/interface/wifi-qcom/info`,
+    `/system/script/run`, and other menu-specific verbs classify correctly
+    instead of falling back to bare navigation. The resolver supplements the
+    curated universal verb heuristic (it does not replace helpers like
+    `find`, which are not enumerated everywhere in the command tree).
+  - `extractMentions(input, cwd?, options?)` — surfaces every distinct path
+    the input *references*, including bare navigation with no verb (e.g.
+    `/ip/firewall/filter` standing alone in prose). Superset of
+    `extractPaths()`. `ParseResult` also carries a new `mentions: string[]`
+    field for callers that already use `canonicalize()` directly.
+  - `CanonicalCommand.confidence: 'high' | 'medium' | 'low'` — `high` for
+    well-formed CLI (absolute path with directly-identified verb),
+    `medium` for relative-with-cwd or pure navigation, `low` when the verb
+    was inferred from a trailing path segment (looser/prose-shaped input).
+    Lets consumers filter prose-extracted results when they need higher
+    precision.
+- **`src/canonicalize-resolver.ts`** — DB-backed `isVerb` adapter for
+  rosetta's `commands` table, with per-resolver in-memory caching. Wired
+  into `searchAll()` via a `ClassifyOptions { isVerb? }` pass-through on
+  `classifyQuery`, so MCP `routeros_search` and TUI `s` benefit
+  automatically when input contains a path with a menu-specific verb.
+
+<!-- markdownlint-disable-next-line MD024 -- historical [0.8.10] entry had two Fixed blocks; kept verbatim, not rewriting a released section -->
+### Fixed
+
+- **Changelog version lookup and bridge VLAN retrieval.** `routeros_search` /
+  `routeros_search_changelogs` now keep exact patch-version lookups exact, but
+  fall back from an absent major.minor changelog (for example `7.22`) to its
+  patch rows (`7.22.*`). Generic "what changed in X.Y" questions now populate
+  `related.changelogs`, and bridge VLAN filtering searches treat "switch" as
+  context so the dedicated Bridge VLAN Table page ranks in the top results.
+- **`canonicalize.ts` robustness — markdown / prose / common-verb gaps.**
+  Tokenizer now strips a leading U+FEFF BOM and treats backticks (`` ` ``) and
+  zero-width space (U+200B) as whitespace in both the outer and word loops, so
+  inputs from markdown fences, doc snippets, and BOM-prefixed files extract
+  cleanly instead of embedding the noise into the first path segment.
+  `GENERAL_COMMANDS` gains four verbs that are universal in the rosetta
+  `commands` table but were missing: `clear`, `unset`, `reset-counters`,
+  `reset-counters-all`. Cross-checked against the DB to confirm zero path
+  collisions — `info`/`warning`/`error`/`debug` are intentionally NOT added
+  (`/error` is itself a top-level cmd; `info` is a dir at
+  `/interface/wireless`). Menu-specific verbs need a path-aware resolver
+  (tracked as H4 in the audit). New `src/canonicalize.fuzz.test.ts`
+  documents both the shipped behaviour and the still-on-the-books H1–H8
+  hardenings.
+
+## [0.8.9] — 2026-04-23
+
+## [0.8.8] — 2026-04-22
+
+### Changed
+
+- **CI: `bump-version` now auto-promotes `[Unreleased]` → `[VERSION] — DATE`**
+  and prepends a fresh `## [Unreleased]` skeleton after every release. No
+  manual CHANGELOG fixup is needed — agents and developers only write to
+  `[Unreleased]`; the version heading is filled in automatically.
+- **CI: Phase 0 retrieval eval runs on release builds (non-blocking).**
+  `release.yml` now executes `bun run src/eval/retrieval.ts` against the
+  freshly built full DB after extraction and writes the report to the job
+  summary. Non-blocking while the baseline adapts to the real-DB corpus —
+  flip to blocking after one green real-DB run refreshes the baseline.
+- **CI: Phase 2 contract checks run in a dedicated real-DB step on release
+  (non-blocking).** `release.yml` executes `bun test src/mcp-contract.test.ts`
+  after the full `bun test` suite so the token-budget and shape-invariant
+  blocks run against the freshly built full DB in a fresh process (the
+  shared `bun test` run pins the DB singleton to `:memory:` before this
+  file loads, so Blocks B/C would otherwise skip). Non-blocking:
+  `continue-on-error: true` while we observe the step green across a few
+  rebuilds; test output is written to the job summary. `test.yml`
+  intentionally does not get a dedicated step: a clean CI checkout has no
+  `ros-help.db`, so B/C would skip regardless and the step would be
+  redundant with Block A in the main run.
+
+### Added
+
+- **MCP behavioural eval framework (Phases 0–2)** — three new surfaces for
+  validating that the MCP tool layer keeps doing what we expect, with no LLM
+  cost in the default flow:
+  - **Phase 0** (`make eval`) — 20 hand-curated golden queries in
+    `fixtures/eval/queries.json`, scored on recall@k / MRR / classifier
+    accuracy with baseline regression gating (2pp tolerance).
+  - **Phase 1** (`make eval-self`) — ~170 auto-generated queries from
+    section headings, property names, and page titles using deterministic
+    seeded sampling. Per-strategy thresholds + 5pp baseline tolerance.
+  - **Phase 2** (`bun test src/mcp-contract.test.ts`) — frozen tool
+    registry test, workflow-arrow (→) convention check, token-budget
+    guardrails on 10 canonical queries, and response-shape invariants for
+    5 representative queries (portable across DBs of varying richness).
+    Runs inside `bun test`.
+  - See `BACKLOG.md` "MCP Behavioral Testing — research + roadmap" for the
+    full 5-phase plan.
+- **Tool-surface change ritual** documented in `CLAUDE.md`: adding,
+  removing, or renaming an MCP tool requires updating both `src/mcp.ts`
+  and the `EXPECTED_TOOLS` array in `src/mcp-contract.test.ts`, plus a
+  `CHANGELOG.md` entry under `[Unreleased]`.
+
+### Fixed
+
+- **Phase 1 self-supervised sampling is now deterministic on full DBs.**
+  The cmd-path strategy no longer uses SQL randomness; it samples from a
+  stable ordered set using the same seeded shuffle as the other strategies,
+  so `self-supervised-baseline.json` stays reproducible across runs.
+
+- `CHANGELOG.md` (Keep a Changelog format, back-filled from v0.1.0) with an
+  agentic "update `[Unreleased]` on every user-visible change" rule in
+  `CLAUDE.md` + `CONTRIBUTING.md`.
+- **TUI: `view` / `v` command.** Re-renders the current context (page,
+  results, sections, etc.) without popping the navigation stack the way
+  `b` does. Useful after exiting the pager to re-read what you were
+  looking at.
+- **TUI: bare `page` re-renders current page.** When already in a page or
+  sections context, `page` with no args re-renders the current page
+  instead of erroring.
+
+- **CI: fast-fail quality gate.** `release.yml` now runs `typecheck` + `lint`
+  immediately after `bun install`, before the ~2-minute extraction pipeline.
+  Tests continue to run post-extraction as the DB-wipe guard.
+- **CI: `bump-version` rebase-retry.** Back-to-back release runs no longer
+  fail with `! [rejected] HEAD -> main (fetch first)`. The job fetches +
+  rebases onto `origin/main` and retries the push up to 3× (safe because
+  the commit only touches `package.json`).
+- **`routeros_search_tests`: 512-byte rows surface first when no
+  `packet_size` filter is set.** 512B is the conventional mid-size
+  benchmark RouterOS admins compare on, so within the LIMIT they now
+  precede 1518B "best case" rows that previously crowded them out.
+  Pin `packet_size` to override.
+- **TUI dot-commands print usage on missing required args.** Calling
+  e.g. `.routeros_get_page` with no args now prints the args, brief
+  description, and TUI equivalent instead of silently returning `null`.
+
+<!-- markdownlint-disable-next-line MD024 -- historical [0.8.8] entry had two Fixed blocks; kept verbatim, not rewriting a released section -->
+### Fixed
+
+- **TUI device detail benchmark truncation now always keeps all 512B rows.**
+  When compacting long per-device test lists, the renderer now preserves every
+  512-byte result (the common comparison size) and only truncates non-512 rows.
+- Tests/CI: importing `extract-test-results.ts` no longer opens the DB or runs
+  extraction side effects at module-load time. The extractor now runs only
+  under `import.meta.main`, and `extract-test-results.test.ts` sets
+  `DB_PATH=:memory:` before dynamic import to prevent cross-file DB singleton
+  contamination that could make `query.test.ts` fail depending on test order.
+- **`extract-test-results`: throughput values with thousands separators now
+  parse correctly.** Values like `7,112.3` Mbps were truncated to `7` because
+  `parseFloat` stops at a comma. The extractor now strips commas before parsing,
+  so the DB will contain correct figures after the next re-extraction.
+- **TUI pager: navigation keystrokes no longer bleed into the REPL prompt.**
+  Pager ran in raw mode while readline's data handler was still active, so
+  each keystroke (`1`, `4`, `q`, etc.) accumulated in readline's internal
+  line buffer and reappeared echoed after the next prompt (e.g. `> 1432q`).
+  Fixed by clearing `rl.line`/`rl.cursor` before re-prompting after dispatch.
+- **TUI: `[p]` and `[cal]` page hints now work on pages with sections.**
+  Pages with headings push `ctx.type = "sections"` (not `"page"`), so the
+  `p`/`prop` and `cal`/`callouts` context-scoped handlers were silently
+  falling back to "no page, show usage" even while a page was showing.
+  Both handlers now check for `sections` context too, so all five footer
+  hints (`[N]`, `[p]`, `[cmd]`, `[cal]`, `[b]`) work correctly regardless
+  of whether the page has headings.
+- **TUI help text mentions `[N]` section navigation.** The post-pager hint
+  line now reads `[N] = go to section N` alongside `[p]` / `[cal]` / `[b]`.
+- **TUI pager: digits open the listed result.** In a results pager
+  (search, devices, callouts, videos, properties, changelogs, sections,
+  command tree, dude), pressing `1`..`N` (where N is the number of
+  visible results) now opens that result and exits the pager. Previously
+  digits were always interpreted as page jumps, so users had to quit the
+  pager (`q`) and then type the number — wasted keystrokes on the most
+  common path. Page-jump still works for digits beyond the visible
+  result count.
+- `routeros_search_changelogs` `X..Y` version range is now inclusive on both
+  ends, normalises reversed ranges (`7.21..7.20` → `7.20..7.21`), and returns
+  entries chronologically (oldest first).
+- Build: missing `compareVersions` import in `src/browse.ts` — was failing
+  typecheck on both `test.yml` and `release.yml`.
+
+## [0.8.2 – 0.8.3] — 2026-04-22
+
+### Changed
+
+- **TUI polish round-2.** Dot-command aliases (`.s` → `.routeros_search`), back
+  navigation re-renders, page calendar rendering, Markdown → ANSI sweep across
+  skills/pages.
+- **CI:** `bump-version` decoupled from `bunx-smoke` — a smoke regression no
+  longer blocks the next version from being available for the fix release.
+  Force-mode runs also skip the npm publish step (npm versions are immutable).
+- **Lint rule sharpened.** `bun run lint` must be zero errors repo-wide, not
+  just on touched files.
+
+### Fixed
+
+- `browse` CLI args now route through the normal TUI dispatcher, so every TUI
+  command (not just `s`) works when passed at launch.
+- Resolved `noNonNullAssertion` lint errors in `canonicalize.test.ts` that
+  were blocking CI.
+
+## [0.8.0 – 0.8.1] — 2026-04-21
+
+### Fixed
+
+- **`bunx` install path is now rock-solid on macOS.** The last `{ readonly: true }`
+  DB open (in `mcp.ts::ensureDbReady` and `setup.ts::dbHasData`) was removed.
+  Freshly-written WAL-mode SQLite DBs with no `.shm` sibling cannot be opened
+  readonly on macOS, which caused `Validated … | Still incompatible after
+  re-download (DB=unreadable)` for v0.8.0 users. Added a structural anchor test
+  that forbids `{ readonly: true }` on DB opens.
+
+### Added
+
+- **Cross-platform bunx smoke job in CI.** `release.yml` now runs a
+  `bunx-smoke` matrix on macOS + Linux after npm publish, pinning the just-
+  published version and exercising `--refresh`, `--version`, and the full MCP
+  server boot path. Linux-only CI had green-lit v0.8.0 before this was added.
+
+## [0.7.5 – 0.7.8] — 2026-04-21
+
+### Added
+
+- **`db_meta` table (schema v5).** Database provenance — `release_tag`,
+  `built_at`, `source_commit`, `schema_version`. Stamped at release time,
+  shown in the startup banner.
+- **Auto-update story for bunx.** DB download URL pins to the running package
+  version (`releases/download/v<VER>/ros-help.db.gz`) with `latest` as
+  fallback. Atomic `.tmp.<pid>` write, magic-byte + size + schema probe, then
+  `renameSync`. Stale `.db-wal` / `.db-shm` siblings are cleaned up in the
+  same step. Schema mismatch is a hard error with an actionable message.
+- **TUI usability: MCP probe via dot-commands.** `.routeros_search`, `.page`,
+  `.device` etc. invoke the same code path as the MCP server tool and dump
+  raw JSON. `.help` lists all 13 dot-commands. Contract: "a human can always
+  see exactly what the agent would receive."
+- **Hunger-knob `related` caps.** `routeros_search.limit` scales callout /
+  video caps proportionally via `relatedCaps(limit)`.
+- **Glossary in `related`.** Short queries that match a glossary term/alias
+  surface the definition in `related.glossary`.
+
+### Fixed
+
+- **CI DB-wipe regression (v0.7.6).** `extract-dude.test.ts` had imported
+  `extract-dude.ts` (which loads `db.ts`) before any `DB_PATH=:memory:` was
+  set; `query.test.ts:beforeAll` then `DELETE FROM …`'d the CI-built DB,
+  shipping a 3-page release. Fixed with `DB_PATH=:memory:` hoisting, a
+  `query.test.ts` hard-fail if the singleton isn't `:memory:`, and a
+  `release.yml` DB content gate (`pages ≥ 200`, `commands ≥ 1000`,
+  `devices ≥ 100`, `properties ≥ 1000`) that runs before publish.
+- `extract-html.ts` exits non-zero if 0 pages are extracted.
+- `probeDb` and `ensureDbReady` open the DB read-write so WAL-mode init
+  doesn't fail on macOS.
+
+## [0.7.0 – 0.7.4] — 2026-04-20
+
+### Added
+
+- **North Star — unified `routeros_search`.** New pre-search regex classifier
+  in `src/classify.ts` (pure module, 42 table-driven tests) detects command
+  path, version, topic, device model, command fragment, and property-name
+  candidate. `searchAll()` in `src/query.ts` wraps `searchPages` and runs
+  classifier-driven side queries in parallel, returning
+  `{ query, classified, pages, related: {command_node, properties, devices,
+  callouts, videos, changelogs, skills, glossary}, next_steps }`.
+- **Glossary table.** Seeded at DB init. Resolves RouterOS domain jargon
+  (product codes, abbreviations, subsystem names).
+- **Known-topics table.** Union of changelog categories and command path
+  segments for soft topic routing in the classifier.
+- **Changelog range expansion.** `buildChangelogVersionSet` includes channel
+  head versions and latest long-term patches.
+
+### Removed
+
+- **`routeros_search_callouts`** and **`routeros_search_videos`** — folded
+  into `routeros_search.related`. Tool count: 15 → 13. The underlying
+  `searchCallouts()` / `searchVideos()` functions remain in `query.ts` as
+  internal helpers used by `searchAll()` and `getPage()` TOC mode.
+- **`routeros_search_properties`** — previously removed (useless without
+  command-tree context); internal function retained for TUI.
+
+### Changed
+
+- `routeros_get_page` is budget-aware: TOC mode surfaces top properties,
+  related videos, and callout summary inline, so small-budget callers rarely
+  need a second tool call.
+
+## [0.6.4 – 0.6.9] — 2026-04-13 → 2026-04-20
+
+### Added
+
+- **`schema_nodes` table + multi-arch import.** `deep-inspect.json` from
+  `tikoci/restraml` is now the preferred source. Dual-arch (x86/arm64) trees,
+  `_completion` data (11K+ args with valid values + 17 style types),
+  `schema_node_presence` flat junction, `_attrs` JSON catch-all. The
+  `commands` + `command_versions` tables are regenerated from `schema_nodes`
+  for backward compatibility.
+- **`desc_raw` decomposition.** Parsed into `data_type`, `enum_values`,
+  `range_min`/`range_max`, `max_length` at import time.
+- **Completion data in `browseCommands()` / `browseCommandsAtVersion()`.**
+- **RouterOS agent skills as MCP resources.** `rosetta://skills` (listing)
+  and `rosetta://skills/{name}` (per-skill content) with provenance header
+  noting community/AI-generated/human-reviewed status.
+- **CLI flag support for DB path.** Explicit `--db <path>` overrides all
+  discovery modes.
+- **Section-level excerpts in search** + server-wide instructions surfaced
+  via `SERVER_INSTRUCTIONS`.
+- **RouterOS CLI path canonicaliser.** `src/canonicalize.ts` maps any input
+  form to `{ path, verb, args }` tuples (61 tests covering subshells, blocks,
+  navigation).
+- **Release workflow version resolution.** `release.yml` reads `package.json`
+  for version when workflow input is blank.
+
+### Fixed
+
+- `dude_pages`: stripped Wayback / wiki chrome from extracted text; removed
+  stub entries; `routeros_dude_get_page` accepts `max_length`.
+- `browseCommands` arch filtering corrected and tests added.
+- Removed `{ readonly: true }` from early DB validation in setup (repeat
+  regression trail — finally closed in 0.8.1).
+- Stop words + compound terms counts corrected in tool descriptions.
+
+## [0.5.x – 0.6.3] — 2026-04-09 → 2026-04-13
+
+### Added
+
+- **MCP Registry metadata.** `server.json` manifest + CI validation job.
+- **MCP dataset resources.** `rosetta://datasets/device-test-results.csv`,
+  `rosetta://datasets/devices.csv`, `rosetta://schema.sql`,
+  `rosetta://schema-guide.md`.
+- **`routeros_command_diff`.** Structural diff of command trees between two
+  RouterOS versions.
+- **`PRAGMA user_version`** written at DB init; MCP server validates on boot.
+- **Sitemap-based device slug resolution** for 100% product-page coverage;
+  AKA / alias matching via dash-split + slug-normalised LIKE.
+- **Changelog extraction: legacy version support** with CI verification;
+  version-set building tests.
+- **`ensureDbReady` function in `mcp.ts`** — hard validation before the
+  server starts serving.
+
+### Fixed
+
+- Per-session HTTP transport routing (each MCP client session gets its own
+  `McpServer` + transport).
+- `.dockerignore` added to slim the build context.
+- OCI smoke test via `docker pull` (not `docker load`); container entrypoint
+  restored in Docker build context.
+
+## [0.4.x] — 2026-04-04 → 2026-04-09
+
+### Added
+
+- **`routeros_search_tests`.** Cross-device ethernet + IPSec benchmark search
+  with mode, configuration, and packet-size filters.
+- **Device test results + block diagrams.** Scraped from `mikrotik.com/product/<slug>`:
+  2,874 measurements across 125 devices, 110 block-diagram URLs.
+- **Experimental TUI (`browse`).** Interactive terminal browser — REPL with
+  paging, OSC 8 links, context-scoped navigation.
+- **Video transcripts via yt-dlp.** 518 MikroTik channel videos, ~1,890
+  chapter-level segments with timestamps. NDJSON cache in `transcripts/`
+  makes CI reproducible without a yt-dlp dependency.
+- **Unicode superscript / subscript normalisation** in product names.
+- **Auto-bump patch version after release** (Makefile + CI).
+- **Security policy documentation** (`SECURITY.md`) + build-script hardening
+  against shell injection.
+
+### Fixed
+
+- HTTP transport test stabilisation; lint sweep.
+- `search_tests` response slimmed to reduce context bloat.
+
+## [0.3.x] — 2026-03-31 → 2026-04-01
+
+### Added
+
+- **Streamable HTTP transport** via `--http` flag. Built on `Bun.serve()` +
+  `WebStandardStreamableHTTPServerTransport`, stateful per-session routing,
+  optional `--tls-cert` / `--tls-key` for direct HTTPS. Defaults to localhost;
+  `--host 0.0.0.0` logs a warning.
+- **OCI image publishing** (`ammo74/rosetta` on Docker Hub,
+  `ghcr.io/tikoci/rosetta` on GHCR). Multi-arch linux/amd64 + linux/arm64.
+  Smoke-tested in CI via `docker pull`.
+- **`get_page` smart budgeting.** `max_length` default 16000, compact callout
+  summary in TOC mode.
+
+### Fixed
+
+- Replaced crane with `Dockerfile + docker buildx` for OCI builds — several
+  crane approaches all failed identically on Docker 28 with containerd image
+  store.
+- Per-session HTTP transport routing.
+
+## [0.2.x] — 2026-03-30
+
+### Added
+
+- **npm distribution.** `bunx @tikoci/rosetta` as canonical install.
+  Runtime version resolution (`import.meta.dirname` + `package.json` read)
+  so `--version` shows a real number. Claude Desktop full-path PATH
+  workaround documented in `--setup` output.
+- **Changelog extraction** from `download.mikrotik.com/routeros/<ver>/CHANGELOG`;
+  `routeros_search_changelogs` tool with version range + category + breaking
+  filters.
+- **Markdownlint configuration** (`.markdownlint.yaml`, `.markdownlintignore`).
+
+### Fixed
+
+- CI release workflow: pass HTML dir to `extract-properties`; tolerate
+  Confluence zip absolute-path entry; lint issues; TypeScript dev-dependency
+  for typecheck.
+- `inspect.json` fetched from restraml GitHub Pages (removed `~/restraml`
+  dependency).
+
+## [0.1.0] — 2026-03-26
+
+Initial public release.
+
+### Added
+
+- **Core MCP server** (`src/mcp.ts`) with 8 tools: `routeros_search`,
+  `routeros_get_page`, `routeros_lookup_property`, `routeros_command_tree`,
+  `routeros_device_lookup`, `routeros_command_version_check`,
+  `routeros_current_versions`, `routeros_stats`.
+- **HTML extraction pipeline** (317 pages, 4,860 properties, 1,034 callouts,
+  2,984 sections) + **command tree** (46 RouterOS versions, 1.67M
+  command-version junction rows) + **product matrix** (144 devices).
+- **SQL-as-RAG** with FTS5 (`porter unicode61` for prose, plain `unicode61`
+  for device model numbers), BM25 ranking, compound-term recognition,
+  AND→OR fallback.
+- **Compiled single-file binaries** for macOS arm64/x64, Linux x64, Windows
+  x64 via `bun build --compile`.
+- **`--setup` flow.** Downloads DB from GitHub Releases, prints MCP client
+  config snippets for Claude Desktop, Claude Code, VS Code Copilot, Copilot
+  CLI, Cursor, Codex.
+- **`DB_PATH` env override** + three-mode DB path resolution (compiled /
+  dev / package at `~/.rosetta/`).
+- Bun tests for the query planner + schema health.
+
+[Unreleased]: https://github.com/tikoci/rosetta/compare/v0.11.3...HEAD
+[0.11.3]: https://github.com/tikoci/rosetta/compare/v0.11.2...v0.11.3
+[0.11.2]: https://github.com/tikoci/rosetta/compare/v0.11.1...v0.11.2
+[0.11.1]: https://github.com/tikoci/rosetta/compare/v0.11.0...v0.11.1
+[0.11.0]: https://github.com/tikoci/rosetta/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/tikoci/rosetta/compare/v0.9.3...v0.10.0
+[0.9.3]: https://github.com/tikoci/rosetta/compare/v0.9.2...v0.9.3
+[0.9.2]: https://github.com/tikoci/rosetta/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/tikoci/rosetta/compare/v0.8.13...v0.9.1
+[0.8.13]: https://github.com/tikoci/rosetta/compare/v0.8.12...v0.8.13
+[0.8.12]: https://github.com/tikoci/rosetta/compare/v0.8.11...v0.8.12
+[0.8.11]: https://github.com/tikoci/rosetta/compare/v0.8.10...v0.8.11
+[0.8.10]: https://github.com/tikoci/rosetta/compare/v0.8.9...v0.8.10
+[0.8.9]: https://github.com/tikoci/rosetta/compare/v0.8.8...v0.8.9
+[0.8.8]: https://github.com/tikoci/rosetta/compare/v0.8.3...v0.8.8
+[0.8.2 – 0.8.3]: https://github.com/tikoci/rosetta/compare/v0.8.1...v0.8.3
+[0.8.0 – 0.8.1]: https://github.com/tikoci/rosetta/compare/v0.7.8...v0.8.1
+[0.7.5 – 0.7.8]: https://github.com/tikoci/rosetta/compare/v0.7.4...v0.7.8
+[0.7.0 – 0.7.4]: https://github.com/tikoci/rosetta/compare/v0.6.9...v0.7.4
+[0.6.4 – 0.6.9]: https://github.com/tikoci/rosetta/compare/v0.6.3...v0.6.9
+[0.5.x – 0.6.3]: https://github.com/tikoci/rosetta/compare/v0.4.5...v0.6.3
+[0.4.x]: https://github.com/tikoci/rosetta/compare/v0.3.1...v0.4.5
+[0.3.x]: https://github.com/tikoci/rosetta/compare/v0.2.1...v0.3.1
+[0.2.x]: https://github.com/tikoci/rosetta/compare/v0.1.0...v0.2.1
+[0.1.0]: https://github.com/tikoci/rosetta/releases/tag/v0.1.0

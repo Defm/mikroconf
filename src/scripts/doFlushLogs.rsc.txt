@@ -1,0 +1,22 @@
+
+:global globalScriptBeforeRun;
+$globalScriptBeforeRun "doFlushLogs";
+
+:global globalNoteMe;
+:local state ""
+
+:set state "FLUSHING logs.."
+$globalNoteMe value=$state;
+
+/system/logging/action {
+  :foreach memAction in=[find target=memory] do={
+    :local actName [get value-name=name $memAction]
+
+    clear action=$actName;
+
+    }
+  }
+
+
+
+

@@ -1,0 +1,103 @@
+# cli-reference entry→inspect crosswalk (V-cliref-link-drift baseline; regenerate: make link-cliref-baseline)
+# counts	exact=962	alias=0	manual-only=100	entries=1062
+source_path	source_type	match_kind	match_detail
+interface/ethernet/poe	Directory	manual-only	
+interface/ethernet/poe/monitor	Command	manual-only	
+interface/ethernet/poe/power-cycle	Command	manual-only	
+interface/ethernet/poe/settings	Settings Directory	manual-only	
+interface/ethernet/pon	Directory	manual-only	
+interface/ethernet/switch/acl	Directory	manual-only	
+interface/ethernet/switch/acl/policer	Directory	manual-only	
+interface/ethernet/switch/dscp-qos-map	Directory	manual-only	
+interface/ethernet/switch/dscp-to-dscp	Directory	manual-only	
+interface/ethernet/switch/egress-vlan-tag	Directory	manual-only	
+interface/ethernet/switch/egress-vlan-translation	Directory	manual-only	
+interface/ethernet/switch/ingress-port-policer	Directory	manual-only	
+interface/ethernet/switch/ingress-vlan-translation	Directory	manual-only	
+interface/ethernet/switch/l3hw-settings	Settings Directory	manual-only	
+interface/ethernet/switch/l3hw-settings/advanced	Settings Directory	manual-only	
+interface/ethernet/switch/l3hw-settings/advanced/monitor	Command	manual-only	
+interface/ethernet/switch/l3hw-settings/monitor	Command	manual-only	
+interface/ethernet/switch/mac-based-vlan	Directory	manual-only	
+interface/ethernet/switch/multicast-fdb	Directory	manual-only	
+interface/ethernet/switch/one2one-vlan-switching	Directory	manual-only	
+interface/ethernet/switch/policer-qos-map	Directory	manual-only	
+interface/ethernet/switch/port-leakage	Directory	manual-only	
+interface/ethernet/switch/protocol-based-vlan	Directory	manual-only	
+interface/ethernet/switch/qos	Directory	manual-only	
+interface/ethernet/switch/qos-group	Directory	manual-only	
+interface/ethernet/switch/qos/map	Directory	manual-only	
+interface/ethernet/switch/qos/map/ip	Directory	manual-only	
+interface/ethernet/switch/qos/map/vlan	Directory	manual-only	
+interface/ethernet/switch/qos/monitor	Command	manual-only	
+interface/ethernet/switch/qos/port	Directory	manual-only	
+interface/ethernet/switch/qos/port/reset-counters	Command	manual-only	
+interface/ethernet/switch/qos/priority-flow-control	Directory	manual-only	
+interface/ethernet/switch/qos/profile	Directory	manual-only	
+interface/ethernet/switch/qos/settings	Settings Directory	manual-only	
+interface/ethernet/switch/qos/tx-manager	Directory	manual-only	
+interface/ethernet/switch/qos/tx-manager/queue	Directory	manual-only	
+interface/ethernet/switch/reserved-fdb	Directory	manual-only	
+interface/ethernet/switch/rule/reset-counters	Command	manual-only	
+interface/ethernet/switch/shaper	Directory	manual-only	
+interface/ethernet/switch/stats	Settings Directory	manual-only	
+interface/ethernet/switch/trunk	Directory	manual-only	
+interface/ethernet/switch/unicast-fdb	Directory	manual-only	
+interface/ethernet/switch/unicast-fdb/flush	Command	manual-only	
+interface/lte/run-modem-update	Command	manual-only	
+interface/pwr-line	Directory	manual-only	
+interface/pwr-line/blink	Command	manual-only	
+interface/pwr-line/configure	Command	manual-only	
+interface/pwr-line/join	Command	manual-only	
+interface/pwr-line/leave	Command	manual-only	
+interface/pwr-line/monitor	Command	manual-only	
+interface/pwr-line/reset-counters	Command	manual-only	
+interface/pwr-line/reset-mac-address	Command	manual-only	
+interface/pwr-line/upgrade-firmware	Command	manual-only	
+interface/w60g	Directory	manual-only	
+interface/w60g/align	Command	manual-only	
+interface/w60g/monitor	Command	manual-only	
+interface/w60g/reset-configuration	Command	manual-only	
+interface/w60g/scan	Command	manual-only	
+interface/w60g/station	Directory	manual-only	
+interface/w60g/station/monitor	Command	manual-only	
+interface/wifi/trigger-radar	Command	manual-only	
+interface/xfrm	Directory	manual-only	
+iot/gpio	Directory	manual-only	
+iot/gpio/analog	Directory	manual-only	
+iot/gpio/digital	Directory	manual-only	
+ip/cloud/back-to-home-file/settings/remove-certificate	Command	manual-only	
+ip/ssh/known-hosts	Directory	manual-only	
+lcd	Settings Directory	manual-only	
+lcd/backlight	Command	manual-only	
+lcd/interface	Directory	manual-only	
+lcd/interface/default-wireless	Command	manual-only	
+lcd/interface/display	Command	manual-only	
+lcd/interface/pages	Directory	manual-only	
+lcd/pin	Settings Directory	manual-only	
+lcd/recalibrate	Command	manual-only	
+lcd/screen	Directory	manual-only	
+lcd/show	Command	manual-only	
+lcd/take-screenshot	Command	manual-only	
+partitions	Directory	manual-only	
+partitions/activate	Command	manual-only	
+partitions/copy-to	Command	manual-only	
+partitions/repartition	Command	manual-only	
+partitions/restore-config-from	Command	manual-only	
+partitions/save-config-to	Command	manual-only	
+root/terminal	Directory	manual-only	
+routing/bfd/authentication	Directory	manual-only	
+system/default-configuration/wps-sync-mode-script	Settings Directory	manual-only	
+system/license/output	Command	manual-only	
+system/ptp	Directory	manual-only	
+system/ptp/monitor	Command	manual-only	
+system/ptp/port	Directory	manual-only	
+system/ptp/status	Directory	manual-only	
+system/resource/irq/rps	Directory	manual-only	
+system/routerboard/settings/keep-frequency	Command	manual-only	
+system/swos	Settings Directory	manual-only	
+system/swos/load-config	Command	manual-only	
+system/swos/password	Command	manual-only	
+system/swos/reset-config	Command	manual-only	
+system/swos/save-config	Command	manual-only	
+system/swos/upgrade	Command	manual-only	

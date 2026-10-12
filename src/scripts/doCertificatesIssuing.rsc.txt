@@ -1,0 +1,129 @@
+
+# generates IPSEC certs: CA, server, IOS *.mobileconfig profile sign and clients
+# i recommend to run it on server side
+
+#clients
+:local IDs [:toarray "alx.iphone.rw.20-21,alx.mbp.rw.20-21"];
+:local fakeDomain "myvpn.fake.org"
+
+:local sysname [/system identity get name]
+:local sysver [/system package get system version]
+:local scriptname "doCertificatesIssuing"
+:global globalScriptBeforeRun;
+$globalScriptBeforeRun $scriptname;
+:global SECRET;
+# Configure CERTIFICATE_EXPORT_PASSPHRASE in $SECRET before running.
+:local CertificateExportPassphrase "$[$SECRET get CERTIFICATE_EXPORT_PASSPHRASE]";
+
+## this fields should be empty IPSEC/ike2/RSA to work, i can't get it functional with filled fields
+#:local COUNTRY "RU"
+#:local STATE "MSC"
+#:local LOC "Moscow"
+#:local ORG "IKEv2 Home"
+#:local OU "IKEv2 Mikrotik"
+
+:local COUNTRY ""
+:local STATE ""
+:local LOC ""
+:local ORG ""
+:local OU ""
+
+:local KEYSIZE "2048"
+:local USERNAME "anna"
+
+:local MaskedServerIP [/ip address get [find where interface=wan] address];
+:local ServerIP ( [:pick "$MaskedServerIP" 0 [:find "$MaskedServerIP" "/" -1]] ) ;
+
+:global globalNoteMe;
+:local itsOk true;
+  
+:do {
+
+  :local state "CA certificates generation...";
+  $globalNoteMe value=$state;
+
+  ## generate a CA certificate (that will be just a template while not signed)
+  ## crl-sign allows to use SCEP
+  /certificate add name="ca.$fakeDomain" common-name="ca@$sysname" subject-alt-name="DNS:ca.$fakeDomain"  key-usage=crl-sign,key-cert-sign country="$COUNTRY" state="$STATE" locality="$LOC" organization="$ORG" unit="$OU"  key-size="$KEYSIZE" days-valid=3650 
+
+  :local state "Signing...";
+  $globalNoteMe value=$state;
+
+  /certificate sign "ca.$fakeDomain" ca-crl-host="$ServerIP" name="ca@$sysname"
+
+  :delay 6s
+
+  /certificate set trusted=yes "ca@$sysname"
+
+  :local state "Exporting CA as PEM...";
+  $globalNoteMe value=$state;
+
+  ## export the CA, as PEM
+  /certificate export-certificate "ca@$sysname" type=pem
+  
+  :local state "SERVER certificates generation...";
+  $globalNoteMe value=$state;
+
+  ## generate a server certificate (that will be just a template while not signed)
+  /certificate add name="server.$fakeDomain" common-name="server@$sysname" subject-alt-name="IP:$ServerIP,DNS:$fakeDomain" key-usage=tls-server country="$COUNTRY" state="$STATE" locality="$LOC" organization="$ORG" unit="$OU"  key-size="$KEYSIZE" days-valid=365 
+
+  :local state "Signing...";
+  $globalNoteMe value=$state;
+
+  /certificate sign "server.$fakeDomain" ca="ca@$sysname" name="server@$sysname"
+
+  :delay 6s
+
+  /certificate set trusted=yes "server@$sysname"
+
+  :local state "CODE SIGN certificates generation...";
+  $globalNoteMe value=$state;
+
+  ## generate a code signing (apple IOS profiles) certificate (that will be just a template while not signed)
+  /certificate add name="sign.$fakeDomain" common-name="sign@$sysname" subject-alt-name="DNS:sign.$fakeDomain" key-usage=code-sign,digital-signature country="$COUNTRY" state="$STATE" locality="$LOC" organization="$ORG" unit="$OU"  key-size="$KEYSIZE" days-valid=365 
+
+  :local state "Signing...";
+  $globalNoteMe value=$state;
+
+  /certificate sign "sign.$fakeDomain" ca="ca@$sysname" name="sign@$sysname"
+
+  :delay 6s
+
+  /certificate set trusted=yes "sign@$sysname"
+
+  ## export the CA, code sign certificate, and private key
+  /certificate export-certificate "sign@$sysname" export-passphrase=$CertificateExportPassphrase type=pkcs12
+
+  :foreach USERNAME in=$IDs do={
+
+    :local state "CLIENT certificates generation...  $USERNAME";
+    $globalNoteMe value=$state;
+
+    ## create a client certificate (that will be just a template while not signed)
+    /certificate add name="client.$fakeDomain" common-name="$USERNAME@$sysname" subject-alt-name="email:$USERNAME@$fakeDomain" key-usage=tls-client country="$COUNTRY" state="$STATE" locality="$LOC" organization="$ORG" unit="$OU"  key-size="$KEYSIZE" days-valid=365 
+
+    :local state "Signing...";
+    $globalNoteMe value=$state;
+
+    /certificate sign "client.$fakeDomain" ca="ca@$sysname" name="$USERNAME@$sysname"
+
+    :delay 6s
+
+    /certificate set trusted=yes "$USERNAME@$sysname"
+
+    ## export the CA, client certificate, and private key
+    /certificate export-certificate "$USERNAME@$sysname" export-passphrase=$CertificateExportPassphrase type=pkcs12
+
+  };
+
+} on-error={
+
+  :local state "Certificates generation script FAILED";
+  $globalNoteMe value=$state;
+
+};
+
+
+
+
+

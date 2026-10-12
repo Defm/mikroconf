@@ -1,0 +1,4426 @@
+{
+  "generated_at": "2026-07-12T22:59:46.450Z",
+  "total_queries": 200,
+  "per_strategy": {
+    "section": {
+      "count": 80,
+      "hit_at_1": 0.3,
+      "hit_at_5": 0.7,
+      "hit_at_10": 0.7875,
+      "mrr": 0.48006448412698405
+    },
+    "property": {
+      "count": 60,
+      "hit_at_1": 0.48333333333333334,
+      "hit_at_5": 0.7166666666666667,
+      "hit_at_10": 0.8,
+      "mrr": 0.587936507936508
+    },
+    "cmd-path": {
+      "count": 30,
+      "hit_at_1": 0.5333333333333333,
+      "hit_at_5": 0.7,
+      "hit_at_10": 0.7666666666666667,
+      "mrr": 0.6200396825396824
+    },
+    "title": {
+      "count": 30,
+      "hit_at_1": 0.8333333333333334,
+      "hit_at_5": 0.9666666666666667,
+      "hit_at_10": 0.9666666666666667,
+      "mrr": 0.8861111111111111
+    }
+  },
+  "overall": {
+    "hit_at_1": 0.47,
+    "hit_at_5": 0.745,
+    "hit_at_10": 0.815,
+    "mrr": 0.5943293650793651
+  },
+  "results": [
+    {
+      "query": "VLAN-based traffic policer",
+      "expected_page_id": 15,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        },
+        {
+          "id": 29,
+          "title": "CRS1xx/2xx series switches examples"
+        },
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        }
+      ]
+    },
+    {
+      "query": "PPPoE Server",
+      "expected_page_id": 324,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 324,
+          "title": "PPPoE"
+        },
+        {
+          "id": 325,
+          "title": "IPv6 PD over PPP"
+        },
+        {
+          "id": 326,
+          "title": "MLPPP over single and multiple links"
+        }
+      ]
+    },
+    {
+      "query": "Health Tab",
+      "expected_page_id": 19,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 184,
+          "title": "MQTT and Azure configuration"
+        },
+        {
+          "id": 185,
+          "title": "MQTT/HTTPS and AWS configuration"
+        },
+        {
+          "id": 19,
+          "title": "CRS3xx and CSS3xx Series Manual"
+        }
+      ]
+    },
+    {
+      "query": "Check if IP on the interface has changed",
+      "expected_page_id": 53,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 157,
+          "title": "PoE-Out"
+        },
+        {
+          "id": 293,
+          "title": "Routing Decision"
+        },
+        {
+          "id": 53,
+          "title": "Scripting examples"
+        }
+      ]
+    },
+    {
+      "query": "Sending function code \"3\" command via Modbus TCP",
+      "expected_page_id": 197,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 197,
+          "title": "Modbus"
+        }
+      ]
+    },
+    {
+      "query": "`The vrf` parameter in WireGuard context",
+      "expected_page_id": 329,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 329,
+          "title": "WireGuard"
+        }
+      ]
+    },
+    {
+      "query": "CAPsMAN router",
+      "expected_page_id": 339,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        },
+        {
+          "id": 359,
+          "title": "WiFi CAPsMAN"
+        },
+        {
+          "id": 339,
+          "title": "CAPsMAN with VLANs"
+        }
+      ]
+    },
+    {
+      "query": "Applications and Usage Examples",
+      "expected_page_id": 16,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.125,
+      "rank": 8,
+      "top_3_pages": [
+        {
+          "id": 38,
+          "title": "Apps"
+        },
+        {
+          "id": 37,
+          "title": "Container"
+        },
+        {
+          "id": 349,
+          "title": "Wireless Station Modes"
+        }
+      ]
+    },
+    {
+      "query": "3. Security Recommendations",
+      "expected_page_id": 320,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 144,
+          "title": "Securing your router"
+        },
+        {
+          "id": 320,
+          "title": "QKD Integration in RouterOS IPsec (PPK)"
+        },
+        {
+          "id": 115,
+          "title": "First Time Configuration"
+        }
+      ]
+    },
+    {
+      "query": "SYN Attack",
+      "expected_page_id": 106,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 106,
+          "title": "DDoS Protection"
+        },
+        {
+          "id": 104,
+          "title": "Building Advanced Firewall"
+        },
+        {
+          "id": 86,
+          "title": "Filter"
+        }
+      ]
+    },
+    {
+      "query": "Step 7: Initialize Configuration Files",
+      "expected_page_id": 43,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 45,
+          "title": "Container - Postgres"
+        },
+        {
+          "id": 43,
+          "title": "Container - Matrix (Synapse)"
+        },
+        {
+          "id": 194,
+          "title": "Step by step installation"
+        }
+      ]
+    },
+    {
+      "query": "Cellular modems",
+      "expected_page_id": 156,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 218,
+          "title": "WWAN and GNSS priority automatization"
+        },
+        {
+          "id": 156,
+          "title": "Peripherals"
+        },
+        {
+          "id": 223,
+          "title": "LTE/5G"
+        }
+      ]
+    },
+    {
+      "query": "Estimated battery life",
+      "expected_page_id": 176,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 176,
+          "title": "MikroTik Beacon Manager for Android devices"
+        }
+      ]
+    },
+    {
+      "query": "Nv2 vs Nstreme",
+      "expected_page_id": 342,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 342,
+          "title": "Nv2"
+        }
+      ]
+    },
+    {
+      "query": "Remote Reinstallation",
+      "expected_page_id": 160,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 129,
+          "title": "Netinstall package"
+        },
+        {
+          "id": 160,
+          "title": "RouterBOARD"
+        },
+        {
+          "id": 21,
+          "title": "CSS610 series Manual"
+        }
+      ]
+    },
+    {
+      "query": "Command in RouterOS v6 version",
+      "expected_page_id": 219,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 156,
+          "title": "Peripherals"
+        },
+        {
+          "id": 148,
+          "title": "Upgrading to v7"
+        },
+        {
+          "id": 110,
+          "title": "Backup"
+        }
+      ]
+    },
+    {
+      "query": "FTP service through SOCKS server",
+      "expected_page_id": 238,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 238,
+          "title": "SOCKS"
+        }
+      ]
+    },
+    {
+      "query": "VLAN Tab (Ingress Control)",
+      "expected_page_id": 19,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.25,
+      "rank": 4,
+      "top_3_pages": [
+        {
+          "id": 22,
+          "title": "GPEN21 series Manual"
+        },
+        {
+          "id": 21,
+          "title": "CSS610 series Manual"
+        },
+        {
+          "id": 20,
+          "title": "CSS106 (RB260) series Manual"
+        }
+      ]
+    },
+    {
+      "query": "IGMP/MLD Snooping",
+      "expected_page_id": 10,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 26,
+          "title": "Bridge IGMP/MLD snooping"
+        },
+        {
+          "id": 10,
+          "title": "Bridging and Switching"
+        },
+        {
+          "id": 24,
+          "title": "Bridging and Switching Case Studies"
+        }
+      ]
+    },
+    {
+      "query": "Roaming script example",
+      "expected_page_id": 219,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 219,
+          "title": "Dual SIM Application"
+        },
+        {
+          "id": 223,
+          "title": "LTE/5G"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "wlan60-1 Configuration",
+      "expected_page_id": 112,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.14285714285714285,
+      "rank": 7,
+      "top_3_pages": [
+        {
+          "id": 355,
+          "title": "PtP CLI example"
+        },
+        {
+          "id": 353,
+          "title": "Fail-over PtP CLI example"
+        },
+        {
+          "id": 352,
+          "title": "Fail-over PtMP CLI example"
+        }
+      ]
+    },
+    {
+      "query": "WiFi interface configuration",
+      "expected_page_id": 360,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 359,
+          "title": "WiFi CAPsMAN"
+        },
+        {
+          "id": 360,
+          "title": "Configuring outdoor CPE to AP links"
+        },
+        {
+          "id": 361,
+          "title": "Configuring a wireless repeater"
+        }
+      ]
+    },
+    {
+      "query": "RADIUS Client",
+      "expected_page_id": 7,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 7,
+          "title": "RADIUS"
+        },
+        {
+          "id": 348,
+          "title": "Enterprise wireless security with User Manager v5"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        }
+      ]
+    },
+    {
+      "query": "Configuration example",
+      "expected_page_id": 334,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 354,
+          "title": "Fail-over PtP GUI example"
+        },
+        {
+          "id": 356,
+          "title": "PtP GUI example"
+        },
+        {
+          "id": 68,
+          "title": "Netwatch"
+        }
+      ]
+    },
+    {
+      "query": "Auto-negotiation and Forced Link Mode",
+      "expected_page_id": 332,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 333,
+          "title": "MikroTik wired interface compatibility"
+        },
+        {
+          "id": 332,
+          "title": "Ethernet"
+        },
+        {
+          "id": 22,
+          "title": "GPEN21 series Manual"
+        }
+      ]
+    },
+    {
+      "query": "Profile settings",
+      "expected_page_id": 13,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 16,
+          "title": "Quality of Service"
+        },
+        {
+          "id": 341,
+          "title": "Interworking Profiles"
+        },
+        {
+          "id": 71,
+          "title": "Profiler"
+        }
+      ]
+    },
+    {
+      "query": "Proxmox VE (KVM/QEMU)",
+      "expected_page_id": 122,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 122,
+          "title": "CHR: Proxmox VE Installation"
+        },
+        {
+          "id": 117,
+          "title": "CHR: Installation"
+        }
+      ]
+    },
+    {
+      "query": "Monitoring Advertisements",
+      "expected_page_id": 279,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.1,
+      "rank": 10,
+      "top_3_pages": [
+        {
+          "id": 332,
+          "title": "Ethernet"
+        },
+        {
+          "id": 174,
+          "title": "Bluetooth"
+        },
+        {
+          "id": 180,
+          "title": "Bluetooth tag-tracking using MQTT and ThingsBoard"
+        }
+      ]
+    },
+    {
+      "query": "Hardware Offloaded Route",
+      "expected_page_id": 293,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.2,
+      "rank": 5,
+      "top_3_pages": [
+        {
+          "id": 12,
+          "title": "L3 Hardware Offloading"
+        },
+        {
+          "id": 92,
+          "title": "Packet Flow in RouterOS"
+        },
+        {
+          "id": 36,
+          "title": "VXLAN"
+        }
+      ]
+    },
+    {
+      "query": "Access List",
+      "expected_page_id": 345,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 238,
+          "title": "SOCKS"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        },
+        {
+          "id": 236,
+          "title": "Proxy"
+        }
+      ]
+    },
+    {
+      "query": "For IPv6",
+      "expected_page_id": 85,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 314,
+          "title": "6to4"
+        },
+        {
+          "id": 137,
+          "title": "IPv6 Addresses"
+        },
+        {
+          "id": 325,
+          "title": "IPv6 PD over PPP"
+        }
+      ]
+    },
+    {
+      "query": "5 GHz interface configuration",
+      "expected_page_id": 361,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 361,
+          "title": "Configuring a wireless repeater"
+        },
+        {
+          "id": 350,
+          "title": "W60G"
+        },
+        {
+          "id": 335,
+          "title": "Wireless"
+        }
+      ]
+    },
+    {
+      "query": "Configuration Reset",
+      "expected_page_id": 109,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.1111111111111111,
+      "rank": 9,
+      "top_3_pages": [
+        {
+          "id": 114,
+          "title": "RouterOS configuration reset"
+        },
+        {
+          "id": 163,
+          "title": "USB Features"
+        },
+        {
+          "id": 160,
+          "title": "RouterBOARD"
+        }
+      ]
+    },
+    {
+      "query": "iBeacon PDU Payload structure",
+      "expected_page_id": 179,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 174,
+          "title": "Bluetooth"
+        },
+        {
+          "id": 179,
+          "title": "MikroTik Tag advertisement formats"
+        }
+      ]
+    },
+    {
+      "query": "Static entries",
+      "expected_page_id": 10,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 234,
+          "title": "DNS"
+        },
+        {
+          "id": 228,
+          "title": "ARP"
+        },
+        {
+          "id": 21,
+          "title": "CSS610 series Manual"
+        }
+      ]
+    },
+    {
+      "query": "Example #2",
+      "expected_page_id": 180,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 354,
+          "title": "Fail-over PtP GUI example"
+        },
+        {
+          "id": 356,
+          "title": "PtP GUI example"
+        },
+        {
+          "id": 68,
+          "title": "Netwatch"
+        }
+      ]
+    },
+    {
+      "query": "Manual ACME renewal",
+      "expected_page_id": 2,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 2,
+          "title": "Certificates"
+        },
+        {
+          "id": 214,
+          "title": "WebFig"
+        }
+      ]
+    },
+    {
+      "query": "Starting a Trial License",
+      "expected_page_id": 141,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 141,
+          "title": "CHR: Licensing"
+        },
+        {
+          "id": 142,
+          "title": "MikroTik Hardware Licensing"
+        },
+        {
+          "id": 143,
+          "title": "x86 Licensing"
+        }
+      ]
+    },
+    {
+      "query": "USB Power Reset",
+      "expected_page_id": 163,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 163,
+          "title": "USB Features"
+        },
+        {
+          "id": 72,
+          "title": "Resource"
+        },
+        {
+          "id": 219,
+          "title": "Dual SIM Application"
+        }
+      ]
+    },
+    {
+      "query": "DNS over HTTPS (DoH)",
+      "expected_page_id": 234,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 234,
+          "title": "DNS"
+        }
+      ]
+    },
+    {
+      "query": "Multicast FDB",
+      "expected_page_id": 11,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        },
+        {
+          "id": 36,
+          "title": "VXLAN"
+        },
+        {
+          "id": 340,
+          "title": "HWMPplus mesh"
+        }
+      ]
+    },
+    {
+      "query": "CAPsMAN channel",
+      "expected_page_id": 337,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        }
+      ]
+    },
+    {
+      "query": "How to hide my own AS?",
+      "expected_page_id": 298,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 214,
+          "title": "WebFig"
+        },
+        {
+          "id": 298,
+          "title": "FAQ"
+        },
+        {
+          "id": 115,
+          "title": "First Time Configuration"
+        }
+      ]
+    },
+    {
+      "query": "Example #1",
+      "expected_page_id": 180,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 354,
+          "title": "Fail-over PtP GUI example"
+        },
+        {
+          "id": 356,
+          "title": "PtP GUI example"
+        },
+        {
+          "id": 68,
+          "title": "Netwatch"
+        }
+      ]
+    },
+    {
+      "query": "Basic configuration example",
+      "expected_page_id": 36,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 25,
+          "title": "Basic VLAN switching"
+        },
+        {
+          "id": 171,
+          "title": "VRRP Configuration Examples"
+        },
+        {
+          "id": 290,
+          "title": "Policy Routing"
+        }
+      ]
+    },
+    {
+      "query": "Command Encoding",
+      "expected_page_id": 195,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.2,
+      "rank": 5,
+      "top_3_pages": [
+        {
+          "id": 50,
+          "title": "Python3 Example"
+        },
+        {
+          "id": 49,
+          "title": "API"
+        },
+        {
+          "id": 226,
+          "title": "SMS"
+        }
+      ]
+    },
+    {
+      "query": "Configure bridge",
+      "expected_page_id": 356,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 32,
+          "title": "Spanning Tree Protocol"
+        },
+        {
+          "id": 26,
+          "title": "Bridge IGMP/MLD snooping"
+        },
+        {
+          "id": 10,
+          "title": "Bridging and Switching"
+        }
+      ]
+    },
+    {
+      "query": "Configuration modification and removal",
+      "expected_page_id": 28,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 109,
+          "title": "Configuration Management"
+        },
+        {
+          "id": 28,
+          "title": "Controller Bridge and Port Extender"
+        },
+        {
+          "id": 5,
+          "title": "Hotspot customisation"
+        }
+      ]
+    },
+    {
+      "query": "Inter-VLAN routing",
+      "expected_page_id": 17,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 12,
+          "title": "L3 Hardware Offloading"
+        },
+        {
+          "id": 35,
+          "title": "VLAN"
+        },
+        {
+          "id": 17,
+          "title": "Switch Chip Features"
+        }
+      ]
+    },
+    {
+      "query": "Virtual interfaces",
+      "expected_page_id": 345,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 113,
+          "title": "List of menus with sensitive parameters"
+        },
+        {
+          "id": 117,
+          "title": "CHR: Installation"
+        },
+        {
+          "id": 172,
+          "title": "VRRP"
+        }
+      ]
+    },
+    {
+      "query": "Setting up scheduler",
+      "expected_page_id": 219,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 272,
+          "title": "Scheduler"
+        },
+        {
+          "id": 219,
+          "title": "Dual SIM Application"
+        },
+        {
+          "id": 187,
+          "title": "GPIO"
+        }
+      ]
+    },
+    {
+      "query": "Port Security",
+      "expected_page_id": 15,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 144,
+          "title": "Securing your router"
+        },
+        {
+          "id": 344,
+          "title": "VLANs on Wireless"
+        },
+        {
+          "id": 115,
+          "title": "First Time Configuration"
+        }
+      ]
+    },
+    {
+      "query": "Forwarding Databases",
+      "expected_page_id": 11,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.1,
+      "rank": 10,
+      "top_3_pages": [
+        {
+          "id": 9,
+          "title": "User Manager"
+        },
+        {
+          "id": 26,
+          "title": "Bridge IGMP/MLD snooping"
+        },
+        {
+          "id": 308,
+          "title": "Routing Table Calculation"
+        }
+      ]
+    },
+    {
+      "query": "Read-only properties",
+      "expected_page_id": 318,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 4,
+          "title": "HotSpot - Captive portal"
+        },
+        {
+          "id": 230,
+          "title": "Back To Home"
+        },
+        {
+          "id": 93,
+          "title": "Queues"
+        }
+      ]
+    },
+    {
+      "query": "Get or read file contents",
+      "expected_page_id": 263,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 263,
+          "title": "Files"
+        },
+        {
+          "id": 54,
+          "title": "Scripting Tips and Tricks"
+        },
+        {
+          "id": 53,
+          "title": "Scripting examples"
+        }
+      ]
+    },
+    {
+      "query": "Feature clarification",
+      "expected_page_id": 260,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 94,
+          "title": "HTB (Hierarchical Token Bucket)"
+        },
+        {
+          "id": 260,
+          "title": "Device-mode"
+        }
+      ]
+    },
+    {
+      "query": "Configuration options",
+      "expected_page_id": 36,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 128,
+          "title": "Netinstall for Linux"
+        },
+        {
+          "id": 209,
+          "title": "Quick Set"
+        },
+        {
+          "id": 233,
+          "title": "DHCP"
+        }
+      ]
+    },
+    {
+      "query": "Port Extender settings",
+      "expected_page_id": 28,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 28,
+          "title": "Controller Bridge and Port Extender"
+        },
+        {
+          "id": 361,
+          "title": "Configuring a wireless repeater"
+        },
+        {
+          "id": 302,
+          "title": "EVPN"
+        }
+      ]
+    },
+    {
+      "query": "Proxy-based firewall – Access List",
+      "expected_page_id": 236,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 236,
+          "title": "Proxy"
+        }
+      ]
+    },
+    {
+      "query": "SNMP Tab",
+      "expected_page_id": 19,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 22,
+          "title": "GPEN21 series Manual"
+        },
+        {
+          "id": 19,
+          "title": "CRS3xx and CSS3xx Series Manual"
+        },
+        {
+          "id": 20,
+          "title": "CSS106 (RB260) series Manual"
+        }
+      ]
+    },
+    {
+      "query": "Configuration example",
+      "expected_page_id": 234,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.14285714285714285,
+      "rank": 7,
+      "top_3_pages": [
+        {
+          "id": 354,
+          "title": "Fail-over PtP GUI example"
+        },
+        {
+          "id": 356,
+          "title": "PtP GUI example"
+        },
+        {
+          "id": 68,
+          "title": "Netwatch"
+        }
+      ]
+    },
+    {
+      "query": "Notes on client device configuration",
+      "expected_page_id": 348,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 213,
+          "title": "TR-069"
+        },
+        {
+          "id": 348,
+          "title": "Enterprise wireless security with User Manager v5"
+        },
+        {
+          "id": 335,
+          "title": "Wireless"
+        }
+      ]
+    },
+    {
+      "query": "MAC-based traffic policer",
+      "expected_page_id": 15,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        },
+        {
+          "id": 29,
+          "title": "CRS1xx/2xx series switches examples"
+        },
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        }
+      ]
+    },
+    {
+      "query": "DHCPv6 Snooping / DHCPv6 Shield",
+      "expected_page_id": 10,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 10,
+          "title": "Bridging and Switching"
+        },
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        }
+      ]
+    },
+    {
+      "query": "Devices which SFP+ ports support 1G links",
+      "expected_page_id": 333,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 332,
+          "title": "Ethernet"
+        },
+        {
+          "id": 333,
+          "title": "MikroTik wired interface compatibility"
+        },
+        {
+          "id": 28,
+          "title": "Controller Bridge and Port Extender"
+        }
+      ]
+    },
+    {
+      "query": "CAKE (Common Applications Kept Enhanced)",
+      "expected_page_id": 99,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 99,
+          "title": "CAKE"
+        },
+        {
+          "id": 98,
+          "title": "Queue types"
+        },
+        {
+          "id": 93,
+          "title": "Queues"
+        }
+      ]
+    },
+    {
+      "query": "Password and Backup",
+      "expected_page_id": 21,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 110,
+          "title": "Backup"
+        },
+        {
+          "id": 229,
+          "title": "Cloud"
+        },
+        {
+          "id": 256,
+          "title": "SMB"
+        }
+      ]
+    },
+    {
+      "query": "Monitoring Status",
+      "expected_page_id": 220,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 68,
+          "title": "Netwatch"
+        },
+        {
+          "id": 275,
+          "title": "UPS"
+        },
+        {
+          "id": 57,
+          "title": "Detect Internet"
+        }
+      ]
+    },
+    {
+      "query": "U.2 Disks for RDS",
+      "expected_page_id": 156,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 260,
+          "title": "Device-mode"
+        },
+        {
+          "id": 156,
+          "title": "Peripherals"
+        }
+      ]
+    },
+    {
+      "query": "CAPsMAN radio",
+      "expected_page_id": 337,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 359,
+          "title": "WiFi CAPsMAN"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        }
+      ]
+    },
+    {
+      "query": "Connecting to a Router",
+      "expected_page_id": 214,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 105,
+          "title": "Connection rate"
+        },
+        {
+          "id": 230,
+          "title": "Back To Home"
+        },
+        {
+          "id": 215,
+          "title": "WinBox"
+        }
+      ]
+    },
+    {
+      "query": "RouterOS configuration",
+      "expected_page_id": 200,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 112,
+          "title": "Default configurations"
+        },
+        {
+          "id": 213,
+          "title": "TR-069"
+        },
+        {
+          "id": 192,
+          "title": "AWS LoRaWAN configuration"
+        }
+      ]
+    },
+    {
+      "query": "Devices with a choice of driver",
+      "expected_page_id": 358,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 335,
+          "title": "Wireless"
+        },
+        {
+          "id": 358,
+          "title": "Wi-Fi 5 (802.11ac)"
+        },
+        {
+          "id": 165,
+          "title": "Bonding"
+        }
+      ]
+    },
+    {
+      "query": "Traffic Storm Control",
+      "expected_page_id": 29,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.16666666666666666,
+      "rank": 6,
+      "top_3_pages": [
+        {
+          "id": 22,
+          "title": "GPEN21 series Manual"
+        },
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        },
+        {
+          "id": 18,
+          "title": "SwOS"
+        }
+      ]
+    },
+    {
+      "query": "Use a different ILM policy",
+      "expected_page_id": 78,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 78,
+          "title": "NetFlow analysis with Elasticsearch"
+        },
+        {
+          "id": 67,
+          "title": "Syslog with Elasticsearch"
+        }
+      ]
+    },
+    {
+      "query": "L3 Hardware Offloading",
+      "expected_page_id": 15,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 12,
+          "title": "L3 Hardware Offloading"
+        },
+        {
+          "id": 146,
+          "title": "Feature support based on architecture"
+        },
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        }
+      ]
+    },
+    {
+      "query": "Reset From RouterOS",
+      "expected_page_id": 114,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 114,
+          "title": "RouterOS configuration reset"
+        },
+        {
+          "id": 163,
+          "title": "USB Features"
+        },
+        {
+          "id": 160,
+          "title": "RouterBOARD"
+        }
+      ]
+    },
+    {
+      "query": "Utility Tip",
+      "expected_page_id": 122,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 130,
+          "title": "Netinstall for Windows"
+        },
+        {
+          "id": 111,
+          "title": "Default Configuration Passwords"
+        },
+        {
+          "id": 122,
+          "title": "CHR: Proxmox VE Installation"
+        }
+      ]
+    },
+    {
+      "query": "Priority from DSCP",
+      "expected_page_id": 34,
+      "source": "section",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 34,
+          "title": "WMM and VLAN priority"
+        },
+        {
+          "id": 16,
+          "title": "Quality of Service"
+        },
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        }
+      ]
+    },
+    {
+      "query": "Quick Setup Guide",
+      "expected_page_id": 165,
+      "source": "section",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.2,
+      "rank": 5,
+      "top_3_pages": [
+        {
+          "id": 208,
+          "title": "MikroTik mobile app"
+        },
+        {
+          "id": 209,
+          "title": "Quick Set"
+        },
+        {
+          "id": 288,
+          "title": "IGMP Proxy"
+        }
+      ]
+    },
+    {
+      "query": "max-cache-size",
+      "expected_page_id": 236,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 236,
+          "title": "Proxy"
+        },
+        {
+          "id": 234,
+          "title": "DNS"
+        }
+      ]
+    },
+    {
+      "query": "internal-path-cost",
+      "expected_page_id": 10,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.14285714285714285,
+      "rank": 7,
+      "top_3_pages": [
+        {
+          "id": 315,
+          "title": "EoIP"
+        },
+        {
+          "id": 32,
+          "title": "Spanning Tree Protocol"
+        },
+        {
+          "id": 352,
+          "title": "Fail-over PtMP CLI example"
+        }
+      ]
+    },
+    {
+      "query": "read-only",
+      "expected_page_id": 274,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 230,
+          "title": "Back To Home"
+        },
+        {
+          "id": 4,
+          "title": "HotSpot - Captive portal"
+        },
+        {
+          "id": 274,
+          "title": "TFTP"
+        }
+      ]
+    },
+    {
+      "query": "distance property",
+      "expected_page_id": 357,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 293,
+          "title": "Routing Decision"
+        },
+        {
+          "id": 167,
+          "title": "Failover (WAN Backup)"
+        },
+        {
+          "id": 292,
+          "title": "Route Selection and Filtering"
+        }
+      ]
+    },
+    {
+      "query": "version property",
+      "expected_page_id": 238,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 72,
+          "title": "Resource"
+        },
+        {
+          "id": 235,
+          "title": "Openflow"
+        },
+        {
+          "id": 270,
+          "title": "Partitions"
+        }
+      ]
+    },
+    {
+      "query": "action property",
+      "expected_page_id": 65,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 235,
+          "title": "Openflow"
+        },
+        {
+          "id": 236,
+          "title": "Proxy"
+        },
+        {
+          "id": 65,
+          "title": "Log"
+        }
+      ]
+    },
+    {
+      "query": "gmt-offset",
+      "expected_page_id": 259,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 259,
+          "title": "Clock"
+        },
+        {
+          "id": 183,
+          "title": "IFTTT app notifications on BLE tag appearance in KNOT's range"
+        }
+      ]
+    },
+    {
+      "query": "without-paging",
+      "expected_page_id": 52,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 133,
+          "title": "Upgrade"
+        },
+        {
+          "id": 52,
+          "title": "Scripting"
+        }
+      ]
+    },
+    {
+      "query": "send-smtp-server",
+      "expected_page_id": 80,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 80,
+          "title": "Watchdog"
+        }
+      ]
+    },
+    {
+      "query": "connection-idle-timeout",
+      "expected_page_id": 238,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 238,
+          "title": "SOCKS"
+        }
+      ]
+    },
+    {
+      "query": "ingress-filtering",
+      "expected_page_id": 10,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.16666666666666666,
+      "rank": 6,
+      "top_3_pages": [
+        {
+          "id": 27,
+          "title": "Bridge VLAN Table"
+        },
+        {
+          "id": 26,
+          "title": "Bridge IGMP/MLD snooping"
+        },
+        {
+          "id": 33,
+          "title": "Wireless VLAN Trunk"
+        }
+      ]
+    },
+    {
+      "query": "broadcast-flood",
+      "expected_page_id": 10,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        },
+        {
+          "id": 10,
+          "title": "Bridging and Switching"
+        }
+      ]
+    },
+    {
+      "query": "add-dns-entries-suffix",
+      "expected_page_id": 267,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 267,
+          "title": "Neighbor discovery"
+        },
+        {
+          "id": 233,
+          "title": "DHCP"
+        }
+      ]
+    },
+    {
+      "query": "unknown-server",
+      "expected_page_id": 233,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 233,
+          "title": "DHCP"
+        }
+      ]
+    },
+    {
+      "query": "accounting-backup",
+      "expected_page_id": 7,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 7,
+          "title": "RADIUS"
+        }
+      ]
+    },
+    {
+      "query": "filter-priority-tagged-frame",
+      "expected_page_id": 11,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        }
+      ]
+    },
+    {
+      "query": "disable-pmkid",
+      "expected_page_id": 357,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "on-fail-retry-time",
+      "expected_page_id": 345,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 346,
+          "title": "Wireless Troubleshooting"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "running property",
+      "expected_page_id": 267,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 8,
+          "title": "User"
+        },
+        {
+          "id": 158,
+          "title": "Ports"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "server property",
+      "expected_page_id": 201,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 8,
+          "title": "User"
+        },
+        {
+          "id": 67,
+          "title": "Syslog with Elasticsearch"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "bucket-stats",
+      "expected_page_id": 235,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 235,
+          "title": "Openflow"
+        }
+      ]
+    },
+    {
+      "query": "frequency property",
+      "expected_page_id": 338,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        },
+        {
+          "id": 189,
+          "title": "Lora"
+        }
+      ]
+    },
+    {
+      "query": "tx-excessive-collision",
+      "expected_page_id": 332,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 332,
+          "title": "Ethernet"
+        },
+        {
+          "id": 17,
+          "title": "Switch Chip Features"
+        }
+      ]
+    },
+    {
+      "query": "tx-rx-1024-max",
+      "expected_page_id": 332,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 332,
+          "title": "Ethernet"
+        }
+      ]
+    },
+    {
+      "query": "fc-fec-block-corrected",
+      "expected_page_id": 332,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 332,
+          "title": "Ethernet"
+        }
+      ]
+    },
+    {
+      "query": "tmpfs-max-size",
+      "expected_page_id": 257,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 257,
+          "title": "Tmpfs"
+        },
+        {
+          "id": 150,
+          "title": "Disks"
+        }
+      ]
+    },
+    {
+      "query": "Group property",
+      "expected_page_id": 21,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.125,
+      "rank": 8,
+      "top_3_pages": [
+        {
+          "id": 8,
+          "title": "User"
+        },
+        {
+          "id": 26,
+          "title": "Bridge IGMP/MLD snooping"
+        },
+        {
+          "id": 318,
+          "title": "IPsec"
+        }
+      ]
+    },
+    {
+      "query": "variables-to-be-used-in-environment",
+      "expected_page_id": 38,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 38,
+          "title": "Apps"
+        }
+      ]
+    },
+    {
+      "query": "rate-limit",
+      "expected_page_id": 6,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.1,
+      "rank": 10,
+      "top_3_pages": [
+        {
+          "id": 9,
+          "title": "User Manager"
+        },
+        {
+          "id": 90,
+          "title": "Kid Control"
+        },
+        {
+          "id": 7,
+          "title": "RADIUS"
+        }
+      ]
+    },
+    {
+      "query": "max-vlans",
+      "expected_page_id": 357,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        }
+      ]
+    },
+    {
+      "query": "interval property",
+      "expected_page_id": 172,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 272,
+          "title": "Scheduler"
+        },
+        {
+          "id": 31,
+          "title": "Loop Protect"
+        },
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        }
+      ]
+    },
+    {
+      "query": "vpn-relay-ipv4-status",
+      "expected_page_id": 230,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 230,
+          "title": "Back To Home"
+        }
+      ]
+    },
+    {
+      "query": "Uptime property",
+      "expected_page_id": 21,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 179,
+          "title": "MikroTik Tag advertisement formats"
+        },
+        {
+          "id": 72,
+          "title": "Resource"
+        },
+        {
+          "id": 174,
+          "title": "Bluetooth"
+        }
+      ]
+    },
+    {
+      "query": "nvme-tcp-server-allow-host-name",
+      "expected_page_id": 249,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 249,
+          "title": "NVMe over TCP"
+        }
+      ]
+    },
+    {
+      "query": "frame-lifetime",
+      "expected_page_id": 337,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 346,
+          "title": "Wireless Troubleshooting"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "filter-vlan",
+      "expected_page_id": 69,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 69,
+          "title": "Packet Sniffer"
+        },
+        {
+          "id": 29,
+          "title": "CRS1xx/2xx series switches examples"
+        },
+        {
+          "id": 27,
+          "title": "Bridge VLAN Table"
+        }
+      ]
+    },
+    {
+      "query": "radsec-certificate",
+      "expected_page_id": 9,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.25,
+      "rank": 4,
+      "top_3_pages": [
+        {
+          "id": 363,
+          "title": "Interworking for WiFi6"
+        },
+        {
+          "id": 7,
+          "title": "RADIUS"
+        },
+        {
+          "id": 341,
+          "title": "Interworking Profiles"
+        }
+      ]
+    },
+    {
+      "query": "timeout property",
+      "expected_page_id": 153,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.125,
+      "rank": 8,
+      "top_3_pages": [
+        {
+          "id": 82,
+          "title": "Connection tracking"
+        },
+        {
+          "id": 4,
+          "title": "HotSpot - Captive portal"
+        },
+        {
+          "id": 77,
+          "title": "Traffic Flow"
+        }
+      ]
+    },
+    {
+      "query": "tx-rx-128-255",
+      "expected_page_id": 332,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 17,
+          "title": "Switch Chip Features"
+        },
+        {
+          "id": 332,
+          "title": "Ethernet"
+        }
+      ]
+    },
+    {
+      "query": "auto-send-supout",
+      "expected_page_id": 80,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 80,
+          "title": "Watchdog"
+        }
+      ]
+    },
+    {
+      "query": "address6 property",
+      "expected_page_id": 267,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 93,
+          "title": "Queues"
+        },
+        {
+          "id": 267,
+          "title": "Neighbor discovery"
+        },
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        }
+      ]
+    },
+    {
+      "query": "authentication-types",
+      "expected_page_id": 345,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 361,
+          "title": "Configuring a wireless repeater"
+        },
+        {
+          "id": 362,
+          "title": "Configuring standalone access point"
+        },
+        {
+          "id": 360,
+          "title": "Configuring outdoor CPE to AP links"
+        }
+      ]
+    },
+    {
+      "query": "packet-sampling",
+      "expected_page_id": 77,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 77,
+          "title": "Traffic Flow"
+        }
+      ]
+    },
+    {
+      "query": "host-key-type",
+      "expected_page_id": 212,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 212,
+          "title": "SSH"
+        },
+        {
+          "id": 244,
+          "title": "Btrfs subvolumes and snapshots"
+        }
+      ]
+    },
+    {
+      "query": "replace-battery",
+      "expected_page_id": 275,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 275,
+          "title": "UPS"
+        }
+      ]
+    },
+    {
+      "query": "flags property",
+      "expected_page_id": 165,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 260,
+          "title": "Device-mode"
+        },
+        {
+          "id": 179,
+          "title": "MikroTik Tag advertisement formats"
+        },
+        {
+          "id": 2,
+          "title": "Certificates"
+        }
+      ]
+    },
+    {
+      "query": "vlan-id",
+      "expected_page_id": 3,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 25,
+          "title": "Basic VLAN switching"
+        },
+        {
+          "id": 17,
+          "title": "Switch Chip Features"
+        },
+        {
+          "id": 29,
+          "title": "CRS1xx/2xx series switches examples"
+        }
+      ]
+    },
+    {
+      "query": "mirror-ports",
+      "expected_page_id": 17,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.2,
+      "rank": 5,
+      "top_3_pages": [
+        {
+          "id": 77,
+          "title": "Traffic Flow"
+        },
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        },
+        {
+          "id": 20,
+          "title": "CSS106 (RB260) series Manual"
+        }
+      ]
+    },
+    {
+      "query": "stp-sender-address",
+      "expected_page_id": 10,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 10,
+          "title": "Bridging and Switching"
+        }
+      ]
+    },
+    {
+      "query": "serial-number",
+      "expected_page_id": 72,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.25,
+      "rank": 4,
+      "top_3_pages": [
+        {
+          "id": 111,
+          "title": "Default Configuration Passwords"
+        },
+        {
+          "id": 224,
+          "title": "MikroTik Connectivity"
+        },
+        {
+          "id": 132,
+          "title": "RouterBOOT"
+        }
+      ]
+    },
+    {
+      "query": "max-concurrent-queries",
+      "expected_page_id": 234,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 234,
+          "title": "DNS"
+        }
+      ]
+    },
+    {
+      "query": "make-static",
+      "expected_page_id": 233,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 233,
+          "title": "DHCP"
+        }
+      ]
+    },
+    {
+      "query": "active-mode",
+      "expected_page_id": 345,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.25,
+      "rank": 4,
+      "top_3_pages": [
+        {
+          "id": 172,
+          "title": "VRRP"
+        },
+        {
+          "id": 260,
+          "title": "Device-mode"
+        },
+        {
+          "id": 165,
+          "title": "Bonding"
+        }
+      ]
+    },
+    {
+      "query": "duration property",
+      "expected_page_id": 56,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 74,
+          "title": "Speed Test"
+        },
+        {
+          "id": 56,
+          "title": "Bandwidth Test"
+        },
+        {
+          "id": 177,
+          "title": "MikroTik Beacon Manager for iOS devices"
+        }
+      ]
+    },
+    {
+      "query": "tx-evm-ch1",
+      "expected_page_id": 345,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "sms-protocol",
+      "expected_page_id": 223,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 223,
+          "title": "LTE/5G"
+        }
+      ]
+    },
+    {
+      "query": "in-state-mismatches",
+      "expected_page_id": 318,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 318,
+          "title": "IPsec"
+        }
+      ]
+    },
+    {
+      "query": "src-port",
+      "expected_page_id": 10,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 168,
+          "title": "Per connection classifier"
+        },
+        {
+          "id": 85,
+          "title": "Common Firewall Matchers and Actions"
+        },
+        {
+          "id": 29,
+          "title": "CRS1xx/2xx series switches examples"
+        }
+      ]
+    },
+    {
+      "query": "number property",
+      "expected_page_id": 223,
+      "source": "property",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 72,
+          "title": "Resource"
+        },
+        {
+          "id": 292,
+          "title": "Route Selection and Filtering"
+        },
+        {
+          "id": 236,
+          "title": "Proxy"
+        }
+      ]
+    },
+    {
+      "query": "ingress-customer-tpid-override",
+      "expected_page_id": 11,
+      "source": "property",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        }
+      ]
+    },
+    {
+      "query": "/interface/wireless/manual-tx-power-table",
+      "expected_page_id": 33,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        }
+      ]
+    },
+    {
+      "query": "/routing/rpki",
+      "expected_page_id": 311,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 311,
+          "title": "RPKI"
+        },
+        {
+          "id": 295,
+          "title": "Unicast routing protocols"
+        },
+        {
+          "id": 292,
+          "title": "Route Selection and Filtering"
+        }
+      ]
+    },
+    {
+      "query": "/tool/romon",
+      "expected_page_id": 210,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 210,
+          "title": "RoMON"
+        },
+        {
+          "id": 8,
+          "title": "User"
+        },
+        {
+          "id": 215,
+          "title": "WinBox"
+        }
+      ]
+    },
+    {
+      "query": "/caps-man/security",
+      "expected_page_id": 337,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        },
+        {
+          "id": 339,
+          "title": "CAPsMAN with VLANs"
+        }
+      ]
+    },
+    {
+      "query": "/routing/id",
+      "expected_page_id": 168,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 305,
+          "title": "Areas and Virtual Links"
+        },
+        {
+          "id": 303,
+          "title": "IS-IS"
+        },
+        {
+          "id": 282,
+          "title": "LDP"
+        }
+      ]
+    },
+    {
+      "query": "/ip/ipsec/key/psk",
+      "expected_page_id": 320,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 320,
+          "title": "QKD Integration in RouterOS IPsec (PPK)"
+        },
+        {
+          "id": 115,
+          "title": "First Time Configuration"
+        },
+        {
+          "id": 145,
+          "title": "Software Specifications"
+        }
+      ]
+    },
+    {
+      "query": "/caps-man/registration-table",
+      "expected_page_id": 337,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        }
+      ]
+    },
+    {
+      "query": "/interface/wifi/network",
+      "expected_page_id": 357,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 359,
+          "title": "WiFi CAPsMAN"
+        },
+        {
+          "id": 360,
+          "title": "Configuring outdoor CPE to AP links"
+        },
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        }
+      ]
+    },
+    {
+      "query": "/ip/arp",
+      "expected_page_id": 136,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 228,
+          "title": "ARP"
+        },
+        {
+          "id": 136,
+          "title": "Networking Fundamentals"
+        },
+        {
+          "id": 14,
+          "title": "MACVLAN"
+        }
+      ]
+    },
+    {
+      "query": "/routing/ospf/neighbor",
+      "expected_page_id": 312,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 307,
+          "title": "Neighbor Relationship"
+        },
+        {
+          "id": 309,
+          "title": "Understanding OSPF"
+        },
+        {
+          "id": 305,
+          "title": "Areas and Virtual Links"
+        }
+      ]
+    },
+    {
+      "query": "/certificate/settings",
+      "expected_page_id": 201,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 2,
+          "title": "Certificates"
+        },
+        {
+          "id": 328,
+          "title": "SSTP"
+        },
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        }
+      ]
+    },
+    {
+      "query": "/mpls/ldp/local-mapping",
+      "expected_page_id": 282,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 282,
+          "title": "LDP"
+        }
+      ]
+    },
+    {
+      "query": "/interface/wireless",
+      "expected_page_id": 33,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.125,
+      "rank": 8,
+      "top_3_pages": [
+        {
+          "id": 345,
+          "title": "Wireless Interface"
+        },
+        {
+          "id": 112,
+          "title": "Default configurations"
+        },
+        {
+          "id": 344,
+          "title": "VLANs on Wireless"
+        }
+      ]
+    },
+    {
+      "query": "/tool/sms",
+      "expected_page_id": 226,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 226,
+          "title": "SMS"
+        },
+        {
+          "id": 289,
+          "title": "PIM-SM"
+        },
+        {
+          "id": 113,
+          "title": "List of menus with sensitive parameters"
+        }
+      ]
+    },
+    {
+      "query": "/interface/wifi/radio/settings",
+      "expected_page_id": 357,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 359,
+          "title": "WiFi CAPsMAN"
+        },
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        }
+      ]
+    },
+    {
+      "query": "/disk/btrfs/transfer",
+      "expected_page_id": 244,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 241,
+          "title": "Btrfs"
+        },
+        {
+          "id": 244,
+          "title": "Btrfs subvolumes and snapshots"
+        }
+      ]
+    },
+    {
+      "query": "/routing/route/rule",
+      "expected_page_id": 137,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 279,
+          "title": "Moving from ROSv6 to ROSv7"
+        },
+        {
+          "id": 290,
+          "title": "Policy Routing"
+        },
+        {
+          "id": 292,
+          "title": "Route Selection and Filtering"
+        }
+      ]
+    },
+    {
+      "query": "/interface/lte/settings",
+      "expected_page_id": 219,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 223,
+          "title": "LTE/5G"
+        },
+        {
+          "id": 219,
+          "title": "Dual SIM Application"
+        },
+        {
+          "id": 217,
+          "title": "BG77 modem AT commands"
+        }
+      ]
+    },
+    {
+      "query": "/ip/dns/static",
+      "expected_page_id": 234,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 234,
+          "title": "DNS"
+        },
+        {
+          "id": 233,
+          "title": "DHCP"
+        },
+        {
+          "id": 318,
+          "title": "IPsec"
+        }
+      ]
+    },
+    {
+      "query": "/system/default-configuration",
+      "expected_page_id": 19,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 204,
+          "title": "Branding"
+        },
+        {
+          "id": 135,
+          "title": "Manual Network Setup (No Default Configuration)"
+        },
+        {
+          "id": 112,
+          "title": "Default configurations"
+        }
+      ]
+    },
+    {
+      "query": "/routing/filter/community-ext-list",
+      "expected_page_id": 292,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 292,
+          "title": "Route Selection and Filtering"
+        }
+      ]
+    },
+    {
+      "query": "/interface/vxlan/fdb",
+      "expected_page_id": 36,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 36,
+          "title": "VXLAN"
+        },
+        {
+          "id": 12,
+          "title": "L3 Hardware Offloading"
+        },
+        {
+          "id": 32,
+          "title": "Spanning Tree Protocol"
+        }
+      ]
+    },
+    {
+      "query": "/tool/romon/port",
+      "expected_page_id": 210,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 210,
+          "title": "RoMON"
+        },
+        {
+          "id": 215,
+          "title": "WinBox"
+        },
+        {
+          "id": 199,
+          "title": "Kaa IoT setup"
+        }
+      ]
+    },
+    {
+      "query": "/routing/pimsm/uib-sg",
+      "expected_page_id": 289,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 289,
+          "title": "PIM-SM"
+        }
+      ]
+    },
+    {
+      "query": "/iot/lora/channels",
+      "expected_page_id": 190,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 190,
+          "title": "General Properties"
+        }
+      ]
+    },
+    {
+      "query": "/interface/wifi/capsman/remote-cap",
+      "expected_page_id": 359,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 359,
+          "title": "WiFi CAPsMAN"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        }
+      ]
+    },
+    {
+      "query": "/interface/pppoe-server/server",
+      "expected_page_id": 324,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 324,
+          "title": "PPPoE"
+        },
+        {
+          "id": 326,
+          "title": "MLPPP over single and multiple links"
+        },
+        {
+          "id": 325,
+          "title": "IPv6 PD over PPP"
+        }
+      ]
+    },
+    {
+      "query": "/interface/ppp-server",
+      "expected_page_id": 3,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 225,
+          "title": "PPP"
+        }
+      ]
+    },
+    {
+      "query": "/routing/ospf/area",
+      "expected_page_id": 279,
+      "source": "cmd-path",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 1,
+      "mrr": 0.14285714285714285,
+      "rank": 7,
+      "top_3_pages": [
+        {
+          "id": 305,
+          "title": "Areas and Virtual Links"
+        },
+        {
+          "id": 289,
+          "title": "PIM-SM"
+        },
+        {
+          "id": 309,
+          "title": "Understanding OSPF"
+        }
+      ]
+    },
+    {
+      "query": "/caps-man/configuration",
+      "expected_page_id": 337,
+      "source": "cmd-path",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        },
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        },
+        {
+          "id": 339,
+          "title": "CAPsMAN with VLANs"
+        }
+      ]
+    },
+    {
+      "query": "AWS LoRaWAN configuration",
+      "expected_page_id": 192,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 192,
+          "title": "AWS LoRaWAN configuration"
+        },
+        {
+          "id": 191,
+          "title": "User Guides"
+        }
+      ]
+    },
+    {
+      "query": "Container - Matrix (Synapse)",
+      "expected_page_id": 43,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 43,
+          "title": "Container - Matrix (Synapse)"
+        }
+      ]
+    },
+    {
+      "query": "Marvell Prestera switch chip features",
+      "expected_page_id": 15,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 15,
+          "title": "Marvell Prestera switch chip features"
+        },
+        {
+          "id": 165,
+          "title": "Bonding"
+        },
+        {
+          "id": 25,
+          "title": "Basic VLAN switching"
+        }
+      ]
+    },
+    {
+      "query": "AP Controller (CAPsMAN)",
+      "expected_page_id": 338,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 338,
+          "title": "AP Controller (CAPsMAN)"
+        },
+        {
+          "id": 339,
+          "title": "CAPsMAN with VLANs"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        }
+      ]
+    },
+    {
+      "query": "CRS1xx and 2xx series switches",
+      "expected_page_id": 11,
+      "source": "title",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 29,
+          "title": "CRS1xx/2xx series switches examples"
+        },
+        {
+          "id": 11,
+          "title": "CRS1xx and 2xx series switches"
+        },
+        {
+          "id": 25,
+          "title": "Basic VLAN switching"
+        }
+      ]
+    },
+    {
+      "query": "Routing and Networking Protocols",
+      "expected_page_id": 278,
+      "source": "title",
+      "hit_at_1": 0,
+      "hit_at_5": 0,
+      "hit_at_10": 0,
+      "mrr": 0,
+      "rank": null,
+      "top_3_pages": [
+        {
+          "id": 293,
+          "title": "Routing Decision"
+        },
+        {
+          "id": 305,
+          "title": "Areas and Virtual Links"
+        },
+        {
+          "id": 290,
+          "title": "Policy Routing"
+        }
+      ]
+    },
+    {
+      "query": "CSS106 (RB260) series Manual",
+      "expected_page_id": 20,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 20,
+          "title": "CSS106 (RB260) series Manual"
+        },
+        {
+          "id": 333,
+          "title": "MikroTik wired interface compatibility"
+        }
+      ]
+    },
+    {
+      "query": "Btrfs subvolumes and snapshots",
+      "expected_page_id": 244,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 244,
+          "title": "Btrfs subvolumes and snapshots"
+        },
+        {
+          "id": 241,
+          "title": "Btrfs"
+        },
+        {
+          "id": 242,
+          "title": "Btrfs maintenance"
+        }
+      ]
+    },
+    {
+      "query": "Setting a hot spare disk",
+      "expected_page_id": 251,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 251,
+          "title": "Setting a hot spare disk"
+        }
+      ]
+    },
+    {
+      "query": "GPS-tracking using MQTT and ThingsBoard",
+      "expected_page_id": 222,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 222,
+          "title": "GPS-tracking using MQTT and ThingsBoard"
+        }
+      ]
+    },
+    {
+      "query": "Diagnostics and Monitoring",
+      "expected_page_id": 55,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 55,
+          "title": "Diagnostics and Monitoring"
+        },
+        {
+          "id": 60,
+          "title": "Flood Ping"
+        },
+        {
+          "id": 75,
+          "title": "Torch"
+        }
+      ]
+    },
+    {
+      "query": "DLNA Media Server",
+      "expected_page_id": 245,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 245,
+          "title": "DLNA Media Server"
+        },
+        {
+          "id": 240,
+          "title": "Storage"
+        },
+        {
+          "id": 150,
+          "title": "Disks"
+        }
+      ]
+    },
+    {
+      "query": "AAA and User Management",
+      "expected_page_id": 1,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 1,
+          "title": "AAA and User Management"
+        },
+        {
+          "id": 6,
+          "title": "PPP AAA"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        }
+      ]
+    },
+    {
+      "query": "NVMe over TCP",
+      "expected_page_id": 249,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 249,
+          "title": "NVMe over TCP"
+        },
+        {
+          "id": 113,
+          "title": "List of menus with sensitive parameters"
+        },
+        {
+          "id": 240,
+          "title": "Storage"
+        }
+      ]
+    },
+    {
+      "query": "CAPsMAN with VLANs",
+      "expected_page_id": 339,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 339,
+          "title": "CAPsMAN with VLANs"
+        },
+        {
+          "id": 359,
+          "title": "WiFi CAPsMAN"
+        },
+        {
+          "id": 337,
+          "title": "CAPsMAN"
+        }
+      ]
+    },
+    {
+      "query": "Firewall and QoS Case Studies",
+      "expected_page_id": 102,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 102,
+          "title": "Firewall and QoS Case Studies"
+        },
+        {
+          "id": 34,
+          "title": "WMM and VLAN priority"
+        },
+        {
+          "id": 10,
+          "title": "Bridging and Switching"
+        }
+      ]
+    },
+    {
+      "query": "Wake on LAN",
+      "expected_page_id": 276,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 276,
+          "title": "Wake on LAN"
+        },
+        {
+          "id": 145,
+          "title": "Software Specifications"
+        },
+        {
+          "id": 39,
+          "title": "List of available Apps"
+        }
+      ]
+    },
+    {
+      "query": "QKD Integration in RouterOS IPsec (PPK)",
+      "expected_page_id": 320,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 320,
+          "title": "QKD Integration in RouterOS IPsec (PPK)"
+        }
+      ]
+    },
+    {
+      "query": "EXP bit and MPLS Queuing",
+      "expected_page_id": 281,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 281,
+          "title": "EXP bit and MPLS Queuing"
+        },
+        {
+          "id": 342,
+          "title": "Nv2"
+        }
+      ]
+    },
+    {
+      "query": "Manual Network Setup (No Default Configuration)",
+      "expected_page_id": 135,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 135,
+          "title": "Manual Network Setup (No Default Configuration)"
+        },
+        {
+          "id": 38,
+          "title": "Apps"
+        },
+        {
+          "id": 115,
+          "title": "First Time Configuration"
+        }
+      ]
+    },
+    {
+      "query": "Dual SIM Application",
+      "expected_page_id": 219,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 219,
+          "title": "Dual SIM Application"
+        },
+        {
+          "id": 223,
+          "title": "LTE/5G"
+        }
+      ]
+    },
+    {
+      "query": "Configuring outdoor CPE to AP links",
+      "expected_page_id": 360,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 360,
+          "title": "Configuring outdoor CPE to AP links"
+        },
+        {
+          "id": 112,
+          "title": "Default configurations"
+        },
+        {
+          "id": 357,
+          "title": "Wi-Fi 6 / 7 (802.11ax/be)"
+        }
+      ]
+    },
+    {
+      "query": "RouterOS License Keys",
+      "expected_page_id": 139,
+      "source": "title",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.25,
+      "rank": 4,
+      "top_3_pages": [
+        {
+          "id": 143,
+          "title": "x86 Licensing"
+        },
+        {
+          "id": 142,
+          "title": "MikroTik Hardware Licensing"
+        },
+        {
+          "id": 141,
+          "title": "CHR: Licensing"
+        }
+      ]
+    },
+    {
+      "query": "Virtual Private Networks",
+      "expected_page_id": 313,
+      "source": "title",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.5,
+      "rank": 2,
+      "top_3_pages": [
+        {
+          "id": 113,
+          "title": "List of menus with sensitive parameters"
+        },
+        {
+          "id": 313,
+          "title": "Virtual Private Networks"
+        },
+        {
+          "id": 330,
+          "title": "ZeroTier"
+        }
+      ]
+    },
+    {
+      "query": "Default Configuration Passwords",
+      "expected_page_id": 111,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 111,
+          "title": "Default Configuration Passwords"
+        },
+        {
+          "id": 110,
+          "title": "Backup"
+        },
+        {
+          "id": 8,
+          "title": "User"
+        }
+      ]
+    },
+    {
+      "query": "CHR: Proxmox VE Installation",
+      "expected_page_id": 122,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 122,
+          "title": "CHR: Proxmox VE Installation"
+        },
+        {
+          "id": 117,
+          "title": "CHR: Installation"
+        }
+      ]
+    },
+    {
+      "query": "Fail-over PtMP CLI example",
+      "expected_page_id": 352,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 352,
+          "title": "Fail-over PtMP CLI example"
+        }
+      ]
+    },
+    {
+      "query": "List of available Apps",
+      "expected_page_id": 39,
+      "source": "title",
+      "hit_at_1": 0,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 0.3333333333333333,
+      "rank": 3,
+      "top_3_pages": [
+        {
+          "id": 38,
+          "title": "Apps"
+        },
+        {
+          "id": 230,
+          "title": "Back To Home"
+        },
+        {
+          "id": 39,
+          "title": "List of available Apps"
+        }
+      ]
+    },
+    {
+      "query": "Container - freeradius server",
+      "expected_page_id": 40,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 40,
+          "title": "Container - freeradius server"
+        },
+        {
+          "id": 7,
+          "title": "RADIUS"
+        },
+        {
+          "id": 233,
+          "title": "DHCP"
+        }
+      ]
+    },
+    {
+      "query": "Routing Protocol Multi-core Support",
+      "expected_page_id": 294,
+      "source": "title",
+      "hit_at_1": 1,
+      "hit_at_5": 1,
+      "hit_at_10": 1,
+      "mrr": 1,
+      "rank": 1,
+      "top_3_pages": [
+        {
+          "id": 294,
+          "title": "Routing Protocol Multi-core Support"
+        },
+        {
+          "id": 71,
+          "title": "Profiler"
+        },
+        {
+          "id": 79,
+          "title": "Traffic Generator"
+        }
+      ]
+    }
+  ]
+}

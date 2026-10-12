@@ -1,0 +1,836 @@
+# Rosetta User Manual
+
+Extended reference for install options, configuration, release/re-extraction operations, and database details beyond the [README](README.md). For rationale, source provenance, and cross-project tradeoffs, see [DESIGN.md](DESIGN.md).
+
+## Install from Binary
+
+Download a compiled binary from [Releases](https://github.com/tikoci/rosetta/releases) — no Bun, Node.js, or other runtime needed.
+
+| Platform | File |
+|----------|------|
+| macOS (Apple Silicon) | `rosetta-macos-arm64.zip` |
+| macOS (Intel) | `rosetta-macos-x64.zip` |
+| Windows | `rosetta-windows-x64.zip` |
+| Linux | `rosetta-linux-x64.zip` |
+
+```sh
+./rosetta --setup    # downloads DB + prints MCP client config
+```
+
+> **macOS Gatekeeper:** `xattr -d com.apple.quarantine ./rosetta` or System Settings → Privacy & Security → Allow Anyway.
+> **Windows SmartScreen:** Click **More info → Run anyway**.
+
+## CLI Flags
+
+| Flag | Purpose |
+|------|---------|
+| `browse` | Interactive terminal browser (REPL) |
+| `browse <cmd> [args]` | Run any TUI command once, then open REPL (e.g. `browse changelog 7.20..7.22`) |
+| `browse --once <cmd>` | Execute any TUI command and exit — no REPL (for piping) |
+| `export <dir> [--force]` | Write DB-only dataset directory (TSV + manifest.toml); `--force` overwrites a non-empty directory with no rosetta manifest |
+| `--setup` | Download DB + print MCP config |
+| `--setup --force` | Re-download DB |
+| `--refresh` | Shortcut for `--setup --force` (refresh DB) |
+| `--version` | Print version |
+| `--help` | Print usage |
+| `--http` | Start with Streamable HTTP transport (instead of stdio) |
+| `--port <N>` | HTTP listen port (default: 8080, env: `PORT`) |
+| `--host <ADDR>` | HTTP bind address (default: localhost, env: `HOST`) |
+| `--tls-cert <PATH>` | TLS certificate PEM file (enables HTTPS) |
+| `--tls-key <PATH>` | TLS private key PEM file (requires `--tls-cert`) |
+| *(none)* | Start MCP server (stdio) |
+
+## HTTP Transport
+
+The [MikroTik /app install](README.md#install-on-mikrotik-app) is the easiest way to get an HTTP endpoint. For other setups, rosetta supports the [MCP Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) via `--http`:
+
+```sh
+rosetta --http                    # http://localhost:8080/mcp
+rosetta --http --port 9090        # custom port
+rosetta --http --host 0.0.0.0    # accessible from LAN
+```
+
+Then point your MCP client at the URL:
+
+```json
+{ "url": "http://localhost:8080/mcp" }
+```
+
+- **Read-only** — queries a local SQLite database, stores nothing.
+- **No authentication** — designed for local/trusted-network use. Use a reverse proxy for public exposure.
+- **TLS built-in** — `--tls-cert cert.pem --tls-key key.pem` for direct HTTPS without a proxy.
+- **Defaults to localhost** — LAN binding (`--host 0.0.0.0`) requires an explicit flag.
+
+HTTP/TLS env vars: `PORT`, `HOST` (lower precedence than CLI flags), `TLS_CERT_PATH`, `TLS_KEY_PATH` (lower precedence than `--tls-cert`/`--tls-key`).
+
+## Container Images
+
+Multi-arch OCI images (linux/amd64 + linux/arm64) are published with each release:
+
+- `ghcr.io/tikoci/rosetta` (GitHub Container Registry)
+- `ammo74/rosetta` (Docker Hub)
+
+```sh
+docker run --rm -p 8080:8080 ghcr.io/tikoci/rosetta:latest
+```
+
+These are the same images used by the [MikroTik /app install](README.md#install-on-mikrotik-app). Tags: `latest`, version (e.g., `v0.2.1`), and `sha-<commit>`.
+
+## MCP Resources
+
+If your MCP client supports resources, rosetta exposes datasets and supplemental content:
+
+| Resource | Purpose |
+|----------|---------|
+| `rosetta://datasets/device-test-results.csv` | Full joined benchmark dataset as CSV |
+| `rosetta://datasets/devices.csv` | Full device catalog with normalized fields and URLs |
+| `rosetta://schema.sql` | Live SQLite DDL from `sqlite_master` |
+| `rosetta://schema-guide.md` | Schema relationships, FTS5 query guidance, and join gotchas |
+| `rosetta://skills` | Listing of all agent skill guides with names and descriptions |
+| `rosetta://skills/{name}` | Full skill guide content with provenance header (community content) |
+
+In VS Code Copilot, attach them via **Add Context > MCP Resources** or **MCP: Browse Resources**. Use tools for normal search and drill-down; use resources when you explicitly want the whole dataset as CSV or agent skill guides.
+
+**Agent Skills** are community-created, human-reviewed guides from [tikoci/routeros-skills](https://github.com/tikoci/routeros-skills) — practical RouterOS domain knowledge written specifically for AI agents. Every skill response includes a provenance header noting that content is NOT official MikroTik documentation and may contain errors. Agents should verify claims using rosetta's official doc tools (`routeros_search`, `routeros_get_page`).
+
+## Data Sources
+
+The database combines multiple MikroTik data sources into a single SQLite file with [FTS5](https://www.sqlite.org/fts5.html) full-text search, [porter stemming](https://www.sqlite.org/fts5.html#porter_tokenizer), and [BM25 ranking](https://www.sqlite.org/fts5.html#the_bm25_function):
+
+- **Docusaurus Documentation** — `/docs` prose from MikroTik's current manual at <https://manual.mikrotik.com>, discovered via `sitemap.xml` and fetched as raw Markdown (`{page}.md` / `{category}/index.md`). Populates `pages`, `sections`, `properties`, and `callouts` the same way the legacy Confluence extractor did, plus a `rosetta_id` identity column (see [DESIGN.md](DESIGN.md#docusaurus-manual-current-primary-prose-corpus)). The standalone `/hardware` section is out of scope for this extractor; the CLI Reference has its own extractor (below).
+
+- **CLI Reference overlay** — `/docs/cli-reference/*` (1,070 pages; discovered as the union of `sitemap.xml` and `llms.txt`, because a branching menu's own Directory page is listed only in the latter — see `V-cliref-discovery`) parsed by `src/extract-cliref.ts` (build: `make extract-cliref`) into a source-faithful, version-less overlay: `cliref_pages` (byte-exact source Markdown + SHA-256), `cliref_entries` (Directory / Settings Directory / Command menus, with the manual-only `package`/`conditions`/`syscap` gates), `cliref_fields` (Argument / Read-only Argument), and `cliref_flags` (print-output markers). `src/link-cliref.ts` (`make link-cliref`, after `schema_nodes` is populated) resolves each entry to its inspect command node — exact, single-internal-segment alias, or manual-only — in `cliref_entry_schema_links`; the `cliref_field_inspect_links` **view** derives the zero-to-many field→argument mapping. An entry has a source path; a field has a name and zero-to-many inspect coordinates, never a path (see [DESIGN.md](DESIGN.md#cli-reference-overlay-source-vs-inspect-identity)). Issue #124. `release.yml` runs both steps so published DBs carry the overlay (#127); two blocking gates run in `qa.yml` db-content against the built DB — `make link-cliref-check` (`V-cliref-link-drift`: byte-compares the crosswalk against the committed `cli-reference-links.tsv` and rejects a non-allowlisted alias segment) and `make cliref-db-check` (`V-cliref-db-integrity`: structural + semantic invariants). After a corpus refresh that legitimately changes the crosswalk, regenerate the reviewable baseline with `make link-cliref-baseline` and commit `cli-reference-links.tsv`. `make extract-cliref-from-cache` re-runs offline from `manual/cli-reference/` — that cache must hold **both** `_sitemap.txt` and `_llms.txt`, since #137 the two together are the page inventory (llms.txt is not merely the sidebar labels).
+
+- **Legacy HTML Documentation** — Confluence space export from help.mikrotik.com (March 2026, frozen). 317 pages broken into sections, callouts, and property tables (~515K words). Kept only for rebuilding historical pre-migration release DBs — see "Re-extracting a Local Database" below.
+
+- **Command Tree** — `inspect.json` / `deep-inspect.json` from [tikoci/restraml](https://github.com/tikoci/restraml), generated by running `/console/inspect` against RouterOS CHR under QEMU for every version since 7.9 (67 versions with command data, 7.9–7.25rc1, as of 0.11.3). The MCP tool descriptions read that range from `command_versions` at startup. `routeros_stats`' `ros_version_min`/`ros_version_max` come from `ros_versions` instead, which also holds metadata-only rows with no command data (7.1.1, 7.8), so its minimum reads lower. `command_versions` keeps full version history; `schema_node_presence` is release-pruned to active channel heads (stable, long-term, testing, development) to bound DB growth.
+
+- **Product Matrix** — CSV export from mikrotik.com/products/matrix (156 products, 34 columns). Hardware specs, license levels, and pricing.
+
+- **Device Benchmarks** — Ethernet bridging/routing and IPSec throughput test results scraped from individual product pages on mikrotik.com (2,874 measurements across 125 devices; 64/512/1518-byte packets, multiple configurations). Also captures block diagram image URLs for 110 devices.
+
+- **YouTube Transcripts** — Auto-generated English transcripts from the official [MikroTik YouTube channel](https://www.youtube.com/@MikroTik/videos) (746 videos, ~2,374 non-empty transcript segments). Split by chapter when available, with timestamps for deep linking. Extracted via yt-dlp, cached as NDJSON in the repo for reproducible CI builds.
+
+- **Archived Dude Wiki** — Wayback Machine snapshots cached in `dude/pages/`, exposed through separate Dude tools because the retired GUI docs are not part of current RouterOS v7 help.
+
+- **Agent Skills** — Community-created agent guides from [tikoci/routeros-skills](https://github.com/tikoci/routeros-skills) (8 skills, ~30K words). NOT official MikroTik documentation — AI-generated, human-reviewed, served with provenance attribution. Practical domain knowledge for topics like containers, QEMU CHR, netinstall, and RouterOS fundamentals.
+
+Documentation covers RouterOS **v7 only**. v6 had different syntax and major subsystems — answers for v6 are unreliable. Prose is now sourced live from <https://manual.mikrotik.com>; its CLI Reference is ingested separately as the source-faithful overlay described above.
+
+## Local DB grounding (dev checkouts)
+
+In a checkout, dev mode serves the repo-root `ros-help.db` — a git-ignored file whose contents are arbitrary local state (a leftover `make extract` build, a partially-migrated corpus, or a schema bumped in place over stale data). **It is not trusted by default.** Before grounding a claim about shipped data on it, verify it.
+
+- **`make db-doctor`** (or `bun run db:doctor`) prints the resolved DB path, its `db_meta` provenance, and a grounding verdict; exits non-zero when the verdict is not `ok`. In-session, one `routeros_stats` call returns the same `provenance.grounding` block.
+- **`make db-sync`** (or `bun run db:sync`) fetches the newest CI-built release DB **matching this checkout's schema** into the resolved path — the **source of truth** for grounding claims, since it is what `bunx @tikoci/rosetta` consumers get. It uses `gh` to find the newest release that ships the DB asset, prereleases included (`--refresh` follows the running build's version; `db-sync` can select a matching prerelease schema). Stop clients owning the resolved path first: atomic rename does not make live SQLite WAL replacement safe. Requires the `gh` CLI.
+- A local `make extract` build is intentionally **unstamped** (no `release_tag`/`source_commit`) — fine for extraction and pipeline work, but `db-doctor` reports it as `unstamped` to signal it is not a grounding source.
+
+Verdict statuses: `schema_mismatch` (pragma ≠ code schema), `internal_inconsistent` (`db_meta.schema_version` ≠ pragma — a corpus bumped in place, the classic "which DB is this?" trap), `unstamped` (a local build with no release stamps), `provenance_incomplete` (claims release identity but is missing one of the four CI stamps — fail closed), `tag_behind`, and `ok`. `ok` means schema/release-**compatible** with this build, not that the DB was built from the exact checked-out commit (a release DB is built from an ancestor). In dev mode, MCP startup emits a loud but non-fatal banner when the verdict is not `ok` (it never fetches — a contributor's local build is never clobbered). See `.github/instructions/local-db-grounding.instructions.md`.
+
+## Re-extracting a Local Database
+
+`make extract` and `make extract-full` fetch `/docs` prose live from manual.mikrotik.com and rebuild the versioned command tree, devices, changelogs, Dude cache, and skills:
+
+```sh
+make clean
+make extract
+make extract-full
+make gc-versions EXTRA_FLAGS=--verbose
+```
+
+- `make extract` runs the single-version ETL chain: Docusaurus `/docs` prose → commands → devices → test results → changelogs → Dude cache → skills → link.
+- `make extract-full` keeps the same pipeline but uses all tracked RouterOS versions for command/schema extraction.
+- `make gc-versions` is the release-retention step that prunes `schema_node_presence` down to active channel heads; local full extracts intentionally keep the full presence history until you run it.
+- `make extract-docusaurus` runs the Docusaurus step alone, live-fetching every in-scope `/docs` page and caching each page's raw Markdown to `manual/pages/` (gitignored — not committed). `make extract-docusaurus-from-cache` re-runs from that cache with no network dependency, for fast local iteration; the cache holds the last complete live run (see "Local-only source refreshes"). `make extract-docusaurus-check-counts` compares the extracted page count against `llms.txt`'s scoped entry count (B-0012 H8, `V-docusaurus-docs-count`) — non-blocking, prints MATCH/MISMATCH.
+
+### Rebuilding a historical (pre-migration) Confluence release DB
+
+The Confluence export is frozen (last shipped March 2026) and no longer the default pipeline, but the extractor is kept for rebuilding historical release DBs:
+
+```sh
+# Place the Confluence export in box/ and update the box/latest symlink.
+make extract-legacy-confluence   # runs extract-html + extract-properties only
+```
+
+`extract-legacy-confluence` populates the same `pages`/`sections`/`properties`/`callouts` tables as `extract-docusaurus` — the two are not meant to run against the same DB in sequence; pick one prose source per build. See [DESIGN.md](DESIGN.md#docusaurus-manual-current-primary-prose-corpus) and [B-0012](briefings/B-0012-docusaurus-manual-migration.md) for the migration history and rationale.
+
+### Video transcript refresh
+
+`extract-videos` is intentionally outside the default extract chain because it requires `yt-dlp` and can take 30–60 minutes:
+
+```sh
+make extract-videos
+make save-videos-cache
+git add transcripts/
+git commit -m "refresh transcript cache YYYY-MM-DD"
+```
+
+If YouTube answers the scrape with HTTP 429, pass browser cookies through `YTDLP_ARGS`. It holds extra yt-dlp arguments, split on whitespace with no quoting, and they're added to every yt-dlp call:
+
+```sh
+YTDLP_ARGS="--cookies-from-browser firefox" make extract-videos
+```
+
+Use Firefox while logged in to YouTube. It reads cookies without prompting, while Chrome needs a Keychain unlock and Safari needs Full Disk Access for the terminal. If a video still returns 429 with cookies, the block is probably on your IP address: wait and retry, or use a different source IP or proxy (`YTDLP_ARGS="--proxy …"`). yt-dlp's FAQ covers the other options. `YTDLP` still overrides the binary itself.
+
+Release CI consumes committed NDJSON via `make extract-videos-from-cache`; it does not run a live YouTube scrape.
+
+### Hardware catalog refresh
+
+`extract-hardware-catalog` runs in the default `extract`/`extract-full` pipeline and in release CI,
+building `hardware_catalog` + `device_aliases` from the **committed** `ros-hardware-assessment.json` /
+`ros-www-assessment.json` research artifacts (no network) — see
+`briefings/B-0017-hardware-overlay-device-resolution.md`. What stays manual/local is **refreshing those
+committed artifacts** via the live-fetch `assess-*` tools; do that when the source pages change, then
+rebuild and review the diff:
+
+```sh
+make assess-hardware   # refresh ros-hardware-assessment.json (live fetch)
+make assess-www        # refresh ros-www-assessment.json (live fetch)
+make extract-devices   # devices must be populated first for the device_id link
+make extract-hardware-catalog
+```
+
+`make extract-devices` **must** run before `make extract-hardware-catalog`: the catalog's `device_id`
+link is captured fresh from `devices.product_name` (UNIQUE, rename-stable) at build time, and the write
+fails loudly if a stored `device_id` no longer resolves to a live `devices` row — so if you rebuild
+`devices` afterwards, rebuild the catalog too.
+
+Every run (re)writes the committed, deterministic **`fixtures/hardware-catalog/catalog.json`** — sorted
+rows + aliases + a drop ledger (every input www product / `/hardware` page / matrix row is either attached
+or listed there with a reason) + counted alias collisions. That file's git diff is the change-review gate:
+review it before committing, since `writeCatalog()` inserts exactly what it contains. `--check-only`
+regenerates it without touching the DB, which is how you inspect a proposed change.
+
+The run enforces two layers of validation and leaves the DB untouched on any failure:
+
+- **Hard output invariants** (always, not baseline-compared): a row's declared `Product code` must be among
+  its own aliases; a www product attaches to at most one row (outside the small justified shared-kit
+  allowlist); every www product is either attached or in the drop ledger; no row is nameless. A violation
+  is an attribution bug — the run fails outright.
+- **Baseline canaries** against `fixtures/hardware-catalog/baseline.json`: a category-count drift, a www
+  spec-field template change, matrix.csv coverage dropping below the floor, a previously-resolved device
+  disappearing, an alias-collision or dropped-www surge, or a sharp www 404-rate swing.
+
+If a flagged baseline drift is a confirmed, legitimate change to the source (not a silent breakage), re-run
+with `--update-baseline` to accept the new numbers.
+
+### Local-only source refreshes
+
+**Live vs. `--from-cache` (#160).** Every extractor with a page cache follows one contract: `extract-docusaurus` (`manual/pages/`), `extract-cliref` (`manual/cli-reference/`), `assess-hardware` (`manual/pages/hardware/`), `assess-www` (`manual/pages/www/`) and `extract-dude` (`dude/pages/`).
+
+- A **live run** (no `--from-cache`) re-fetches every page it discovers and overwrites that page's cache file. It never reads the cache as input, so a page MikroTik changed upstream can't be served from an older cached copy.
+- After a **complete** live run (no `--limit`, no fetch errors), it deletes the cached pages the run did not discover and keeps the index files it wrote (`_sitemap.txt`, `_llms.txt`). The log line starts `Pruned N cached page(s)`. A partial run logs `Cache not pruned` and leaves older files in place; rerun it live before relying on the cache.
+- A **`--from-cache` run** makes no network requests. Right after a complete live run it reproduces that run exactly (for `extract-cliref`, the same entry, field and flag counts). One exception, by design: `extract-docusaurus --from-cache --check-counts` fetches the live `llms.txt`, because `V-docusaurus-docs-count` (the `qa.yml` docusaurus-count gate) compares the cached pages against what MikroTik lists today.
+- `extract-docusaurus` also skips the prune when `--check-counts` doesn't match, including when it couldn't fetch `llms.txt`, so a failed `--strict` run keeps its cache for a retry. A live `extract-dude` with any failed page fetch now fails before touching `dude_pages`.
+- `extract-dude --force` now only re-downloads images already in `dude/images/`. Pages are always re-fetched on a live run, and `dude/images/` is never pruned.
+
+Before cutting a corpus release, check these inputs separately from CI:
+
+| Source | CI behavior | Local action when freshness matters |
+| --- | --- | --- |
+| YouTube transcripts | Imports the latest committed `transcripts/YYYY-MM-DD/videos.ndjson` cache. | Run `make extract-videos` for the live scrape, then `make save-videos-cache` (or `bun run src/extract-videos.ts --save-cache`) to write the committed cache. |
+| Product matrix | Parses the committed matrix CSV path used by `src/extract-devices.ts`. | Export **All** from <https://mikrotik.com/products/matrix>, save `matrix/YYYY-MM-DD/matrix.csv`, and update the extractor default if the release should consume it. |
+| Dude wiki | Imports committed `dude/pages/` HTML with `--skip-images`. | Rerun `make extract-dude` only when intentionally curating archived Wayback snapshots. It is not a routine current-source refresh. It rewrites every committed `dude/pages/` file, so review the diff before committing. |
+| Changelog patch probing | Runs the normal live changelog extractor. | `make extract-changelogs-extended` is exploratory unless the release workflow is changed to use it. |
+| RouterOS versions, product tests, skills | Fetched live in release CI. | No local cache refresh is required for normal release prep. |
+
+## Release Workflow
+
+Published artifacts come from the GitHub Actions `Release` workflow (`workflow_dispatch`), not from local ad hoc release commands.
+
+- **Inputs:** `version` (optional override — see "npm channel" below for how this interacts with prerelease dispatches), `docs_date`, `full_versions`, and `republish_assets`.
+- **`republish_assets`:** reuploads GitHub Release assets and OCI tags for an existing version. It does **not** republish npm because npm versions are immutable, and it never moves a floating OCI tag (`:latest`/`:next`) on any channel. See "Prerelease republish semantics" below for prerelease-specific caveats.
+- **Job graph (Phase B, #42; #176):** `build` → `qa` → `publish` → {`verify-dist-tags`, `smoke`}.
+  - **`build`:** npm channel detection (+ workspace-only prerelease version rewrite) → CHANGELOG gate (latest only) → npm publish-access preflight → fast-fail quality gate → live Docusaurus extraction (`extract-docusaurus.ts --check-counts --strict`, proving `V-docusaurus-docs-count` on every run) → extraction chain → transcript/Dude cache imports → skill extraction → command linking → `schema_node_presence` GC → DB-wipe guard → `db_meta` stamping → DB-stats collection. Uploads the built DB and the resolved `package.json` as artifacts.
+  - **`qa`:** `uses: ./.github/workflows/qa.yml` with `db_source=artifact` — the single definition of the release-locked gates (contract, retrieval evals, DB-content floors, `db_meta` presence) runs here against the exact DB `build` produced. Nothing publishes if it's red.
+  - **`publish`:** downloads the gated DB + resolved `package.json`, then OCI build/push → GitHub Release → npm publish (side effects only, keyed off `build`'s job outputs).
+  - **`verify-dist-tags`:** reads the npm dist-tags back (up to 15 minutes; see "npm channel" below). It is a separate job so that slow registry propagation fails the run without skipping the install smoke.
+  - **`smoke`:** `uses: ./.github/workflows/release-smoke.yml`, the three-OS `bunx-smoke` and `bunx-upgrade-smoke` jobs. They wait for the exact version they test, not for the dist-tag read-back.
+- **Re-running a skipped smoke:** `release-smoke.yml` is also dispatchable on its own against an already-published version, e.g. `gh workflow run release-smoke.yml -f version=v0.11.3-next.116 -f previous_version=v0.11.3-next.115`. Leave `previous_version` empty to run `bunx-smoke` only. `bunx-upgrade-smoke` resolves the dist-tag, so it can only pass for the version that is currently the tag's head.
+- **Release notes (#22):** the GitHub Release body starts with the version's `CHANGELOG.md` block on a latest release, or the `[Unreleased]` block (headed "Changes since *last release* (unreleased)") on a `-next` release, then the DB stats and build info. `scripts/release-notes.ts` builds it from the checked-out `CHANGELOG.md`, so a `republish_assets` run from the same commit writes the same body.
+- **Provenance:** release notes include DB stats, and the stamped `db_meta` keys (`release_tag`, `built_at`, `source_commit`, `schema_version`) let runtime surfaces report exactly what shipped.
+- **Test coverage:** the fast-fail `bun test` step runs with `--coverage`, prints a per-file table to the workflow's step summary, and uploads `coverage/lcov.info` as a `coverage-lcov` workflow artifact. Informational only — not a gate.
+
+The legacy Confluence pipeline (`extract-html.ts`/`extract-properties.ts`, `html_url` input) has been retired from `release.yml` (T-0036) — it survives only as the local-only `make extract-legacy-confluence` target for rebuilding historical pre-migration DBs; see "Rebuilding a historical (pre-migration) Confluence release DB" above.
+
+### Rehearsing release quality gates without publishing (`qa.yml`)
+
+Several `VALIDATION.md` invariants (`V-tool-shapes`, `V-tool-budget`, `V-retrieval-floor`, `V-retrieval-self`, `V-db-min-content`, `V-db-meta`, `V-docusaurus-docs-count`) are the release-locked gates — and since Phase B (#42) they live in exactly one place: **`qa.yml`**, which `release.yml`'s `qa` job calls (`db_source=artifact`). The **`QA` workflow (`qa.yml`, `workflow_dispatch`)** runs those *same* checks on any ref with **no npm publish, no OCI push, and no GitHub Release**, so you can ask "would the release gates pass on this branch?" without burning a version — the definition you rehearse is byte-for-byte the one the release runs. It is the intended way to rehearse changes to the release pipeline (extraction, content floors, eval) before a real dispatch.
+
+Dispatch it from the Actions tab or:
+
+```sh
+gh workflow run qa.yml --ref <branch> \
+  -f test_scope=all -f db_source=local-build
+```
+
+Inputs:
+
+- **`test_scope`** — `all` (default) or a single gate: `contract`, `eval-golden`, `eval-self`, `db-content`, `db-meta`, `docusaurus-count`, `device-map`.
+- **`db_source`** — `local-build` (default; runs the real extraction pipeline — live fetch, minutes — the path that rehearses the build + content floors) or `published` (downloads the latest Release DB).
+- **`full_versions`** — `local-build` only: extract all RouterOS versions vs. the single primary.
+- **`eval_self_blocking`** — treat the self-supervised eval as a hard gate (default `false`, matching `release.yml`'s non-blocking stance).
+
+There is a third `db_source` — `artifact` — but it is **`workflow_call`-only** (no dispatch dropdown entry): `release.yml`'s `build` job uploads its freshly extracted DB and the `qa` job pulls it via `artifact_name`, so the gates validate the exact bytes about to publish. A manual dispatch has no upstream artifact, so it stays on `local-build`/`published`.
+
+Caveat: `db_source: published` downloads the latest *non-prerelease* Release DB, which may predate a floor's introduction (today's latest predates the hardware overlay). `db-content` is therefore excluded from an `all` run on `published` and is only meaningful on `local-build` (or the release `artifact` path); requesting `test_scope: db-content db_source: published` explicitly will honestly report the unmet floor.
+
+### Version bumps are a manual step
+
+CI no longer bumps `package.json` or promotes `CHANGELOG.md` for you, on **any** channel — the old `bump-version` job's blind `PATCH + 1` auto-commit is gone entirely. Before dispatching a release:
+
+1. Edit `package.json`'s `version` by hand to the version you intend to publish (see "npm channel" below for the prerelease vs. latest shape).
+2. For a **latest** (bare-version) release, promote `## [Unreleased]` in `CHANGELOG.md` to `## [<version>] — <date>` by hand, and start a fresh `## [Unreleased]` skeleton above it. The release workflow's "Verify CHANGELOG promotion for latest-channel release" step hard-fails if a matching `## [<version>]` heading isn't already there — this is the backstop for a forgotten promotion.
+3. **Update the reference-style link definitions at the bottom of `CHANGELOG.md`** — add `[<version>]: <repo>/compare/v<previous>...v<version>` and update `[Unreleased]` to compare from `compare/v<version>...HEAD`. The version headings are reference links, so a heading promoted without its definition renders as literal `[0.11.0]` brackets and `[Unreleased]` keeps comparing from the *previous* release. **Nothing catches this**: the CHANGELOG gate only greps for the heading, and markdownlint's MD051 validates heading anchors, not undefined reference links — it was missed during the 0.11.0 promotion and caught only in PR review.
+4. Commit both files, merge to `main`, then dispatch `Release`.
+
+The existing "already published" npm preflight (`npm view <pkg>@<version>`) remains the backstop against re-dispatching an already-shipped version — loud failure, not silent, same as before.
+
+### npm channel: latest vs. next
+
+There are exactly two channels, `latest` and `next` (#152). `package.json`'s committed version is the **single source of truth for channel** — no separate CI input duplicates this:
+
+- A **bare** version (`0.11.3`) means the **latest** channel: `npm publish` runs with no `--tag` (defaults to the `latest` dist-tag), and the OCI `:latest` tag pushes.
+- A **prerelease** version of the form `MAJOR.MINOR.PATCH-next` or `MAJOR.MINOR.PATCH-next.N` means the **next** channel. Any other prerelease identifier — including the retired `alpha` / `beta` / `rc` — fails the workflow with a clear error.
+
+**`next` is never behind `latest`.** Every run enforces it:
+
+- A prerelease must be semver-newer than both the current `latest` and `next`, or the build job fails before extracting anything ("Verify prerelease is ahead of latest and next"). This catches the easy mistake of dispatching `X.Y.Z-next` after `X.Y.Z` already shipped stable — `X.Y.Z-next.N` sorts *below* `X.Y.Z`. Bump to the next unreleased version instead.
+- A stable publish also moves `next` (npm dist-tag and OCI `:next`) when the current `next` is semver-lower. A newer prerelease already on `next` stays.
+- After publishing, the `verify-dist-tags` job fails the run unless, within 15 minutes, the run's dist-tag resolves to the new version and `next` ≥ `latest`. Propagation has taken from ~135s (next.112) to over 300s (next.116), which is why this is no longer a `publish` step (#176).
+
+For prerelease dispatches, the workflow's very first extraction-pipeline step rewrites `package.json`'s version **in the workspace only** (never committed) to `MAJOR.MINOR.PATCH-next.${GITHUB_RUN_NUMBER}` before any preflight or publish step reads it. This means:
+
+- Repeated dispatches of the same committed prerelease version never collide on an already-published npm version — each run gets its own run-number suffix.
+- `npm publish --tag next` ships the run.
+- **Leave the `version` input blank for prerelease dispatches.** The true published version (with its run-number suffix) can't be predicted ahead of dispatch. Supplying `version` anyway will fail the npm publish-access preflight loudly rather than silently publishing under the wrong version.
+- OCI images get a floating `:next`, alongside the always-on `$VERSION` and `sha-$SHORT_SHA` tags. The bare `:latest` OCI tag **never** pushes on a prerelease run — this is the fix for the OCI-latest-clobber risk (an unguarded prerelease dispatch used to silently overwrite the production `/app` container's `:latest`).
+- The GitHub Release is created with `--prerelease` so it doesn't show as "Latest" on the repo's Releases page.
+- `^0.11.3-next`-style semver ranges are **not** a substitute for dist-tags — see the caveat in [README.md](README.md#prerelease-channel-optional).
+
+### Prerelease republish semantics
+
+`republish_assets: true` re-uploads GitHub Release assets and OCI tags for an already-published version without touching npm. Same-tag asset replacement is **not automatically detected** by the runtime's exact-tag freshness check (#80). Publish a new patch version for normal corrected DB content; reserve republishing for asset recovery. For same-tag recovery, stop clients owning the affected DB, run `--refresh` using their original package version and `--db` / `DB_PATH` destination, then restart them.
+
+**On any channel**, no floating OCI tags move during a republish — `:latest` and `:next` are both left alone; only the exact-version and `sha-*` image tags are re-pushed. This applies regardless of whether the republished version is `latest` or a prerelease, so a republish of an older run (of either channel) can never regress what a floating tag currently points testers at.
+
+For a **prerelease** version specifically, `republish_assets: true` has extra rules, since CI cannot recompute a past run's `$GITHUB_RUN_NUMBER`:
+
+- `version` **must** be supplied as the exact already-published run-numbered version (e.g. `v0.11.3-next.42`) — the workflow fails fast if it's blank.
+- `package.json` is **not** rewritten in this mode.
+- No `npm dist-tag add` calls happen (npm publish is already fully skipped in `republish_assets` mode).
+
+## Dataset Export
+
+`rosetta export <dir>` writes a deterministic directory of spreadsheet-friendly datasets derived from the runtime database **alone** — dataset generation reads only the resolved SQLite DB, with no caches, no source artifacts, and no re-extraction. (Like every rosetta command, startup first ensures the DB is present and current, which may download or refresh it; that readiness step is the only network activity, and never a source for the exported data.) It is an audit surface for the artifact rosetta actually ships (rationale: `briefings/B-0022-runtime-sqlite-dataset-exports.md`).
+
+```sh
+bunx @tikoci/rosetta export /tmp/rosetta-datasets
+```
+
+The current pass writes one flat TSV per subject:
+
+```text
+rosetta-datasets/
+├── manifest.toml       # provenance (from db_meta) + serialization contract + per-file row counts + disclosures
+├── changelog.tsv       # changelogs: version, released, category, is_breaking, sort_order, description
+├── callouts.tsv        # callouts joined to page rosetta_id + resolved section_anchor
+├── properties.tsv      # properties joined to pages + resolved section_anchor
+├── videos.tsv          # video metadata + per-video transcript segment/word/byte counts
+├── commands.tsv        # command glossary: path, name, type, parent_path, page_id, description, ros_version
+├── pages.tsv           # one row per page: its own word count + section/empty/table rollup counts — GitHub-readable
+├── sections.tsv        # one row per section (incl. the '_lead' fragment): sizing + table counts (pivot-able)
+└── tables.tsv          # one row per captured doc table: shape + size stats, is_property_source flag, page/section provenance, section deep-link (table_url)
+```
+
+`pages.tsv` and `sections.tsv` are the two views of the same core data: `pages.tsv` is one whole-page row (its own word count and `#sections`/`#empty`/table counts), small enough to read directly on GitHub; `sections.tsv` is one row per section, and grouping those rows by `page_id` in a spreadsheet pivots up to (near-)the page totals. The residual is heading-text lines that live in no fragment — `pages.tsv.word_count` is the authoritative whole-page figure, and a per-page sum over `sections.tsv` is the covered-body figure (~98%). `tables.tsv` is the inventory of every captured doc table — one row each with the table's shape (`column_count`/`data_row_count`/`is_ragged`), source size (`raw_bytes`), an `is_property_source` flag (`1` if and only if the table actually produced a row in the `properties` table — the data `routeros_lookup_property` surfaces — not merely that it looks property-shaped, so a property-headed table the extractor skipped is honestly `0`), page/section provenance, and a `table_url` deep-linking to the section that contains it. Columns are ordered human-readable-first (title, heading, stats) with the long URL columns last; it is the "what tables exist and where" list — the table **cell data** is not exported here. Product specs (`products/**`) and per-fragment table cell files (`pages/<slug>/**`) are not yet exported.
+
+Serialization contract (stated in full in `manifest.toml`):
+
+- **TSV**, UTF-8, LF line endings, a header row, and stable row/column ordering — a rebuild on the same DB is byte-identical.
+- **Escaping** follows the Postgres COPY text convention: `\\`=backslash, `\t`=tab, `\n`=LF, `\r`=CR, applied as a general backstop to every value. A field exactly equal to `\N` is SQL NULL; an empty field is the empty string. This keeps the one-line-equals-one-record property (parseable by `awk -F '\t'`) while remaining losslessly reversible.
+
+When the CLI-Reference overlay is populated, the export also writes a `cli-reference/` subtree (issue #124): `pages.tsv`, `entries.tsv`, `fields.tsv`, `flags.tsv`, `entry-inspect-links.tsv` (the stored exact/alias crosswalk), `field-inspect-links.tsv` (the zero-to-many field→argument view), and `source/<slug>.md` — the byte-exact fetched Markdown for every page, hashing back to `pages.tsv`'s `source_sha256`. `fields.tsv` labels its entry column `entry_source_path` and deliberately carries **no** `field_path`: a settable Argument maps to zero-to-many inspect coordinates, which `field-inspect-links.tsv` exposes explicitly (a field's `inspect_link_count` is the count of those rows). Read-only fields have zero links: a same-name inspect input is not evidence that a CLI-Reference output field is the same thing. An entry with no crosswalk row is manual-only (a menu CHR `/console/inspect` cannot self-report, not an extraction gap). These outputs appear only when the overlay has rows; an empty overlay exports nothing under `cli-reference/`.
+
+Because the export reads only the DB, a column it cannot produce is omitted and disclosed in `manifest.toml` rather than recovered from a source artifact.
+
+**Safe replacement.** `manifest.toml` is both the index and the ownership record: its `[[files]]` list names every file the export owns (each `name` is a directory-relative path, so `products/**` and `pages/<slug>/**` files are owned the same way as the flat TSVs). Re-running into a directory that already holds a manifest **rosetta wrote** adopts it — it rewrites the current file set and **prunes** any file the old manifest listed that the new run no longer produces (so a renamed page slug or dropped product leaves no stale file), cleaning up directories that empties. It only ever deletes files a prior rosetta manifest named, so files you added to the directory yourself are left untouched. Exporting into a **new or empty** directory just writes. Exporting into a **non-empty directory with no rosetta manifest** is refused, to avoid clobbering a directory the tool did not create — pass `--force` to override (on an interactive terminal you are prompted instead). Names are contained to the export root both lexically and through symlinks (a symlinked component can't make a write or prune act outside the directory). Ordering within a run is prune → write datasets → write `manifest.toml` last, so a file/directory name reused across runs transitions cleanly and the manifest never names half-written data. A run that crashes before writing `manifest.toml` leaves no manifest, so resuming into that directory needs `--force` once; the next successful run heals it. The directory is a regenerable **audit surface, not a transactional store**: a crash mid-run can leave individual dataset files as a mix of the previous and current export until the next successful run reconciles them.
+
+## Database (Standalone)
+
+The SQLite database is downloadable on its own from [GitHub Releases](https://github.com/tikoci/rosetta/releases):
+
+```text
+https://github.com/tikoci/rosetta/releases/latest/download/ros-help.db.gz
+```
+
+Each tagged release also publishes the same asset under its own version, so you can pin a specific snapshot:
+
+```text
+https://github.com/tikoci/rosetta/releases/download/v0.7.3/ros-help.db.gz
+```
+
+The version-pinned URL is what `bunx @tikoci/rosetta` uses internally — see [How Updates Work](#how-updates-work) below.
+
+Use it with any SQLite client:
+
+```sh
+sqlite3 ros-help.db "SELECT title, url FROM pages_fts WHERE pages_fts MATCH 'DHCP lease' ORDER BY rank LIMIT 5;"
+```
+
+### Tables
+
+> Row counts below are **order-of-magnitude orientation only** — the corpus grows every extraction, so no exact count is maintained here. Call `routeros_stats` on a built database for live figures (the single source of truth). Descriptions reflect the current Docusaurus-default schema; where a table still holds legacy Confluence rows, that difference is called out.
+
+| Table | Rows | What's in it |
+|-------|------|-------------|
+| `pages` | ~360 | Doc pages (Docusaurus `/docs`) — title, breadcrumb path, full text, code blocks, source URL; legacy Confluence rows carry help.mikrotik.com URLs |
+| `sections` | ~3K | Page chunks split by h1–h3 headings, with anchor IDs for deep linking |
+| `callouts` | ~950 | Warning/Note/Info/Tip admonition boxes extracted from the docs |
+| `page_tables` | ~850 | Every Docusaurus pipe table with raw Markdown, source heading, section attribution, width, and raggedness |
+| `page_table_rows` | ~9K | Header (`row_order = 0`) and data rows for `page_tables` |
+| `page_table_cells` | ~25K | Decoded cells at their actual source width; backslash-escaped pipe syntax is stored without the backslash |
+| `properties` | ~4.6K | Command properties — name, type, default value, description (from doc tables) |
+| `commands` | ~42K | RouterOS command hierarchy — dirs, commands, arguments from `/console/inspect` |
+| `command_versions` | ~2M+ | Junction table: which command paths exist in which RouterOS versions |
+| `schema_nodes` | ~40K | Rich command-tree nodes from `deep-inspect.json` — arch tags, parsed descriptions, completion metadata |
+| `schema_node_presence` | active heads only | Junction table: which `schema_nodes` exist in active channel-head versions; pruned during release builds |
+| `ros_versions` | dozens | Tracked RouterOS versions with channel (stable/development) |
+| `devices` | ~155 | MikroTik hardware — CPU, RAM, storage, ports, PoE, wireless, license level, MSRP |
+| `device_test_results` | ~3K | Ethernet and IPSec throughput benchmarks — packet sizes, modes, Mbps/Kpps |
+| `hardware_catalog` | ~255 | `/hardware` + `mikrotik.com/product` device overlay — superset of `devices` (accessories, legacy/EOL SKUs included); never-null `name`, `category` from the `/hardware` sidebar taxonomy, raw www spec fields + non-default IP + FCC/IC IDs as JSON, optional `device_id` link back |
+| `device_aliases` | ~752 | Every observed device slug/code/name variant (matrix.csv, `/hardware` slug/link/table code, www requested/declared/compare code) resolved to one `hardware_catalog.rosetta_device_id` (priority-ranked, collision-counted) |
+| `device_overview` (view) | ~255 | Documented read surface: `hardware_catalog` joined to `devices` spec columns with per-device alias counts |
+| `changelogs` | varies | Parsed changelog entries per RouterOS version — category, description, breaking flag |
+| `videos` | ~660 | MikroTik YouTube video metadata — title, description, duration, chapters |
+| `video_segments` | ~2.2K non-empty | Chapter-level transcript segments with timestamps for deep linking |
+| `dude_pages` | varies | Archived Dude wiki pages from Wayback/cache |
+| `dude_images` | varies | Screenshot metadata for Dude wiki pages |
+| `skills` | 8 | Agent skill guides from tikoci/routeros-skills with provenance |
+| `skill_references` | varies | Reference documents bundled with skills |
+| `glossary` | varies | RouterOS terms, aliases, definitions, and search hints |
+| `db_meta` | varies | Release provenance and schema/update metadata |
+
+Each content table has a corresponding FTS5 index (e.g., `pages_fts`, `properties_fts`, `devices_fts`, `video_segments_fts`).
+
+### Logical schema reference
+
+The live authoritative DDL is available from the `rosetta://schema.sql` MCP resource or `sqlite_master`. This block mirrors the logical table layout and relationship model used throughout the codebase:
+
+```sql
+-- Pages (Docusaurus /docs prose since T-0035; legacy Confluence rows had no
+-- rosetta_id and used a Confluence-numbered `id` — both shapes coexist in the
+-- schema, but a single build populates one or the other, never both)
+pages (
+    id INTEGER PRIMARY KEY,  -- synthetic rowid for Docusaurus-sourced rows;
+                              -- literal Confluence page ID for legacy rows
+    rosetta_id,               -- TEXT, unique-when-not-null. URL-path-derived
+                              -- (e.g. 'docs/network-management/dhcp'); NULL on
+                              -- legacy Confluence rows. See DESIGN.md H7 / B-0012.
+    slug, title, path,       -- path = 'docs > network-management > dhcp'
+    depth, parent_id,
+    url,                     -- https://manual.mikrotik.com/{rosetta_id}
+    text, code, code_lang,
+    author, last_updated,
+    word_count, code_lines, html_file
+)
+
+-- FTS5 over pages
+pages_fts USING fts5(title, path, text, code,
+    content=pages, content_rowid=id,
+    tokenize='porter unicode61'
+)
+
+-- Callouts (Note/Warning/Info/Tip from Confluence callout macros)
+callouts (
+    id, page_id REFERENCES pages(id),
+    type,          -- 'Note' | 'Warning' | 'Info' | 'Tip'
+    content TEXT,
+    section_id,    -- REFERENCES sections(id); nullable when no section resolves
+    sort_order
+)
+
+-- FTS5 over callouts
+callouts_fts USING fts5(content, ...)
+
+-- Sections (a synthetic Docusaurus lead fragment, then page chunks split by h1–h3 headings)
+sections (
+    id, page_id REFERENCES pages(id),
+    heading, level,        -- heading text, 1/2/3; Docusaurus lead uses title + level 0
+    anchor_id,             -- section anchor identity; Docusaurus lead reserves `_lead`
+    text, code,
+    word_count, sort_order
+)
+
+-- Every Docusaurus pipe table, without guessing what the table means. Exact source
+-- Markdown preserves delimiter/alignment syntax; normalized children make cells queryable.
+page_tables (
+    id INTEGER PRIMARY KEY,
+    page_id INTEGER NOT NULL REFERENCES pages(id),
+    section_id INTEGER REFERENCES sections(id), -- enclosing h1-h3 or synthetic lead; nullable
+    source_heading TEXT,                         -- nearest h1-h6 heading; nullable
+    raw_markdown TEXT NOT NULL,
+    column_count INTEGER NOT NULL,              -- header width
+    data_row_count INTEGER NOT NULL,
+    is_ragged INTEGER NOT NULL,                 -- 0|1; ragged rows keep actual width
+    sort_order INTEGER NOT NULL,
+    UNIQUE(page_id, sort_order)
+)
+
+page_table_rows (
+    id INTEGER PRIMARY KEY,
+    table_id INTEGER NOT NULL REFERENCES page_tables(id),
+    row_order INTEGER NOT NULL,                 -- 0 = header; data starts at 1
+    UNIQUE(table_id, row_order)
+)
+
+page_table_cells (
+    row_id INTEGER NOT NULL REFERENCES page_table_rows(id),
+    column_order INTEGER NOT NULL,
+    value TEXT NOT NULL,                        -- decoded; `\\|` is stored as `|`
+    PRIMARY KEY(row_id, column_order)
+)
+
+-- Properties derived from Docusaurus tables/bullets (or historical Confluence tables)
+properties (
+    id, page_id, name, type, default_val,
+    description,
+    section,               -- raw nearest-heading text, ANY level (h1–h6); kept for compat
+    section_id,            -- REFERENCES sections(id); the resolvable identity, nullable
+    source_table_row_id,   -- REFERENCES page_table_rows(id); exact source for table-derived
+                           -- rows, NULL for bullet-derived and historical rows
+    sort_order
+)
+-- No UNIQUE: (page_id, name, section) is not an identity in this corpus — a single section
+-- can document one property name several times with different meanings (dot1x defines
+-- `interface` twice under "Server": once for the server table, once for the client one).
+-- The constraint plus INSERT OR IGNORE silently destroyed 141 distinct properties (issue #90).
+-- Extractors assert parsed == stored instead, so a drop fails the build.
+--
+-- For a property under an h4–h6, `section` and `section_id` deliberately disagree: `section`
+-- names the h4, `section_id` resolves to the enclosing h1–h3 section (`sections` also mints
+-- a synthetic lead row for pre-heading prose). The h4 name remains recoverable from `section`.
+
+-- FTS5 over properties
+properties_fts USING fts5(name, description, ...)
+
+-- RouterOS command tree (from inspect.json / deep-inspect.json)
+commands (
+    id, path UNIQUE,     -- '/ip/firewall/filter'
+    name, type,          -- 'dir' | 'cmd' | 'arg'
+    parent_path,
+    page_id,             -- linked doc page (nullable)
+    description,         -- from inspect.json desc field
+    ros_version          -- primary version tag
+)
+
+-- Version tracking
+ros_versions (
+    version PRIMARY KEY, -- '7.22', '7.23beta2'
+    channel,             -- 'stable' | 'development'
+    extra_packages,      -- 0|1
+    extracted_at,
+    api_transport,       -- from deep-inspect _meta (e.g., 'rest')
+    enrichment_duration_ms, -- deep-inspect enrichment time
+    crash_paths_safe     -- deep-inspect crash safety metadata
+)
+
+command_versions (
+    command_path, ros_version,
+    PRIMARY KEY (command_path, ros_version)
+)
+
+-- Multi-arch schema nodes (from deep-inspect.json — richer than commands table)
+schema_nodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,       -- 'dir' | 'cmd' | 'arg'
+    parent_id INTEGER REFERENCES schema_nodes(id),
+    parent_path TEXT,
+    dir_role TEXT,            -- 'list' | 'namespace' | 'hybrid' (dirs only)
+    desc_raw TEXT,            -- raw description from inspect.json
+    data_type TEXT,           -- parsed: 'string' | 'integer' | 'time' | 'enum' | 'script' | 'range'
+    enum_values TEXT,         -- JSON array of enum values
+    enum_multi INTEGER,       -- 1 if multi-select enum (e.g., "ftp|read[,Permission*]")
+    type_tag TEXT,            -- type tag from multi-select (e.g., "Permission")
+    range_min TEXT,           -- lower bound for ranged types
+    range_max TEXT,           -- upper bound for ranged types
+    max_length INTEGER,       -- max string length
+    _arch TEXT,               -- NULL=both arches, 'x86'/'arm64'=platform-specific
+    _package TEXT,            -- future: package that provides this node
+    _attrs TEXT,              -- JSON catch-all (completion data, future metadata)
+    page_id INTEGER REFERENCES pages(id),
+    UNIQUE(path, type)
+)
+
+-- schema_nodes version presence (flat junction — no arch column, arch is on schema_nodes)
+schema_node_presence (
+    node_id INTEGER NOT NULL REFERENCES schema_nodes(id),
+    version TEXT NOT NULL,
+    PRIMARY KEY (node_id, version)
+)
+-- Release DBs prune schema_node_presence to active channel heads
+-- (stable, long-term, testing, development); command_versions keeps
+-- the full extracted version history.
+
+-- MikroTik product hardware specs (from product matrix CSV)
+devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_name UNIQUE, product_code,
+    architecture,        -- ARM 64bit, ARM 32bit, MIPSBE, MMIPS, SMIPS
+    cpu, cpu_cores, cpu_frequency,
+    license_level,       -- 3/4/5/6
+    operating_system,    -- RouterOS, RouterOS v7, RouterOS / SwitchOS
+    ram, ram_mb,         -- original text + normalized MB
+    storage, storage_mb,
+    poe_in, poe_out, max_power_w,
+    wireless_24_chains, wireless_5_chains,
+    eth_fast, eth_gigabit, eth_2500,
+    sfp_ports, sfp_plus_ports, eth_multigig,
+    usb_ports, sim_slots, msrp_usd,
+    product_url,         -- mikrotik.com product page URL
+    block_diagram_url    -- CDN URL to block diagram PNG
+)
+
+-- FTS5 over devices (unicode61 only — no porter stemming for model numbers)
+devices_fts USING fts5(product_name, product_code, architecture, cpu, ...)
+
+-- Device performance test results (from mikrotik.com product pages)
+device_test_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id REFERENCES devices(id),
+    test_type,           -- 'ethernet' | 'ipsec'
+    mode,                -- 'Bridging' | 'Routing' | 'Single tunnel' | '256 tunnels'
+    configuration,       -- '25 ip filter rules' | 'AES-128-CBC + SHA1' | etc.
+    packet_size INTEGER, -- 64, 512, 1400, 1518
+    throughput_kpps REAL,
+    throughput_mbps REAL,
+    UNIQUE(device_id, test_type, mode, configuration, packet_size)
+)
+
+-- Hardware catalog: /hardware + mikrotik.com/product device overlay, superset of
+-- `devices` (accessories, legacy/EOL SKUs included). `devices` itself is untouched.
+-- See briefings/B-0017-hardware-overlay-device-resolution.md and src/extract-hardware-catalog.ts.
+hardware_catalog (
+    id INTEGER PRIMARY KEY,
+    rosetta_device_id TEXT NOT NULL UNIQUE,  -- rosetta-curated stable key, not any one
+                                              -- source's own slug (MikroTik does rename
+                                              -- products, e.g. hEX -> hEX refresh)
+    device_id INTEGER REFERENCES devices(id),  -- NULL for accessory/legacy-only rows;
+                                                -- named to match device_test_results.device_id
+    name TEXT NOT NULL,          -- display name: COALESCE(www title, /hardware title, matrix name)
+    category TEXT,               -- from /hardware sidebar taxonomy (12 values today)
+    discontinued INTEGER,        -- 0/1/NULL, from www's Discontinued badge
+    specs_json TEXT,             -- raw www key/value spec fields as JSON, plus _non_default_ips
+                                  -- and _fcc_id / _ic regulatory arrays (coverage drops off
+                                  -- sharply outside a small universal core — see B-0017
+                                  -- field-frequency census — so this is a blob, not ~40
+                                  -- mostly-null columns)
+    source_hardware_slug TEXT,   -- provenance: /hardware page this row came from
+    source_www_code TEXT         -- provenance: mikrotik.com/product/<code> this row came from
+)
+
+-- Every observed slug/code/name variant -> one hardware_catalog.rosetta_device_id.
+-- alias is stored normalized (trim + lowercase); source values: 'matrix.csv',
+-- 'hardware-slug', 'hardware-link', 'hardware-table', 'www-code',
+-- 'www-declared-code', 'www-compare-id'. Assignment is priority-ranked and
+-- collision-counted (extract-hardware-catalog.ts) so a shared code resolves to the
+-- device that owns it, not whichever was processed first.
+device_aliases (
+    alias TEXT PRIMARY KEY,
+    rosetta_device_id TEXT NOT NULL REFERENCES hardware_catalog(rosetta_device_id),
+    source TEXT NOT NULL
+)
+
+-- Documented read surface: catalog + devices spec columns + per-device alias count.
+-- Consumers (MCP, TUI, ad-hoc SQL) should read this rather than re-deriving the join.
+device_overview AS
+    SELECT hc.rosetta_device_id, hc.name, hc.category, hc.discontinued, hc.device_id,
+           d.product_name, d.product_code, d.architecture, d.cpu,
+           hc.source_hardware_slug, hc.source_www_code, hc.specs_json,
+           (SELECT COUNT(*) FROM device_aliases da
+             WHERE da.rosetta_device_id = hc.rosetta_device_id) AS alias_count
+    FROM hardware_catalog hc LEFT JOIN devices d ON d.id = hc.device_id
+
+-- Changelogs (parsed per-entry from MikroTik download server)
+changelogs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version TEXT NOT NULL,    -- '7.22', '7.22.1'
+    released TEXT,            -- '2026-Mar-09 10:38'
+    category TEXT NOT NULL,   -- subsystem: 'bgp', 'bridge', 'wifi'
+    is_breaking INTEGER NOT NULL DEFAULT 0,  -- 1 for !) entries
+    description TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    UNIQUE(version, sort_order)
+)
+
+-- FTS5 over changelogs
+changelogs_fts USING fts5(category, description,
+    content=changelogs, content_rowid=id,
+    tokenize='porter unicode61'
+)
+
+-- YouTube video metadata (from yt-dlp transcript extraction)
+videos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id TEXT NOT NULL UNIQUE,   -- YouTube video ID
+    title, description, channel,
+    upload_date,                     -- YYYYMMDD string
+    duration_s INTEGER,              -- duration in seconds
+    url TEXT NOT NULL,               -- https://youtube.com/watch?v=...
+    view_count INTEGER,
+    like_count INTEGER,
+    has_chapters INTEGER NOT NULL DEFAULT 0  -- 1 if yt-dlp provided chapters
+)
+
+-- FTS5 over video titles/descriptions
+videos_fts USING fts5(title, description,
+    content=videos, content_rowid=id,
+    tokenize='porter unicode61'
+)
+
+-- Chapter-level transcript segments (one row per chapter, or one row for no-chapter videos)
+video_segments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id INTEGER REFERENCES videos(id),  -- FK to videos.id (INTEGER, NOT videos.video_id)
+    chapter_title TEXT,              -- NULL if video has no chapters
+    start_s INTEGER NOT NULL DEFAULT 0,
+    end_s INTEGER,                   -- NULL for single-segment no-chapter videos
+    transcript TEXT NOT NULL,        -- joined cue text for this segment
+    sort_order INTEGER NOT NULL
+)
+
+-- FTS5 over transcript segments
+video_segments_fts USING fts5(chapter_title, transcript,
+    content=video_segments, content_rowid=id,
+    tokenize='porter unicode61'
+)
+
+-- The Dude wiki documentation (archived from wiki.mikrotik.com via Wayback Machine)
+dude_pages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,   -- 'Probes', 'Device_discovery'
+    title, path,                 -- path = 'The Dude > v6 > Probes'
+    version TEXT NOT NULL DEFAULT 'v6',  -- 'v6' or 'v3'
+    url,                         -- original wiki.mikrotik.com URL
+    wayback_url,                 -- web.archive.org snapshot URL used
+    text, code,
+    last_edited,
+    word_count
+)
+
+-- Dude page screenshots (downloaded from Wayback Machine)
+dude_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_id INTEGER NOT NULL REFERENCES dude_pages(id),
+    filename, alt_text, caption,
+    local_path,                  -- 'dude/images/Dude-probes-all.JPG'
+    original_url, wayback_url,
+    sort_order
+)
+
+-- FTS5 over dude pages
+dude_pages_fts USING fts5(title, path, text, code,
+    content=dude_pages, content_rowid=id,
+    tokenize='porter unicode61'
+)
+
+-- Agent skill guides (from tikoci/routeros-skills — community content, not official MikroTik docs)
+skills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,       -- 'routeros-fundamentals'
+    description TEXT,                -- from YAML frontmatter
+    content TEXT NOT NULL,           -- full SKILL.md markdown (frontmatter stripped)
+    source_repo TEXT NOT NULL DEFAULT 'tikoci/routeros-skills',
+    source_sha TEXT,                 -- git commit SHA at extraction time
+    source_url TEXT,                 -- GitHub URL to SKILL.md
+    word_count INTEGER,
+    extracted_at TEXT                -- ISO 8601
+)
+
+-- Reference docs for each skill
+skill_references (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    skill_id INTEGER NOT NULL REFERENCES skills(id),
+    path TEXT NOT NULL,              -- 'references/rest-api-patterns.md'
+    filename TEXT NOT NULL,          -- 'rest-api-patterns.md'
+    content TEXT NOT NULL,
+    word_count INTEGER,
+    UNIQUE(skill_id, path)
+)
+
+-- FTS5 over skills
+skills_fts USING fts5(name, description, content,
+    content=skills, content_rowid=id,
+    tokenize='porter unicode61'
+)
+
+-- Glossary of RouterOS terms and abbreviations (seeded at DB init)
+glossary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    term TEXT NOT NULL UNIQUE,   -- canonical lowercase term
+    definition TEXT NOT NULL,
+    category TEXT NOT NULL,      -- 'product' | 'protocol' | 'subsystem' | 'concept'
+    aliases TEXT,                -- comma-separated alternate names
+    search_hint TEXT,            -- suggested search query for routeros_search
+    UNIQUE(term)
+)
+
+-- DB provenance and update metadata (key/value to avoid schema churn).
+-- Stamped by scripts/stamp-db-meta.ts in CI; read by mcp.ts startup banner
+-- and the bunx auto-update flow. Standard keys: release_tag, built_at,
+-- source_commit, schema_version. Added in SCHEMA_VERSION 5. The hardware
+-- overlay ETL (extract-hardware-catalog.ts) stamps three more:
+-- hardware_catalog_source, hardware_catalog_built_at, and
+-- hardware_catalog_matrix_snapshot (the dated matrix/<date>/ snapshot the
+-- device_id links were built from). extract-all-versions.ts stamps
+-- command_versions_expected (how many RouterOS versions restraml listed),
+-- which qa.yml's db-content gate compares with the versions that have
+-- command data (#178).
+db_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+)
+```
+
+## How Updates Work
+
+Once configured as an MCP server, rosetta should keep itself up to date without manual intervention. Here's the model:
+
+1. **Package updates (`bunx`).** `bunx @tikoci/rosetta` re-resolves the npm `latest` dist-tag on each MCP-client launch and downloads the new package version automatically. No manual cache cleanup is needed in normal operation. Pinned and prerelease specs keep their selected version/channel. For recovery, stop clients owning the DB and run your original invocation with `--refresh` and the same `--db` / `DB_PATH` override.
+
+2. **Database updates (auto on first launch after a package update).** Package mode defaults to `~/.rosetta/ros-help-<fullVersion>.db`, so different versions (including prerelease counters) download separate files and can remain open concurrently. Same-version clients share the file and first-download lock. Old copies are cleaned up automatically (see item 8). Two older unpatched versions still share the legacy default: give them distinct absolute `DB_PATH` values or upgrade. The DB download URL is **pinned to the running package version** — `releases/download/v<VERSION>/ros-help.db.gz` — with `releases/latest/` as a fallback. On every launch, `ensureDbReady()` compares a non-null, stamped on-disk `db_meta.release_tag` against the running package's own version — not just its schema version — so a new package version fetches the matching DB on first launch **regardless of whether that release bumped the schema** (e.g. a content-only bump like `0.11.0-beta.92` → `beta.93`, #76/#23). Dev checkouts (running from a git clone) are exempt from the release-tag comparison — a locally-extracted DB isn't tied to any published release.
+
+3. **Atomic, validated download.** Downloads go to `<dbPath>.tmp.<pid>` first. The file is checked for SQLite magic bytes, minimum size (~50 MB), expected `PRAGMA user_version`, and minimum row counts before being atomically renamed into place. Stale `.tmp.*`, `.db-wal`, and `.db-shm` artifacts are removed automatically when no active rosetta download lock exists. Validation failure leaves the existing DB untouched. Package-managed downloads are converted to rollback-journal mode and opened read-only. A refresh of a managed file that a live client holds is refused with a message naming the path. For `DB_PATH` / `--db` / dev databases (WAL mode, not lock-probed), stop clients owning the destination before an intentional replacement (`--refresh`, `--setup --force`, or `db-sync`): deleting WAL sidecars and renaming a live DB can break its open connections.
+
+4. **Provenance.** Every released DB carries a `db_meta` table (`release_tag`, `built_at`, `source_commit`, `schema_version`). Rosetta logs a one-line provenance banner at startup: `rosetta v0.7.3 ready (DB schema v5, 317 pages, release v0.7.3).`
+
+5. **Schema mismatch is a hard error; a content-only release-tag mismatch degrades gracefully.** If a download still doesn't match the expected schema after the auto-recovery attempt, the server exits with an actionable message instead of silently booting on unqueryable data — retry the selected package version with `--refresh` and the same resolved DB path after stopping its owners. But if the mismatch is release-tag-only (same schema, newer content published) and the refresh attempt itself fails — e.g. offline — rosetta logs a warning and keeps serving the existing, still-queryable DB instead of crashing startup.
+
+   Set `ROSETTA_OFFLINE=1` to opt into this deliberately — rosetta skips the network attempt entirely instead of letting it time out. A release-tag-only mismatch still falls back to the existing DB with a warning; a genuine schema mismatch still fails hard (offline can't fix an unqueryable DB either way).
+
+6. **Manual refresh.** Stop clients owning the DB, then append `--refresh` to your original invocation, preserving its version and `--db` / `DB_PATH` override. This downloads and validates without printing MCP config. Same-tag asset replacements are not automatically detected; normal corrected content should ship as a new patch version, with manual refresh reserved for recovery.
+
+7. **`~/.rosetta/ros-help-<fullVersion>.db` is the default** for `bunx` / global installs. `DB_PATH` (highest priority) and `--db` override it, and missing parent directories are created recursively. Relative paths resolve from the current working directory; use absolute paths in MCP environment settings because `~` is not shell-expanded. Compiled binaries store the DB next to the executable; dev checkouts use `<repo>/ros-help.db`.
+
+8. **Automatic cleanup (#151).** On startup and after a refresh, rosetta keeps every package version currently running plus the most recently used idle one, and deletes other `~/.rosetta/ros-help-<version>.db` files. It never deletes a file a running client holds (each client holds a SQLite read lock for its lifetime). The legacy shared `ros-help.db` (and its `-wal`/`-shm`) is never deleted automatically. Pre-0.11.3 clients only update its file times when they start, not when they query, so a client running for weeks looks idle, and deleting the file under it breaks every call with `disk I/O error` (#165). Once all three files have been untouched for 14 days, the startup log names the file and its size. Delete `~/.rosetta/ros-help.db*` by hand after stopping any ≤0.11.2 clients. Files with other names, WAL-mode files, symlinks, and `DB_PATH` / `--db` targets are never touched; an override naming a managed `ros-help-<semver>.db` inside `~/.rosetta/` is rejected. If a newer version's database is present, the server notes it in its MCP instructions and `routeros_stats.newer_local_versions`: check the MCP config's package spec (`@next` vs `@latest`).
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **First launch is slow** | One-time database download (~50 MB). Subsequent starts are instant. |
+| **`npx @tikoci/rosetta` fails** | Not supported: this package requires Bun, not Node.js. Use `bunx` instead of `npx`. Without Bun on PATH, `npx` fails with `env: bun: No such file or directory` (the entry point has a `bun` shebang, #175). |
+| **`npm install -g` then `rosetta` fails** | A global npm install works only if Bun is on PATH, because the `rosetta` command runs under `bun`. Prefer `bunx`: it's simpler and auto-updates. |
+| **ChatGPT Apps can't connect** | ChatGPT Apps require a remote HTTPS MCP endpoint. Use the [MikroTik /app install](README.md#install-on-mikrotik-app) for a hosted endpoint, or Codex CLI for local stdio. |
+| **Claude Desktop can't find `bunx`** | Claude Desktop on macOS may not inherit shell PATH. Use the full path to bunx (run `which bunx` to find it, typically `~/.bun/bin/bunx`). `bunx @tikoci/rosetta --setup` prints the full-path config. |
+| **macOS Gatekeeper blocks binary** | Use `bunx` install (no Gatekeeper issues), or: `xattr -d com.apple.quarantine ./rosetta` |
+| **Windows SmartScreen warning** | Use `bunx` install (no SmartScreen issues), or click **More info → Run anyway** |
+| **How to update** | `bunx` always uses the latest published version. The DB is version-pinned to the package and auto-downloads on first launch after a package update — see [How Updates Work](#how-updates-work). For binaries, re-download from [Releases](https://github.com/tikoci/rosetta/releases/latest). MikroTik /app with `auto-update: true` pulls the latest image on each boot. |
+| **`bunx` is using a stale package** | Verify the selected dist-tag or exact version. Stop clients owning its DB, then refresh using that spec and the same DB path. |
+| **"DB schema mismatch" or "Still incompatible after re-download"** | The selected build and DB disagree. Stop clients owning the reported path, then retry the diagnostic's command, which preserves that build and path. |
+| **Same-tag DB asset was recovered** | Freshness checks cannot detect this. Stop owners, refresh the original version/path, then restart. Publish a new patch version for normal content corrections. |
+| **"is in use by another rosetta client" on refresh** | A running client holds that version's database. Stop the MCP clients using it (or the editor sessions that launched them), then rerun the printed command. |
+| **"rosetta vX has run on this machine; this client is vY"** | Another config resolves a newer rosetta. If this one is meant to follow it, update the package spec (e.g. it pins an exact version or a retired `@alpha` / `@beta` / `@rc` tag). |
