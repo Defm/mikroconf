@@ -1,67 +1,65 @@
 # fill it inside netwatch script
-:global NetwatchHostName;
-:global NetwatchHostState;
+:global globalNetwatchHostName
+:global globalNetwatchHostState
 
-# This script may be triggered twice (or more) per moment, so push down Globals as fast as we can, before they're overwritten
-:local localNetwatchHostName $NetwatchHostName;
-:local localNetwatchHostState $NetwatchHostState;
-
-:local SafeScriptCall do={
-
-    :if ([:len $0]!=0) do={
-        :if ([:len $1]!=0) do={
-            :if ([:len [/system script find name=$1]]!=0) do={
-
-                :do {
-                    :log warning "Starting script: $1 (NETWATCH context)";
-                    :put "Starting script: $1"
-                    /system script run $1;
-                } on-error= {
-                    :log error "FAIL Starting script: $1 (NETWATCH context)";
-                    :put "FAIL Starting script: $1"
-                };
-
-            }
-        }
-    } 
-
-}
+# may be triggered twice per moment - snapshot globals first
+:local netwatchHostName $globalNetwatchHostName
+:local netwatchHostState $globalNetwatchHostState
 
 # init globals as far as we are inside *sys user account
-$SafeScriptCall "doEnvironmentSetup";
+:global globalSafeScriptCall
+:if (!any $globalSafeScriptCall) do={ /system script run doEnvironmentSetup }
 
-# NetWatch notifier OnDown
+:local sysname [/system identity get name]
+:local scriptname "doNetwatchHost"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname "NETWATCH"
 
-:local scriptname "doNetwatchHost";
-:local state "Starting script: $scriptname";
-$globalNoteMe value=$state;
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-:global globalTgMessage;
-:global globalNoteMe;
-
-
-:if (!any $localNetwatchHostName) do={
-
-  :set state "No NetwatchHostName provided..";
-  $globalNoteMe value=$state;
-  :error $inf; 
+:if (!any $netwatchHostName) do={
+    :set state "No globalNetwatchHostName provided.."
+    $globalNoteMe value=$state
+    :error $state
 }
 
-:if (!any $localNetwatchHostState) do={
-
-  :set state "No NetwatchHostState provided..";
-  $globalNoteMe value=$state;
-  :error $inf; 
+:if (!any $netwatchHostState) do={
+    :set state "No globalNetwatchHostState provided.."
+    $globalNoteMe value=$state
+    :error $state
 }
 
-:set state "Netwatch for $localNetwatchHostName started...";
-$globalNoteMe value=$state;
+:onerror errorDescr in={
 
-:set state "$localNetwatchHostName is $localNetwatchHostState";
-:log warning "$state";
+    :set state "Netwatch for $netwatchHostName started..."
+    $globalNoteMe value=$state
 
-$globalTgMessage value=$state;
+    :set state "$netwatchHostName is $netwatchHostState"
+    $globalNoteMe value=$state
+    :log warning $state
+    $globalTgMessage value=$state
 
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
 
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: $netwatchHostName is $netwatchHostState, notified"
+}
 
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
 
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

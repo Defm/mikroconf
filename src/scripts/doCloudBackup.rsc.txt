@@ -1,41 +1,66 @@
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doCloudBackup";
+:local sysname [/system identity get name]
+:local scriptname "doCloudBackup"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalNoteMe;
-:local state
-:local itsOk true;
+:global globalNoteMe
+:global globalTgMessage
+:global globalSecret
+:global globalOnPrimaryPartition
+:local itsOk true
+:local state ""
 
-:global SECRET;
-# Configure at runtime: $SECRET set BACKUP_PASSWORD password="YOUR_SECRET"
-:local BackupPassword "$[$SECRET get BACKUP_PASSWORD]";
+# Configure at runtime: $globalSecret set BACKUP_PASSWORD password="YOUR_SECRET"
+:local backupPassword "$[$globalSecret get BACKUP_PASSWORD]"
 
-# we are not interested in output, but print without count-only is
-# required to fetch information from cloud
-
-:global globalOnPrimaryPartition;
-:if ( ![$globalOnPrimaryPartition] ) do {
-    
+# preflight
+:if (![$globalOnPrimaryPartition]) do={
     :set state "WARNING: the system booted up from fallback partition - skipping backup!"
     :log error $state
-    $globalNoteMe value=$state;
-    :error $state;
-
+    $globalNoteMe value=$state
+    :error $state
 }
 
-/system backup cloud print as-value
+:onerror errorDescr in={
 
-:local Backup ([ /system/backup/cloud/find ]->0);
-:if ([ :typeof $Backup ] = "id") do={
-    /system/backup/cloud/upload-file action=create-and-upload password=$BackupPassword replace=$Backup;
-} else={
-    /system/backup/cloud/upload-file action=create-and-upload password=$BackupPassword;
+    # we are not interested in output, but print without count-only is
+    # required to fetch information from cloud
+    /system backup cloud print as-value
+
+    :set state "Creating and uploading cloud backup"
+    $globalNoteMe value=$state
+
+    :local backup ([/system/backup/cloud/find]->0)
+    :if ([:typeof $backup] = "id") do={
+        /system/backup/cloud/upload-file action=create-and-upload password=$backupPassword replace=$backup
+    } else={
+        /system/backup/cloud/upload-file action=create-and-upload password=$backupPassword
+    }
+
+    :set backup ([/system/backup/cloud/find]->0)
+    :local backupName [/system/backup/cloud/get $backup name]
+    :set state "Cloud backup file uploaded: $backupName"
+    $globalNoteMe value=$state
+    $globalNoteMe value="Done"
+
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
 }
 
-:local Backup ([ /system/backup/cloud/find ]->0);
-:local BackupName [/system/backup/cloud/get $Backup name];
-:set state "Creating and uploading backup file... $BackupName"
-$globalNoteMe value=$state;
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: cloud backup uploaded"
+}
 
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
 
+$globalNoteMe value=$inf
 
-
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

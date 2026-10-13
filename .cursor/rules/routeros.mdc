@@ -8,7 +8,8 @@ alwaysApply: false
 # RouterOS
 
 - Сохраняй совместимость с версиями и пакетами из `docs/devices/inventory.md`.
-- Не встраивай пароли, токены, ключи или passphrase; используй `$SECRET` либо ввод оператора во время восстановления.
+- Не встраивай пароли, токены, ключи или passphrase; используй `$globalSecret` либо ввод оператора во время восстановления.
+- Оформление скриптов — по `docs/style-canon.md`, раздел 4 (заголовок, `:onerror errorDescr`, footer, camelCase, без `;`).
 - Не меняй одновременно код скрипта и путь выпуска без отдельного плана cutover.
 - Учитывай ограничение `fetch output=user` и риск усечения больших скриптов.
 - Перед write-capable изменением опиши preconditions, проверку, откат и влияние на `anna`, `capxl`, `capax`, `atl`, `CHR`, `mikrouter`.

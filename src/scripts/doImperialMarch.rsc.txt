@@ -1,58 +1,92 @@
+:local sysname [/system identity get name]
+:local scriptname "doImperialMarch"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:delay 6
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-:beep frequency=500 length=500ms;
-:delay 500ms;
+:onerror errorDescr in={
+    :set state "Playing Imperial March"
+    $globalNoteMe value=$state
 
-:beep frequency=500 length=500ms;
-:delay 500ms;
+    :delay 6
 
-:beep frequency=500 length=500ms;
-:delay 500ms;
+    :beep frequency=500 length=500ms
+    :delay 500ms
 
-:beep frequency=400 length=500ms;
-:delay 400ms;
+    :beep frequency=500 length=500ms
+    :delay 500ms
 
-:beep frequency=600 length=200ms;
-:delay 100ms;
+    :beep frequency=500 length=500ms
+    :delay 500ms
 
-:beep frequency=500 length=500ms;
-:delay 500ms;
+    :beep frequency=400 length=500ms
+    :delay 400ms
 
-:beep frequency=400 length=500ms;
-:delay 400ms;
+    :beep frequency=600 length=200ms
+    :delay 100ms
 
-:beep frequency=600 length=200ms;
-:delay 100ms;
+    :beep frequency=500 length=500ms
+    :delay 500ms
 
-:beep frequency=500 length=500ms;
-:delay 1000ms;
+    :beep frequency=400 length=500ms
+    :delay 400ms
 
+    :beep frequency=600 length=200ms
+    :delay 100ms
 
+    :beep frequency=500 length=500ms
+    :delay 1000ms
 
-:beep frequency=750 length=500ms;
-:delay 500ms;
+    :beep frequency=750 length=500ms
+    :delay 500ms
 
-:beep frequency=750 length=500ms;
-:delay 500ms;
+    :beep frequency=750 length=500ms
+    :delay 500ms
 
-:beep frequency=750 length=500ms;
-:delay 500ms;
+    :beep frequency=750 length=500ms
+    :delay 500ms
 
-:beep frequency=810 length=500ms;
-:delay 400ms;
+    :beep frequency=810 length=500ms
+    :delay 400ms
 
-:beep frequency=600 length=200ms;
-:delay 100ms;
+    :beep frequency=600 length=200ms
+    :delay 100ms
 
-:beep frequency=470 length=500ms;
-:delay 500ms;
+    :beep frequency=470 length=500ms
+    :delay 500ms
 
-:beep frequency=400 length=500ms;
-:delay 400ms;
+    :beep frequency=400 length=500ms
+    :delay 400ms
 
-:beep frequency=600 length=200ms;
-:delay 100ms;
+    :beep frequency=600 length=200ms
+    :delay 100ms
 
-:beep frequency=500 length=500ms;
-:delay 1000ms;
+    :beep frequency=500 length=500ms
+    :delay 1000ms
+
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
+
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: sequence played"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

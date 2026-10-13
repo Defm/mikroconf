@@ -30,6 +30,31 @@ MCP запускается с `ROSETTA_OFFLINE=1`.
 MikroTik MCP читает inventory из
 `~/.config/mikrobackups/inventory.yml`, а доверенные SSH host keys — из
 `~/.ssh/mikrobackups/known_hosts`. Не копируйте эти файлы в workspace.
+В inventory указаны пользователь `automation` и ключ
+`~/.ssh/mikrobackups/automation`. Каталог MCP остаётся read-only, но SSH-аккаунт
+на устройстве привилегированный: write-команды по-прежнему режет hook и
+hardened allowlist, least-privilege пользователя `cursor-diag` это не заменяет.
+
+Локальная готовность (без SSH):
+
+```sh
+./tools/check-mcp-readonly.sh
+```
+
+Пустой `known_hosts` — ожидаемый fail-closed: hardened-клиент использует
+только этот файл и `RejectPolicy`. Закрепляйте ключ по заранее известному
+fingerprint, не копируйте `~/.ssh/known_hosts` и не принимайте
+непроверенный `ssh-keyscan`:
+
+```sh
+./tools/pin-host-key.sh <host> SHA256:<fingerprint>
+```
+
+В `.cursor/mcp.json` для `mikrotik-readonly` явно заданы
+`MIKROTIK_PROFILE=hardened-read-only`, `MIKROTIK_READ_ONLY=true`,
+`MIKROTIK_SENSITIVE_HIDING=true` и `stdio`. Launcher всё равно принудительно
+ставит те же значения; дублирование в env не даёт ослабить профиль, если
+команду сменят на обычный `mcp-server-mikrotik`.
 
 Hardened-профиль:
 
@@ -69,7 +94,7 @@ Apply разрешён только после независимой прове
 ## Скрипт не обновился
 
 - проверьте точное имя и наличие в update list;
-- подтвердите текущий release path (`master/scripts` до cutover);
+- подтвердите текущий release path (`mikroconf` / `master/src/scripts`, либо ещё старый `mikrobackups` / `master/scripts`);
 - сравните размер загруженного source, особенно около ограничения `output=user`;
 - убедитесь, что ошибка одного скрипта не остановила весь цикл;
 - не запускайте массовое обновление для диагностики.

@@ -1,98 +1,80 @@
-:local SafeScriptCall do={
+# fill it inside dhcp lease-script
+:global globalLeaseBound
+:global globalLeaseServerName
+:global globalLeaseActMac
+:global globalLeaseActIp
 
-    :if ([:len $0]!=0) do={
-        :if ([:len $1]!=0) do={
-            :if ([:len [/system script find name=$1]]!=0) do={
-
-                :do {
-                    :log warning "Starting script: $1 (DHCP context)";
-                    :put "Starting script: $1"
-                    /system script run $1;
-                } on-error= {
-                    :log error "FAIL Starting script: $1 (DHCP context)";
-                    :put "FAIL Starting script: $1"
-                };
-
-            }
-        }
-    } 
-
-}
+# may be triggered twice per moment - snapshot globals first
+:local leaseBound $globalLeaseBound
+:local leaseServerName $globalLeaseServerName
+:local leaseActMac $globalLeaseActMac
+:local leaseActIp $globalLeaseActIp
 
 # init globals as far as we are inside *sys user account
-$SafeScriptCall "doEnvironmentSetup";
+:global globalSafeScriptCall
+:if (!any $globalSafeScriptCall) do={ /system script run doEnvironmentSetup }
 
-:local scriptname "doDHCPLeaseTrack";
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun $scriptname;
+:local sysname [/system identity get name]
+:local scriptname "doDHCPLeaseTrack"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname "DHCP"
 
-:global globalTgMessage;
-:global globalNoteMe;
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-:local state;
-
-
-# Globals
-#
-:global GleaseBound;
-:global GleaseServerName;
-:global GleaseActMAC;
-:global GleaseActIP;
-
-
-:if (!any $GleaseActIP) do={
-
-  :set state "No GleaseActIP provided..";
-  $globalNoteMe value=$state;
-  :error $inf; 
+:if (!any $leaseActIp) do={
+    :set state "No globalLeaseActIp provided.."
+    $globalNoteMe value=$state
+    :error $state
 }
 
-:if (!any $GleaseServerName) do={
-
-  :set state "No GleaseServerName provided..";
-  $globalNoteMe value=$state;
-  :error $inf; 
+:if (!any $leaseServerName) do={
+    :set state "No globalLeaseServerName provided.."
+    $globalNoteMe value=$state
+    :error $state
 }
 
-:local date [/system clock get date];
-:local time [/system clock get time];
-:local systemIdentity [/system identity get name];
+:onerror errorDescr in={
 
-:local Data [{}]
-:set ($Data->"date") $date
-:set ($Data->"time") $time
-:set ($Data->"systemIdentity") $systemIdentity
-:set ($Data->"bound") $GleaseBound
-:set ($Data->"serverName") $GleaseServerName
-:set ($Data->"mac") $GleaseActMAC
-:set ($Data->"ip") $GleaseActIP
+    :if ($leaseBound = 1) do={
 
-:local json [:serialize to=json value=$Data]
+        :local leaseId [/ip dhcp-server lease find where server=$leaseServerName and address=$leaseActIp]
 
+        :if ([:len $leaseId] = 0) do={
+            :set state "DHCP lease not found for server=$leaseServerName ip=$leaseActIp"
+            $globalNoteMe value=$state
+        } else={
+            :local clientid [/ip dhcp-server lease get $leaseId host-name]
+            :set state "DHCP Client assigned - $clientid ($leaseActIp)"
+            $globalNoteMe value=$state
+            $globalTgMessage value=$state
+        }
 
-:if ($GleaseBound = 1) do={
-    :local leaseId [/ip dhcp-server lease find where server=$GleaseServerName and address=$GleaseActIP]
-
-    :if ([:len $leaseId] = 0) do={
-        :set state "DHCP lease not found for server=$GleaseServerName ip=$GleaseActIP";
-        $globalNoteMe value=$state;
-        
     } else={
-
-        :local clientid [/ip dhcp-server lease get $leaseId host-name]
-
-        :set state "DHCP Client assigned - $clientid ($GleaseActIP)";
-        $globalNoteMe value=$state;
-
-        $globalTgMessage value=$state;
-
-        /system script run doWestminister;
+        :set state "DHCP Client expired - $leaseActIp"
+        $globalNoteMe value=$state
     }
 
- } else={
-
-   :set state "DHCP Client expired - $GleaseActIP";
-   $globalNoteMe value=$state;
-
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
 }
 
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: $state"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

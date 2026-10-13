@@ -8,21 +8,32 @@
 
 1. RouterOS на шести активных устройствах выполняет скрипты и создаёт backup/raw artifacts.
 2. `doBackup` создаёт бинарный backup и raw export, передаёт их во внешнее хранилище и удаляет временные файлы.
-3. `doDumpTheScripts` выгружает исходники скриптов через RAM-диск во внешний raw-каталог.
-4. `gitwatch` наблюдает внешний staging-каталог и сохраняет историю изменений. Это legacy-механизм, а не доверенный sanitizer.
-5. `src/scripts` становится каноническим источником для review и выпуска.
-6. `doFreshTheScripts` получает разрешённые скрипты. До cutover используется `master/scripts`, после контролируемого переключения — `master/src/scripts`.
+3. На хосте `/REPO/raw` — рабочий clone `Defm/mikroconf` на ветке `_autobranch`.
+   Контейнер gitwatch смотрит этот каталог и пушит автокоммиты в `_autobranch`
+   (как легаси `mikrobackups`). `master` для автокоммитов не используется.
+4. `doDumpTheScripts` выгружает исходники через RAM-диск в
+   `REPO/raw/src/scripts/` (внутрь того же clone). Dump не очищает секреты —
+   это operational loop, не sanitizer.
+5. `src/scripts` — канонический каталог в Git и цель fetch/dump.
+6. `doFreshTheScripts` загружает скрипты из
+   `Defm/mikroconf` / `master/src/scripts` (через relay).
+7. `doBackup` шлёт `.backup` в `REPO/backups/` (рядом с clone, вне Git) и
+   rawconf в `REPO/raw/rawconf_*` (файлы лежат в working tree clone, но
+   игнорируются `.gitignore` и не коммитятся).
 
 ## Потоки доверия
 
-- Git → устройство: только reviewed release, ручной canary и поэтапное расширение.
-- Устройство → raw storage: чувствительный поток, не направляемый напрямую в Git.
-- raw storage → curated source: только после очистки и проверки.
+- Git → устройство: release из `mikroconf` / `master`, ручной canary и
+  поэтапное расширение.
+- Устройство → `REPO/raw/src/scripts` → gitwatch → `_autobranch`: operational
+  feedback; review и осознанный merge в `master` остаются обязательными перед
+  изменением release-поведения.
+- Устройство → `REPO/backups` и `REPO/raw/rawconf_*`: чувствительный
+  backup/raw поток; в tracked Git не попадает.
 - Локальный агент → внешняя система: запрещено по умолчанию.
 
 ## Инварианты
 
-- Raw-конвейер работает до подтверждения долговременного retention и восстановления.
-- В Git нет секретов, backup-файлов и полных exports.
-- Изменение пути загрузки отделено от изменения содержимого скриптов.
+- Binary backup и полные rawconf не попадают в tracked Git.
+- В Git нет секретов, `.backup` и полных exports как отдельных артефактов.
 - Ошибка проверки блокирует выпуск.

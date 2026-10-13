@@ -1,49 +1,78 @@
+:local sysname [/system identity get name]
+:local scriptname "doCheckPingRate"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doCheckPingRate";
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-:global globalNoteMe;
-:local state;
+# latency threshold (ms) - alert via Telegram when exceeded
+:local maxMs 20
+:local numPing 6
+:local toPingIp1 8.8.8.8
+:local latencySite "ya.ru"
 
-#Mikrotik Ping more than 25ms to send mail
+:onerror errorDescr in={
 
-:local host  [:resolve "ya.ru"];
-:local ms 20;
+    :set state "Resolving $latencySite"
+    $globalNoteMe value=$state
+    :local host [:resolve $latencySite]
+    :local toPingIp2 $host
 
-:set state ("Checking ping rate $host");
-$globalNoteMe value=$state;
+    :set state "Checking ping rate $host"
+    $globalNoteMe value=$state
 
-:local avgRttA value=0;
-:local avgRttB value=0;
-:local numPing value=6;
-:local toPingIP1 value=8.8.8.8;
-:local toPingIP2 value=$host;
+    :local avgRttA 0
+    :local avgRttB 0
 
-:for tmpA from=1 to=$numPing step=1 do={
- /tool flood-ping count=1 size=38 address=$toPingIP1 do={
-  :set avgRttA ($"avg-rtt" + $avgRttA);
- }
- /tool flood-ping count=1 size=38 address=$toPingIP2 do={
-  :set avgRttB ($"avg-rtt" + $avgRttB);
- }
- /delay delay-time=1;
+    :for tmpA from=1 to=$numPing step=1 do={
+        /tool flood-ping count=1 size=38 address=$toPingIp1 do={
+            :set avgRttA ($"avg-rtt" + $avgRttA)
+        }
+        /tool flood-ping count=1 size=38 address=$toPingIp2 do={
+            :set avgRttB ($"avg-rtt" + $avgRttB)
+        }
+        :delay 1s
+    }
+
+    :set state ("Ping Average for $toPingIp1: " . [:tostr ($avgRttA / $numPing)] . "ms")
+    $globalNoteMe value=$state
+
+    :set state ("Ping Average for $host: " . [:tostr ($avgRttB / $numPing)] . "ms")
+    $globalNoteMe value=$state
+
+    :local rate ($avgRttB / $numPing)
+
+    :if ($rate >= $maxMs) do={
+        :set state "Yandex latency is too high ($rate ms, over $maxMs ms)"
+        $globalNoteMe value=$state
+        :log warning $state
+        $globalTgMessage value=$state
+    } else={
+        :set state "Yandex latency ok ($rate ms)"
+        $globalNoteMe value=$state
+    }
+
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
 }
 
-:set state ("Ping Average for 8.8.8.8: ".[:tostr ($avgRttA / $numPing )]."ms");
-$globalNoteMe value=$state;
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: $state"
+}
 
-:set state ("Ping Average for $host: ".[:tostr ($avgRttB / $numPing )]."ms");
-$globalNoteMe value=$state;
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
 
-:local rate ($avgRttB / $numPing );
+$globalNoteMe value=$inf
 
-:if ($rate >= $ms) do={
-
-    :set state "Yandex latency is too high ($rate ms, over $ms ms)";
-    $globalNoteMe value=$state;
-    :log warning $state;
-
-    :global globalTgMessage;
-    $globalTgMessage value=$state;
-
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
 }

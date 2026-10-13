@@ -1,59 +1,93 @@
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doBumerSound";
+:local sysname [/system identity get name]
+:local scriptname "doBumerSound"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:beep frequency=1300 length=400ms;
-:delay 200ms;
-:beep frequency=1550 length=700ms;
-:delay 1500ms;
-:beep frequency=1550 length=400ms;
-:delay 200ms;
-:beep frequency=1300 length=700ms;
-:delay 1500ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1950 length=700ms;
-:delay 1500ms;
-:beep frequency=1300 length=400ms;
-:delay 200ms;
-:beep frequency=1550 length=700ms;
-:delay 1500ms;
-:beep frequency=1550 length=400ms;
-:delay 200ms;
-:beep frequency=1300 length=700ms;
-:delay 1500ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1550 length=200ms;
-:delay 200ms;
-:beep frequency=1720 length=200ms;
-:delay 200ms;
-:beep frequency=1950 length=700ms;
-:delay 200ms;
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
+
+:onerror errorDescr in={
+    :set state "Playing Bumer sequence"
+    $globalNoteMe value=$state
+
+    :beep frequency=1300 length=400ms
+    :delay 200ms
+    :beep frequency=1550 length=700ms
+    :delay 1500ms
+    :beep frequency=1550 length=400ms
+    :delay 200ms
+    :beep frequency=1300 length=700ms
+    :delay 1500ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1950 length=700ms
+    :delay 1500ms
+    :beep frequency=1300 length=400ms
+    :delay 200ms
+    :beep frequency=1550 length=700ms
+    :delay 1500ms
+    :beep frequency=1550 length=400ms
+    :delay 200ms
+    :beep frequency=1300 length=700ms
+    :delay 1500ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1550 length=200ms
+    :delay 200ms
+    :beep frequency=1720 length=200ms
+    :delay 200ms
+    :beep frequency=1950 length=700ms
+    :delay 200ms
+
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
+
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: sequence played"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

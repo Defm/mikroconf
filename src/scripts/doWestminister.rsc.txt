@@ -1,15 +1,47 @@
+:local sysname [/system identity get name]
+:local scriptname "doWestminister"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doWestminister";
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-#Westminister Sequence #1
-# E-660 D-588 C-528 G-396
-# EDCG
-:beep length=480ms frequency=660
-:delay 500ms
-:beep length=480ms frequency=588
-:delay 500ms
-:beep length=480ms frequency=528
-:delay 500ms
-:beep length=480ms frequency=396
-:delay 10000ms
+:onerror errorDescr in={
+    :set state "Playing Westminster sequence #1"
+    $globalNoteMe value=$state
+
+    # E-660 D-588 C-528 G-396
+    # EDCG
+    :beep length=480ms frequency=660
+    :delay 500ms
+    :beep length=480ms frequency=588
+    :delay 500ms
+    :beep length=480ms frequency=528
+    :delay 500ms
+    :beep length=480ms frequency=396
+    :delay 10000ms
+
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
+
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: sequence played"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

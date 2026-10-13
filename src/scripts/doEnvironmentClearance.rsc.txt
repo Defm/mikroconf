@@ -1,6 +1,2 @@
-
-#clear all global variables
-/system script environment remove [find];
-
-
-
+# clear all global variables (called before doEnvironmentSetup, so no guard here)
+/system script environment remove [find]

@@ -1,9 +1,36 @@
+:local sysname [/system identity get name]
+:local scriptname "doLEDon"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doLEDon";
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-/system leds settings set all-leds-off=never;
+:onerror errorDescr in={
+    :set state "Switching LEDs on"
+    $globalNoteMe value=$state
+    /system leds settings set all-leds-off=never
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
 
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: LEDs switched on"
+}
 
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
 
+$globalNoteMe value=$inf
 
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

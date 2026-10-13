@@ -1,153 +1,64 @@
+:local sysname [/system identity get name]
+:local scriptname "doSuperviseCHRviaSSH"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:local sysname [/system identity get name];
-:local scriptname "doSuperviseCHRviaSSH";
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun $scriptname;
+:global globalNoteMe
+:global globalTgMessage
+:global globalCallSSH
+:local itsOk true
+:local state ""
 
-:global globalNoteMe;
-:local itsOk true;
-:local state "n/d";
+# every RPC step throws its error text, so itsOk is switched in one place
+:onerror errorDescr in={
 
-:local exitCode 0;
-
-:local callSSH do={
-
-    # reading params
-    :local cmd $1;
-
-    # ssh server attr
-    :local dst "185.13.148.14";
-    :local port 2223;
-    :local user "automation";
-
-    :local errorDef "";
-
-    :do {
- 
-        #password-less (RSA keys) connection should be set up before
-        :local callResult ([/system ssh-exec address=$dst user=$user port=$port command=$cmd as-value]);
-        :local exitCode ([$callResult]->"exit-code");
-
-        :if ($exitCode != 0) do={
-
-            :set errorDef "RPC: script parameter setup returns exit code ($exitCode)";
-
-        } else={
-
-            # success
-
-        }
-
-    } on-error= {
-        :set errorDef "Remote SSH session gets unexperted error";
-    };
-
-    :return $errorDef;
-
-};
-
-:do {
-    
     :local policyComment [/ip dns static get value-name=text [find where type=TXT and name="special-remote-CHR-ipsec-policy-comment"]]
-    :local remoteCommand ":global globalPolicyComment $policyComment";
+    :local remoteCommand ":global globalPolicyComment $policyComment"
 
-    :set state "Calling --- $remoteCommand";
-    $globalNoteMe value=$state;
+    :set state "Calling --- $remoteCommand"
+    $globalNoteMe value=$state
+    :local errorDef [$globalCallSSH $remoteCommand]
+    :if ([:len $errorDef] > 0) do={ :error $errorDef }
+    :set state "RPC: set remote preferred policy comment variable: ($policyComment) - Ok"
+    $globalNoteMe value=$state
 
-    :local errorDef [$callSSH $remoteCommand];
+    :local wanIp [/ip cloud get public-address]
+    :set remoteCommand ":global globalRemoteIp $wanIp/32"
 
-    :if ([:len $errorDef] > 0) do={
+    :set state "Calling --- $remoteCommand"
+    $globalNoteMe value=$state
+    :set errorDef [$globalCallSSH $remoteCommand]
+    :if ([:len $errorDef] > 0) do={ :error $errorDef }
+    :set state "RPC: set remote preferred policy IP variable: ($wanIp) - Ok"
+    $globalNoteMe value=$state
 
-        :set state $errorDef;
-        $globalNoteMe value=$state;
-        :set itsOk false;
+    :set remoteCommand "/system script run doUpdatePoliciesRemotely"
 
-    } else={
+    :set state "Calling --- $remoteCommand"
+    $globalNoteMe value=$state
+    :set errorDef [$globalCallSSH $remoteCommand]
+    :if ([:len $errorDef] > 0) do={ :error $errorDef }
+    :set state "RPC: call remote script: doUpdatePoliciesRemotely - Ok"
+    $globalNoteMe value=$state
 
-        :set state "RPC: set remote preferred policy comment variable: ($policyComment) - Ok";
-        $globalNoteMe value=$state;
-    
-    }
-
-};
-
-:if ($itsOk) do={
-
-    :do {
-        
-        :local wanIp [/ip cloud get public-address];
-        :local remoteCommand ":global globalRemoteIp $wanIp/32";
-
-        :set state "Calling --- $remoteCommand";
-        $globalNoteMe value=$state;
-       
-        :local errorDef [$callSSH $remoteCommand];
-
-        :if ([:len $errorDef] > 0) do={
-
-            :set state $errorDef;
-            $globalNoteMe value=$state;
-            :set itsOk false;
-
-        } else={
-
-            :set state "RPC: set remote preferred policy IP variable: ($wanIp) - Ok";
-            $globalNoteMe value=$state;
-        
-        }
-
-    };
-
-}
-
-:if ($itsOk) do={
-
-    :do {
-        
-        :local remoteCommand "/system script run doUpdatePoliciesRemotely";
-
-        :set state "Calling --- $remoteCommand";
-        $globalNoteMe value=$state;
-       
-        :local errorDef [$callSSH $remoteCommand];
-
-        :if ([:len $errorDef] > 0) do={
-
-            :set state $errorDef;
-            $globalNoteMe value=$state;
-            :set itsOk false;
-
-        } else={
-
-            :set state "RPC: call remote script: doUpdatePoliciesRemotely - Ok";
-            $globalNoteMe value=$state;
-        
-        }
-
-    };
-
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
 }
 
 :local inf ""
 :if ($itsOk) do={
-  :set inf "$scriptname on $sysname: remote policies refreshed Successfully"
+    :set inf "✓ SUCCESS $scriptname on $sysname: remote policies refreshed"
 }
 
 :if (!$itsOk) do={
-  :set inf "Error When $scriptname on $sysname: $state"  
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
 }
 
 $globalNoteMe value=$inf
 
 :if (!$itsOk) do={
-
-  :global globalTgMessage;
-  $globalTgMessage value=$inf;
-  :error $inf; 
- 
+    $globalTgMessage value=$inf
+    :error $inf
 }
-
-
-
-
-

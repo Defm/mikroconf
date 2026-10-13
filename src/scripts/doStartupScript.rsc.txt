@@ -1,98 +1,80 @@
+:local sysname [/system identity get name]
+:local scriptname "doStartupScript"
+
 # reset current
-/system note set note="Pending";
+/system note set note="Pending"
 
-:do {
+# Track sync time (avoid CHR initial clock bug), with this we are also checking if internet comes up
+# globalNoteMe does not exist yet - direct :log/:put here
+:onerror errorDescr in={
 
-    # Track sync time (avoid CHR initial clock bug), with this we are also checking if internet comes up
-
-    :local successSyncState "synchronized";
-    :local syncOk false;
-    :local syncState "";
-    :local timeSpent 0;
-    :local ticks 0;
-    :local maxTicks 40;
-    :local break false;
+    :local successSyncState "synchronized"
+    :local syncOk false
+    :local syncState ""
+    :local timeSpent 0
+    :local ticks 0
+    :local maxTicks 40
+    :local break false
     :do {
-        :set syncState [/system ntp client get status];
-        :set syncOk ($syncState = $successSyncState);
+        :set syncState [/system ntp client get status]
+        :set syncOk ($syncState = $successSyncState)
 
-        :log info "Waiting 15s for clock sync using NTP.. ($ticks/$maxTicks, $syncState)";
-        :put "Waiting 15s for clock sync using NTP.. ($ticks/$maxTicks, $syncState)";
-        
+        :log info "Waiting 15s for clock sync using NTP.. ($ticks/$maxTicks, $syncState)"
+        :put "Waiting 15s for clock sync using NTP.. ($ticks/$maxTicks, $syncState)"
+
         :if (!$syncOk) do={
-
-            :delay 15s;        
-            :set timeSpent ($timeSpent + 15);
-            :set break ($ticks >= $maxTicks);
-
+            :delay 15s
+            :set timeSpent ($timeSpent + 15)
+            :set break ($ticks >= $maxTicks)
         } else={
-            :set break true;
-        };
+            :set break true
+        }
 
-        :set ticks ($ticks + 1);
+        :set ticks ($ticks + 1)
 
-    } while=(! $break )
+    } while=(!$break)
 
     :if ($syncOk) do={
-        :log warning "Successful clock sync using NTP in $timeSpent seconds";
-        :put "Successful clock sync using NTP in $timeSpent seconds";
-        
+        :log warning "Successful clock sync using NTP in $timeSpent seconds"
+        :put "Successful clock sync using NTP in $timeSpent seconds"
     } else={
-        :log error "Error when clock sync using NTP in $timeSpent seconds";
-        :put "Error when clock sync using NTP in $timeSpent seconds";
+        :log error "Error when clock sync using NTP in $timeSpent seconds"
+        :put "Error when clock sync using NTP in $timeSpent seconds"
+    }
 
-    };
-    
-} on-error={
-
-    :log error "Error when tracking clock sync using NTP";
-    :put "Error when tracking clock sync using NTP";
-
-};
-
-:local SafeScriptCall do={
-
-    :if ([:len $0]!=0) do={
-        :if ([:len $1]!=0) do={
-            :if ([:len [/system script find name=$1]]!=0) do={
-
-                :do {
-                    :log warning "Starting script: $1";
-                    :put "Starting script: $1"
-                    /system script run $1;
-                } on-error= {
-                    :log error "FAIL Starting script: $1";
-                    :put "FAIL Starting script: $1"
-                };
-
-            }
-        }
-    } 
-
+} do={
+    :log error "Error when tracking clock sync using NTP: $errorDescr"
+    :put "Error when tracking clock sync using NTP: $errorDescr"
 }
 
-$SafeScriptCall "doEnvironmentClearance";
-$SafeScriptCall "doEnvironmentSetup";
-$SafeScriptCall "doImperialMarch";
-$SafeScriptCall "doCoolConsole";
+# bootstrap environment directly - globalSafeScriptCall appears only after doEnvironmentSetup
+:onerror errorDescr in={
+    :log warning "Starting script: doEnvironmentClearance (STARTUP context)"
+    /system script run doEnvironmentClearance
+    :log warning "Starting script: doEnvironmentSetup (STARTUP context)"
+    /system script run doEnvironmentSetup
+} do={
+    :log error "FAIL Starting environment scripts (STARTUP context): $errorDescr"
+    :put "FAIL Starting environment scripts (STARTUP context): $errorDescr"
+}
+
+:global globalSafeScriptCall
+:global globalNoteMe
+:global globalTgMessage
+
+:if (any $globalSafeScriptCall) do={
+    $globalSafeScriptCall "doImperialMarch" "STARTUP"
+    $globalSafeScriptCall "doCoolConsole" "STARTUP"
+} else={
+    :log error "Environment is not ready - skipping startup chain (STARTUP context)"
+}
 
 # wait some for all tunnels to come up after reboot and VPN to work
+:local inf "Wait some for all tunnels to come up after reboot and VPN to work.."
+:if (any $globalNoteMe) do={ $globalNoteMe value=$inf }
 
-:local inf "Wait some for all tunnels to come up after reboot and VPN to work.." ;
-:global globalNoteMe;
-:global globalTgMessage;
-:if (any $globalNoteMe ) do={ $globalNoteMe value=$inf; }
+:delay 15s
 
-:delay 15s;
-
-:local sysname [/system identity get name];
-:local scriptname "doStartupScript";
-
-:local inf "$scriptname on $sysname: system restart detected" ;
-:if (any $globalNoteMe ) do={ $globalNoteMe value=$inf; }
-:if (any $globalTgMessage ) do={ $globalTgMessage value=$inf; }
-      
-
-
-
-
+:set inf "$scriptname on $sysname: system restart detected"
+:if (any $globalNoteMe) do={ $globalNoteMe value=$inf }
+:if (any $globalTgMessage) do={ $globalTgMessage value=$inf }

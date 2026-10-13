@@ -1,10 +1,10 @@
-# mikrobackups
+# mikroconf
 
 Безопасный репозиторий исходников RouterOS-скриптов, эксплуатационной документации и локальных защитных проверок для домашней инфраструктуры MikroTik.
 
 ## Статус
 
-Репозиторий находится на этапе безопасной миграции. Активные устройства: `anna`, `capxl`, `capax`, `atl`, `CHR`, `mikrouter`. Канонический каталог скриптов — [`src/scripts`](src/scripts). До отдельного переключения устройства продолжают загружать скрипты из исторического пути `master/scripts`; целевой путь после cutover — `master/src/scripts`.
+Репозиторий находится на этапе безопасной миграции. Активные устройства: `anna`, `capxl`, `capax`, `atl`, `CHR`, `mikrouter`. Канонический каталог и цель fetch/dump — [`src/scripts`](src/scripts). Release — `Defm/mikroconf` / `master/src/scripts`; operational dump — `REPO/raw/src/scripts/` (host `/REPO/raw` = clone, Docker gitwatch → `_autobranch`). Rollout — по [`docs/cutover-plan.md`](docs/cutover-plan.md).
 
 Текущий raw-конвейер и долговременное хранилище резервных копий не отключаются, пока не подтверждены полнота, срок хранения и восстановление из новой схемы.
 

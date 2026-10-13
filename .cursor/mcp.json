@@ -18,7 +18,11 @@
       "args": [],
       "env": {
         "MIKROTIK_INVENTORY_FILE": "${userHome}/.config/mikrobackups/inventory.yml",
-        "MIKROTIK_KNOWN_HOSTS_PATH": "${userHome}/.ssh/mikrobackups/known_hosts"
+        "MIKROTIK_KNOWN_HOSTS_PATH": "${userHome}/.ssh/mikrobackups/known_hosts",
+        "MIKROTIK_PROFILE": "hardened-read-only",
+        "MIKROTIK_READ_ONLY": "true",
+        "MIKROTIK_SENSITIVE_HIDING": "true",
+        "MIKROTIK_MCP__TRANSPORT": "stdio"
       }
     }
   }

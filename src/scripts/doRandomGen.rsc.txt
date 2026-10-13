@@ -1,105 +1,87 @@
-
+:local sysname [/system identity get name]
 :local scriptname "doRandomGen"
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun $scriptname;
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalNoteMe;
-:local state "";
+:global globalNoteMe
+:global globalTgMessage
+:global globalTimestamp
+:local itsOk true
+:local state ""
 
-:global simplercurrdatetimestr;
+:local stamp [$globalTimestamp]
 
-:local stamp [$simplercurrdatetimestr];
-
-:local sysname [/system identity get name];
 :local rosVer [:tonum [:pick [/system resource get version] 0 1]]
-
 :local sysver "NA"
-:if ( [ :len [ /system package find where name="system" and disabled=no ] ] > 0 and $rosVer = 6 ) do={
-  :set sysver [/system package get system version]
+:if ([:len [/system package find where name="system" and disabled=no]] > 0 and $rosVer = 6) do={
+    :set sysver [/system package get system version]
 }
-:if ( [ :len [ /system package find where name="routeros" and disabled=no ] ] > 0 and $rosVer = 7 ) do={
-  :set sysver [/system package get routeros version]
+:if ([:len [/system package find where name="routeros" and disabled=no]] > 0 and $rosVer = 7) do={
+    :set sysver [/system package get routeros version]
 }
 
-:local SMTPAddress "defm.kopcap@gmail.com";
-:local SMTPSubject ("$sysname pwd restoration ($stamp)");
-:local SMTPBody;
+:local smtpAddress "defm.kopcap@gmail.com"
+:local smtpSubject "$sysname pwd restoration ($stamp)"
+:local smtpBody ""
 
-:local itsOk true;
-
-:set state "Starting reserve password generator Script...";
-$globalNoteMe value=$state;
+:set state "Starting reserve password generator Script..."
+$globalNoteMe value=$state
 
 # special password appendix - current month 3chars
-:local pfx [:pick [/system clock get date] 0 3 ];
-:local newPassword "";
+:local date [/system clock get date]
+:local monthNum [:tonum [:pick $date 5 7]]
+:local months {"jan";"feb";"mar";"apr";"may";"jun";"jul";"aug";"sep";"oct";"nov";"dec"}
+:local pfx [:pick $months ($monthNum - 1)]
 
-:local date [/system clock get date]; 
-:local monthNum [:tonum [:pick $date 5 7]];
-:local months {"jan";"feb";"mar";"apr";"may";"jun";"jul";"aug";"sep";"oct";"nov";"dec"};
-:local pfx  ([:pick $months ($monthNum-1)]); 
+:local newPassword [:rndstr length=6 from="0123456789dglpqwBHNTQV"]
 
-:set newPassword [:rndstr length=6 from="0123456789dglpqwBHNTQV"];
-
-:set state "Randomized: '$newPassword'";
-$globalNoteMe value=$state;
+:set state "Randomized: '$newPassword'"
+$globalNoteMe value=$state
 
 # doing simple salt
-:set newPassword ($pfx . $newPassword);
+:set newPassword ($pfx . $newPassword)
 
 /user set [find name=reserved] password=$newPassword
 
 # crop appendix
-:local halfPass [:pick [$newPassword] 3 11 ];
+:local halfPass [:pick $newPassword 3 11]
 
-:do {
+:onerror errorDescr in={
     :set state "Sending backup password"
     $globalNoteMe value=$state
 
-    :set SMTPBody ("Device additional password: '***$halfPass'")
+    :set smtpBody "Device additional password: '***$halfPass'"
 
-    #email works in background, delay needed
-    /tool e-mail send to=$SMTPAddress body=$SMTPBody subject=$SMTPSubject tls=starttls
+    # email works in background, delay needed
+    /tool e-mail send to=$smtpAddress body=$smtpBody subject=$smtpSubject tls=starttls
 
-    #waiting for email to be delivered
-    :delay 15s;
+    # waiting for email to be delivered
+    :delay 15s
 
-    :local emlResult ([/tool e-mail get last-status] = "succeeded")
-
-    if (!$emlResult) do={
-
-            :set state "Error When $state"
-            $globalNoteMe value=$state;
-            :set itsOk false;
-
-        } else={
-
-            $globalNoteMe value="Done"
-    
-        }
-
-    } on-error={ 
-        :set state "Error When $state"
-        $globalNoteMe value=$state;
-        :set itsOk false;
+    :if ([/tool e-mail get last-status] != "succeeded") do={
+        :error "e-mail last-status is not succeeded"
     }
+
+    $globalNoteMe value="Done"
+
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
 
 :local inf ""
 :if ($itsOk) do={
-  :set inf "$scriptname on $sysname: pwd restoration Completed Successfully"
+    :set inf "✓ SUCCESS $scriptname on $sysname: pwd restoration completed"
 }
 
 :if (!$itsOk) do={
-  :set inf "Error When $scriptname on $sysname: $state"  
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
 }
 
 $globalNoteMe value=$inf
 
 :if (!$itsOk) do={
-
-  :global globalTgMessage;
-  $globalTgMessage value=$inf;
-  :error $inf; 
-  
+    $globalTgMessage value=$inf
+    :error $inf
 }
-

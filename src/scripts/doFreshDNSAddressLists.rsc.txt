@@ -1,144 +1,123 @@
+:local sysname [/system identity get name]
+:local scriptname "doFreshDNSAddressLists"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doFreshDNSAddressLists";
+:global globalNoteMe
+:global globalTgMessage
+:global globalCallFetch
+:global globalTimestamp
+:local itsOk true
+:local state ""
 
-:global globalCallFetch;
-:global globalNoteMe;
-:global globalTgMessage;
+# Example call
+# :if ([$waitForFile $outputFile 300ms]) do={ ... }
+# predicate: polls for a file up to 4 times with given delay, returns true/false
+:local waitForFile do={
+    :local fileName [:tostr $1]
+    :local waitTime $2
 
-:local state;
+    :global globalNoteMe
+    :local state ""
+    :local fileFound false
 
-:global simplercurrdatetimestr;
+    :onerror errorDescr in={
+        :retry command={
 
-:local WaitForFile do={
-  :local FileName [ :tostr $1 ];
-  :local WaitTime  $2;
+            :set state "Looking for file.. $fileName  ($waitTime delay)"
+            $globalNoteMe value=$state
 
-  :global globalNoteMe;
-  :local fileFound false;
+            # rise error if no such file
+            :set fileFound false
+            /file/get $fileName
 
-  :onerror errorName {
-    :retry command={
+            # reach there if no error
+            :set state "Got it"
+            $globalNoteMe value=$state
+            :set fileFound true
 
-      :local state ("Looking for file.. $FileName  ($WaitTime delay)");
-      $globalNoteMe value=$state;
+        } delay=$waitTime max=4
+    } do={
+        :set state "Investigation result - $errorDescr"
+        $globalNoteMe value=$state
+        :log warning $state
+    }
 
-      # rise error if no such file
-      :set fileFound false;
-      /file/get $FileName;
-
-      :local state ("Got it");
-      $globalNoteMe value=$state;
-
-      # reach there if no error 
-      :set fileFound true;
-      :return $fileFound;
-
-    } delay=$WaitTime max=4
-  } do={
-    
-    :local state ("Investigation result - $errorName");
-    $globalNoteMe value=$state;
-    :log warning $state;
-
-    :return $fileFound;
-
-  }
-  
-  :while ([ :len [ /file/find where name=$FileName ] ] > 0) do={
-    
-    :do {
-      /file/get $FileName;
-      # found, get over here
-      :return true;
-    } on-error={ }
-    
-    :delay $WaitTime;
-    
-  }
-  :return false;
-}  
-
-
+    :return $fileFound
+}
 
 # see available groups at https://iplist.opencck.org/ru
-
-:local options [{}];
+:local options [{}]
 
 :set ($options->"youtube") {"mode"="group"; "data"="domains"; "target"="youtube"; "alist"="alist-mangle-byedpi-YTB"; "forwarderName"="DOH-Google"}
 :set ($options->"torrent") {"mode"="group"; "data"="domains"; "target"="torrent"; "alist"="alist-mangle-byedpi-TORR"; "forwarderName"="DOH-Google"}
-#:set ($options->"telegram") {"mode"="site"; "data"="cidr4"; "target"="telegram.org"; "alist"="alist-mangle-TG"; "forwarderName"="DOH-Google"}
+# :set ($options->"telegram") {"mode"="site"; "data"="cidr4"; "target"="telegram.org"; "alist"="alist-mangle-TG"; "forwarderName"="DOH-Google"}
 
+:local stamp [$globalTimestamp]
 
-:local stamp [$simplercurrdatetimestr];
+:foreach group,opts in=$options do={
 
-:foreach G,S in=$options do={
+    :onerror errorDescr in={
 
-    :local group $G;
-    :local alist ($S->"alist");
-    :local forwarderName  ($S->"forwarderName");
-    :local data  ($S->"data");
-    :local mode  ($S->"mode");
-    :local target  ($S->"target");        
-    
-    :local template ":if ([:len [/ip/dns/static find name={data}]] = 0) do={/ip/dns/static/add address-list=$alist comment=$alist-$stamp forward-to=$forwarderName match-subdomain=yes type=FWD name={data} ;}";
-    :if ($data = "domains") do={
-      :set template ":if ([:len [/ip/dns/static find name={data}]] = 0) do={/ip/dns/static/add address-list=$alist comment=$alist-$stamp forward-to=$forwarderName match-subdomain=yes type=FWD name={data} ;}";
-    } else={
+        :local alist ($opts->"alist")
+        :local forwarderName ($opts->"forwarderName")
+        :local data ($opts->"data")
+        :local mode ($opts->"mode")
+        :local target ($opts->"target")
 
+        :local template ":if ([:len [/ip/dns/static find name={data}]] = 0) do={/ip/dns/static/add address-list=$alist comment=$alist-$stamp forward-to=$forwarderName match-subdomain=yes type=FWD name={data} ;}"
         :if ($data = "cidr4") do={
-            :set template "{/ip/firewall/address-list/remove [find where list=$alist and address={data}]; /ip/firewall/address-list/add list=$alist comment=$alist-$stamp address={data} ;}";
+            :set template "{/ip/firewall/address-list/remove [find where list=$alist and address={data}]; /ip/firewall/address-list/add list=$alist comment=$alist-$stamp address={data} ;}"
         }
+
+        :set state "Freshing $alist DNS static entries using iplist.opencck.org at $stamp"
+        $globalNoteMe value=$state
+
+        :set template [:convert to=url $template]
+
+        :local url ("\"https://iplist.opencck.org/?format=custom&data=$data&wildcard=1&$mode=$target&template=" . $template . "\"")
+
+        :local outputFile "$alist.rsc"
+        :local fetchCmd "/tool/fetch idle-timeout=20s mode=https url=$url dst-path=$outputFile"
+
+        # remove old files
+        /file remove [find where name="$outputFile"]
+
+        :local i 2
+        :do {
+
+            :set state "*************** Trying fetch of $outputFile ***************"
+            $globalNoteMe value=$state
+
+            # no timeout for fetch, so it will still batch after 20sec of polling, thats why we need to waitForFile polling for additional amount of time
+            $globalCallFetch $fetchCmd
+
+            :set i ($i - 1)
+
+        } while=(![$waitForFile $outputFile 300ms] && $i > 0)
+
+        :if (![$waitForFile $outputFile 1000ms]) do={
+            :error "Import failed of $outputFile - file never appeared"
+        }
+
+        :set state "Import started of $outputFile"
+        $globalNoteMe value=$state
+
+        :local importCmd ":import file-name=$outputFile"
+        $globalCallFetch $importCmd
+
+        /file remove [find where name="$outputFile"]
+        $globalNoteMe value="Done"
+
+    } do={
+        :set state "Error When $state: $errorDescr"
+        $globalNoteMe value=$state
+        :log error $state
+        :set itsOk false
     }
-
-    :set state ("Freshing $alist DNS static entries using iplist.opencck.org at $stamp");
-    $globalNoteMe value=$state;
-
-    :set template [:convert to=url $template];
-
-    :local url ("\"https://iplist.opencck.org/?format=custom&data=$data&wildcard=1&$mode=$target&template=" . ($template) . "\"");
-
-    :local outputFile "$alist.rsc";
-    :local fetchCmd "/tool/fetch idle-timeout=20s mode=https url=$url dst-path=$outputFile";
-
-    # remove old files
-    /file remove [find where name="$outputFile"]
-
-    :local I 2;
-    :do {
-
-        :set state "*************** Trying fetch of $outputFile ***************"
-        $globalNoteMe value=$state;
-
-        # no timeout for fetch, so it will still batch after 20sec of polling, thats why we need to WaitForFile polling for additional amount of time
-        $globalCallFetch $fetchCmd;
-
-        :set I ($I - 1);
-
-    } while=([ $WaitForFile $outputFile 300ms ] = false && $I > 0);
-
-    :if ([ $WaitForFile $outputFile 1000ms ] = true) do={
-
-      :set state "Import started of $outputFile"
-      $globalNoteMe value=$state;
-
-      :local importCmd ":import file-name=$outputFile";
-      $globalCallFetch $importCmd;
-
-      /file remove [find where name="$outputFile"]
-
-    } else={
-
-      :set state "Import failed of $outputFile"
-      $globalNoteMe value=$state;
-      $globalTgMessage value=$state;
-      :log error $state;
-
-    }
-    
 }
 
-
+# borrowed address-list importer ($update) - kept as is, not a style reference
 {
 /ip firewall address-list
 :local update do={
@@ -250,8 +229,8 @@ $globalScriptBeforeRun "doFreshDNSAddressLists";
  }; # if counter restore on failure and remove on success
 }; # do
 
-:global simplercurrdatetimestr;
-:local stamp [$simplercurrdatetimestr];
+:global globalTimestamp;
+:local stamp [$globalTimestamp];
 :local comment ("alist-mangle-RKN-$stamp");
 $update url=https://antifilter.download/list/allyouneed.lst listname=alist-mangle-RKN delimiter=("\n") timeout=2d comment=$comment
 
@@ -272,3 +251,18 @@ $update url=https://antifilter.download/list/allyouneed.lst listname=alist-mangl
 # ownPosix=    allow to enter a onw regEX posix to be used (not ative at this moment)
 # nolog=        any value, then don't write to the log (default: writing to log)
 
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: DNS address lists refreshed"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

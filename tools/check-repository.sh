@@ -18,7 +18,7 @@ required=(
   docs/operations/backup-pipeline.md docs/operations/script-release.md
   docs/operations/diagnostics.md docs/operations/raw-policy.md
   docs/security/credentials.md docs/security/write-path-design.md
-  docs/script-audit.md docs/routeros-skills-review.md
+  docs/script-audit.md docs/style-canon.md docs/routeros-skills-review.md
   docs/migration-report.md docs/cutover-plan.md
   config/inventory.example.yml
   bin/README.md src/safe/README.md src/config/README.md vendor/README.md
@@ -108,7 +108,9 @@ mapfile -t registered_skills < <(
 for path in "${registered_skills[@]}"; do
   case "$path" in
     .cursor/skills/routeros-fundamentals/SKILL.md|\
-    .cursor/skills/routeros-scripting/SKILL.md)
+    .cursor/skills/routeros-scripting/SKILL.md|\
+    .cursor/skills/routeros-syntax-inspection/SKILL.md|\
+    .cursor/skills/routeros-centrs/SKILL.md)
       grep -q '^disable-model-invocation: true$' "$path" &&
         fail "базовый skill не должен быть manual-only: $path"
       ;;

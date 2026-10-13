@@ -1,178 +1,142 @@
+:local sysname [/system identity get name]
+:local scriptname "doPushStatsToInfluxDB"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:local sysname [/system identity get name];
-:local scriptname "doPushStatsToInfluxDB";
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun $scriptname;
-:global SECRET;
+:global globalNoteMe
+:global globalTgMessage
+:global globalSecret
+:global globalCallFetch
+:local itsOk true
+:local state ""
 
-#a part of queue comment to locate queues to be processed
-:local queueCommentMark "dtq";
+# a part of queue comment to locate queues to be processed
+:local queueCommentMark "dtq"
 
-#influxDB service URL (beware about port when /fetch)
-:local tURL "http://nas.home/api/v2/write\?bucket=httpapi&org=home"
-:local tPingURL "http://nas.home/ping"
-:global globalNoteMe;
-# Configure at runtime: INFLUXDB_USER, INFLUXDB_PASSWORD and INFLUXDB_TOKEN in $SECRET.
-:local influxUser "$[$SECRET get INFLUXDB_USER]";
-:local influxPassword "$[$SECRET get INFLUXDB_PASSWORD]";
-:local influxToken "$[$SECRET get INFLUXDB_TOKEN]";
-:local itsOk true;
+# influxDB service URL (beware about port when /fetch)
+:local tUrl "http://nas.home/api/v2/write\?bucket=httpapi&org=home"
+:local tPingUrl "http://nas.home/ping"
 
+# Configure at runtime: INFLUXDB_USER, INFLUXDB_PASSWORD and INFLUXDB_TOKEN in $globalSecret.
+:local influxUser "$[$globalSecret get INFLUXDB_USER]"
+:local influxPassword "$[$globalSecret get INFLUXDB_PASSWORD]"
+:local influxToken "$[$globalSecret get INFLUXDB_TOKEN]"
+:local authHeader "Authorization: Token $influxToken"
 
-:local useBandwidthTest false;
+:local useBandwidthTest false
 
-:local state "";
-
-:do {
-
-  :set state ("Checking if INFLUXDB Service online");
-  $globalNoteMe value=$state;
-
-  :local result [/tool fetch http-method=get port=8086 user=$influxUser password=$influxPassword mode=http url="$tPingURL"  as-value output=user];
- 
-} on-error={
-  
-  :set state ("INFLUXDB: Service Failed!");
-  $globalNoteMe value=$state;
-
-  :local inf "Error When $scriptname on $sysname: $state"  
-
-  :global globalTgMessage;
-  # do not spam via Tg on this error - just log error
-
-  :error $inf;
+# preflight: service must be online, otherwise quiet exit (no Telegram spam)
+:onerror errorDescr in={
+    :set state "Checking if INFLUXDB Service online"
+    $globalNoteMe value=$state
+    :local result [/tool fetch http-method=get port=8086 user=$influxUser password=$influxPassword mode=http url="$tPingUrl" as-value output=user]
+    $globalNoteMe value="Done"
+} do={
+    :set state "WARNING: INFLUXDB service unreachable ($errorDescr) - skipping stats push!"
+    :log error $state
+    $globalNoteMe value=$state
+    :error $state
 }
 
-:local state "";
+:if ($useBandwidthTest) do={
 
-:local authHeader ("Authorization: Token $influxToken"); 
+    :local txAvg 0
+    :local rxAvg 0
 
+    :local btServer 192.168.97.1
+    # Configure at runtime: BANDWIDTH_TEST_USER and BANDWIDTH_TEST_PASSWORD in $globalSecret.
+    :local btUser "$[$globalSecret get BANDWIDTH_TEST_USER]"
+    :local btPassword "$[$globalSecret get BANDWIDTH_TEST_PASSWORD]"
 
-:if ( $useBandwidthTest  ) do={
+    :set state "Starting VPN bandwidth test"
+    $globalNoteMe value=$state
 
-:local txAvg 0
-:local rxAvg 0
+    /tool bandwidth-test protocol=tcp direction=transmit user=$btUser password=$btPassword address=$btServer duration=15s do={
+        :set txAvg ($"tx-total-average" / 1048576)
+    }
 
-:local btServer 192.168.97.1;
-:local btUser "$[$SECRET get BANDWIDTH_TEST_USER]";
-:local btPassword "$[$SECRET get BANDWIDTH_TEST_PASSWORD]";
+    /tool bandwidth-test protocol=tcp direction=receive user=$btUser password=$btPassword address=$btServer duration=15s do={
+        :set rxAvg ($"rx-total-average" / 1048576)
+    }
 
-:set state ("Starting VPN bandwidth test");
-$globalNoteMe value=$state;
-
-tool bandwidth-test protocol=tcp direction=transmit user=$btUser password=$btPassword address=$btServer duration=15s do={
-:set txAvg ($"tx-total-average" / 1048576 );
+    :local fetchCmd "/tool fetch http-method=post port=8086 mode=http url=\"$tUrl\" http-header-field=\"$authHeader, content-type: text/plain\" http-data=\"bandwidth,host=$sysname,target=CHR transmit=$txAvg,receive=$rxAvg\" keep-result=no"
+    $globalCallFetch $fetchCmd
 }
 
-tool bandwidth-test protocol=tcp direction=receive user=$btUser password=$btPassword address=$btServer duration=15s do={
-:set rxAvg ($"rx-total-average" / 1048576 );
-}
-
-:global globalCallFetch;
-:local fetchCmd  "/tool fetch http-method=post port=8086 mode=http url=\"$tURL\" http-header-field=\"$authHeader, content-type: text/plain\" http-data=\"bandwidth,host=$sysname,target=CHR transmit=$txAvg,recieve=$rxAvg\" keep-result=no";
-
-$globalCallFetch $fetchCmd;
-
-}
- 
 /queue simple
-
 :foreach z in=[find where comment~"$queueCommentMark"] do={
 
-  :local skip false;
+    :onerror errorDescr in={
 
-  :local queuecomment [get $z comment]
-  :local ip [get $z target]
+        :local queueComment [get $z comment]
+        :local ip [get $z target]
 
-  :if ( $itsOk ) do={
+        :set state "Locating queue target IP for queue $queueComment"
+        $globalNoteMe value=$state
+        :if ([:typeof ($ip->0)] = "nil") do={
+            :set state "Cant locate queue target IP for queue $queueComment. Skip it."
+            $globalNoteMe value=$state
+            :error "skip-continue"
+        }
+        :set ip ($ip->0)
+        :set ip [:pick $ip 0 [:find $ip "/" -1]]
+        $globalNoteMe value="Done"
 
-    :if ( ($ip->0) != nil ) do={
-      :set state ("Locating queue target IP for queue $queuecomment");
-      $globalNoteMe value=$state;
-      :set ip ($ip->0) 
-      :set ip ( [:pick $ip 0 [:find $ip "/" -1]] ) ;
-      $globalNoteMe value="Done";
-    } else {
-      :set state "Cant locate queue target IP for queue $queuecomment. Skip it."
-      $globalNoteMe value=$state;
-      :set skip true;
-    }
+        :local bytes [get $z bytes]
+        :local upload [:pick $bytes 0 [:find $bytes "/"]]
+        :local download [:pick $bytes ([:find $bytes "/"] + 1) [:len $bytes]]
 
-  }
+        # dhcp server for IP->name translation
+        :set state "Picking host name for $ip via DHCP"
+        $globalNoteMe value=$state
+        :local hostName ""
+        :onerror errorDescr in={
+            :set hostName [/ip dhcp-server lease get [find (address=$ip)] host-name]
+        } do={
+            :set state "Cant pick host name for $ip ($errorDescr). Skip it."
+            $globalNoteMe value=$state
+            :error "skip-continue"
+        }
 
-  :local hostName ""
-  :local upload 0
-  :local download 0
-
-  :if ( $itsOk and !$skip) do={
-    :local bytes [get $z bytes]
-    :set upload ($upload + [:pick $bytes 0 [:find $bytes "/"]])
-    :set download ($download + [:pick $bytes ([:find $bytes "/"]+1) [:len $bytes]])
-  }
-
-  :if ( $itsOk and !$skip) do={
-    :do {
-      #dhcp server for IP->name translation
-      :set state ("Picking host name for $ip via DHCP");
-      $globalNoteMe value=$state;
-      :set hostName [/ip dhcp-server lease get [find (address=$ip)] host-name]
-
-      :local typeOfValue [:typeof $hostName]
-
-      :if (($typeOfValue = "nothing") or ($typeOfValue = "nil")) do={
-        :set state "Got empty host name. Skip it."
-        $globalNoteMe value=$state;
-        :set skip true;
-      } else={
+        :local typeOfValue [:typeof $hostName]
+        :if (($typeOfValue = "nothing") or ($typeOfValue = "nil") or ([:len $hostName] = 0)) do={
+            :set state "Got empty host name. Skip it."
+            $globalNoteMe value=$state
+            :error "skip-continue"
+        }
         :set state "Got it $hostName"
-        $globalNoteMe value=$state;
-      }
+        $globalNoteMe value=$state
 
-    } on-error= {
-      :set state "Error When $state"
-      $globalNoteMe value=$state;
-      :set skip true;
-    }
-  }
+        :set state "Pushing stats to influxDB about $hostName: UP = $upload, DOWN=$download"
+        $globalNoteMe value=$state
+        /tool fetch http-method=post port=8086 mode=http url="$tUrl" http-header-field="$authHeader, content-type: text/plain" http-data="traffic,host=$sysname,target=$hostName upload=$upload,download=$download" keep-result=no
+        $globalNoteMe value="Done"
 
-  :if ( $itsOk and !$skip) do={
-    :do {
-      :set state ("Pushing stats to influxDB about $hostName: UP = $upload, DOWN=$download");
-     $globalNoteMe value=$state;
-      /tool fetch http-method=post port=8086 mode=http url="$tURL" http-header-field="$authHeader, content-type: text/plain" http-data="traffic,host=$sysname,target=$hostName upload=$upload,download=$download" keep-result=no;
-      $globalNoteMe value="Done";
-    } on-error= {
-      :set state "Error When $state"
-      $globalNoteMe value=$state;
-      :set itsOk false;
+        :set state "Flushing stats.."
+        $globalNoteMe value=$state
+        reset-counters $z
+
+    } do={
+        :if ($errorDescr != "skip-continue") do={
+            :set state "Error When $state: $errorDescr"
+            $globalNoteMe value=$state
+            :set itsOk false
+        }
     }
-  }
-  
-  :if ($itsOk and !$skip) do={
-    :set state "Flushing stats.."
-    $globalNoteMe value=$state;
-    reset-counters $z
-  }  
 }
 
 :local inf ""
 :if ($itsOk) do={
-  :set inf "$scriptname on $sysname: stats pushed Succesfully"
+    :set inf "✓ SUCCESS $scriptname on $sysname: stats pushed"
 }
 
 :if (!$itsOk) do={
-  :set inf "Error When $scriptname on $sysname: $state"  
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
 }
 
 $globalNoteMe value=$inf
 
 :if (!$itsOk) do={
-  :set inf "$scriptname on $sysname: $state"  
-  
-  :global globalTgMessage;
-  $globalTgMessage value=$inf;
-  :error $inf; 
-
-
+    $globalTgMessage value=$inf
+    :error $inf
 }
-

@@ -17,14 +17,17 @@
 Эти два непосредственно полезны для текущего исходного кода. Их можно
 регистрировать автоматически либо оставить ручными.
 
+Автоматически также доступны:
+
+- `routeros-syntax-inspection` — как валидировать `.rsc` через `/console/inspect`
+  и `:parse`; сам probe на устройство по-прежнему требует разрешения оператора.
+- `routeros-centrs` — контракт centrs (`explain` / envelope / `--yes`); live
+  `execute` не разрешён этим skill сам по себе.
+
 ## Справочные и inspection
 
 - `routeros-command-tree` — дерево команд и CLI/REST mapping.
-- `routeros-syntax-inspection` — inspect/highlight/completion/syntax.
 - `routeros-app-yaml` — формат RouterOS `/app`.
-
-Inspection может обращаться к live-устройству. Рекомендуется только ручной
-вызов и read-only credential.
 
 ## Подсистемы RouterOS
 
@@ -46,24 +49,24 @@ path, container/CMR менять packages и device-mode, sniffer раскрыв
 - `routeros-qemu-chr`
 - `routeros-quickchr`
 - `routeros-quickchr-cli`
-- `routeros-centrs`
 - `routeros-netinstall`
 
-`quickchr*` и `qemu-chr` полезны для будущего стенда. `centrs` умеет выполнять
-live-команды. `netinstall` форматирует system drive. Все пять следует
-регистрировать только вручную; `netinstall` — лишь при отдельной задаче.
+`quickchr*` и `qemu-chr` полезны для будущего стенда. `netinstall` форматирует
+system drive. Эти четыре остаются только ручными; `netinstall` — лишь при
+отдельной задаче.
 
 ## Варианты регистрации
 
 1. Только `routeros-fundamentals` и `routeros-scripting`, оба автоматически.
-2. Те же два автоматически, остальные 15 вручную.
+2. Четыре автоматически (`fundamentals`, `scripting`, `syntax-inspection`,
+   `centrs`), остальные 13 вручную.
 3. Все 17 вручную через `disable-model-invocation: true`.
 4. Ничего не копировать в `.cursor/skills`: читать локальный `vendor` и
    resources `rosetta://skills` по запросу.
 
 ## Принятое решение
 
-`routeros-fundamentals` и `routeros-scripting` доступны для автоматического
-выбора агентом. Остальные 15 зарегистрированы с
-`disable-model-invocation: true` и запускаются только вручную. Это не отменяет
-правила безопасности и не разрешает live-команды само по себе.
+Автоматический выбор агентом: `routeros-fundamentals`, `routeros-scripting`,
+`routeros-syntax-inspection`, `routeros-centrs`. Остальные 13 зарегистрированы
+с `disable-model-invocation: true` и запускаются только вручную. Это не
+отменяет правила безопасности и не разрешает live-команды само по себе.

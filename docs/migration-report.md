@@ -38,8 +38,9 @@ credentials.
 
 - формат tracked `src/config`;
 - долговременное закрытое хранилище для `src/safe` и `bin`;
-- GitHub URL;
-- production cutover на `master/src/scripts`;
+- публикация remote `Defm/mikroconf` (в т.ч. ветка `_autobranch` для gitwatch)
+  и rollout на устройствах (пути в скриптах уже `mikroconf` / `src/scripts`;
+  canary ещё не выполнен);
 - write/apply broker.
 
 Текущий backup и script release pipeline не выключен и не изменён.

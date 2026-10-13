@@ -1,11 +1,43 @@
+:local sysname [/system identity get name]
+:local scriptname "doSomeAlarm"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doSomeAlarm";
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-:for i from=1000 to=3000 step=1000  do={
- :beep frequency=2000 length=500ms;
- :delay delay-time=1000ms;
- :beep frequency=4000 length=500ms;
- :delay delay-time=1000ms;
+:onerror errorDescr in={
+    :set state "Playing alarm sequence"
+    $globalNoteMe value=$state
+
+    :for i from=1000 to=3000 step=1000 do={
+        :beep frequency=2000 length=500ms
+        :delay delay-time=1000ms
+        :beep frequency=4000 length=500ms
+        :delay delay-time=1000ms
+    }
+
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
 }
 
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: sequence played"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

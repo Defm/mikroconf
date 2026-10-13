@@ -1,7 +1,6 @@
 ---
 name: routeros-syntax-inspection
 description: "Inspecting and validating RouterOS command/script syntax against a live device via /console/inspect (highlight, completion, syntax, child) and :parse IL. Use when: validating RouterOS commands before execution, explaining or linting RouterOS scripts, building syntax-aware tooling (LSP servers, validators, agent explain/check commands), interpreting highlight token streams or :parse intermediate language, discovering enum values or argument schemas, or when the user mentions console/inspect, highlight tokens, parseIL, or RouterOS script validation."
-disable-model-invocation: true
 ---
 
 # RouterOS Syntax Inspection

@@ -1,681 +1,689 @@
-:global globalNoteMe;
+# Example call
+# $globalNoteMe value="12345"
+# outputs $value using both :put and :log info
+:global globalNoteMe
 :if (!any $globalNoteMe) do={
+    :global globalNoteMe do={
 
-  :global globalNoteMe do={
+        :local scriptname [:jobname]
+        :local state "$scriptname: $value"
+        :put "$state"
+        :log info "$state"
 
-  :local scriptname [:jobname] ;
-  ## outputs $value using both :put and :log info
-  ## example $outputInfo value="12345"
-
-  :local state "$scriptname: $value";
-  :put "$state"
-  :log info "$state"
-
-  }
+    }
 }
 
-
-:global globalScriptBeforeRun;
+# Example call
+# $globalScriptBeforeRun $scriptname
+# $globalScriptBeforeRun $scriptname "NETWATCH"
+# prevents second instance of the same script and logs the start; $2 is an optional context postfix
+:global globalScriptBeforeRun
 :if (!any $globalScriptBeforeRun) do={
-  :global globalScriptBeforeRun do={
+    :global globalScriptBeforeRun do={
 
-    :global globalNoteMe;
-    :if ([:len $1] > 0) do={
+        :global globalNoteMe
+        :if ([:len $1] > 0) do={
 
-           :local scriptname [:jobname] ;
-           :local state "$scriptname instance already running - prevent new instance";
+            :local scriptname [:jobname]
+            :local context ""
+            :if ([:len $2] > 0) do={ :set context " ($2 context)" }
 
-           :if ([/system script job print count-only as-value where script=$scriptname] > 1) do={
-              :log error $state
-              $globalNoteMe value=$state;
-              :error $state
+            :local state "$scriptname instance already running - prevent new instance$context"
+            :if ([/system script job print count-only as-value where script=$scriptname] > 1) do={
+                :log error $state
+                $globalNoteMe value=$state
+                :error $state
             }
 
-      :local state "Starting script: $scriptname";
-      $globalNoteMe value=$state;
+            :set state "Starting script: $scriptname$context"
+            $globalNoteMe value=$state
 
-    }
-  }
-}
-
-# $SECRET
-#   get <name>
-#   set <name> password=<password>
-# . remove <name
-#   print
-:if (!any $SECRET) do={
-:global SECRET do={
-
-    # helpers
-    :local fixprofile do={
-        :if ([/ppp profile find name="null"]) do={:put "nothing"} else={
-            /ppp profile add bridge-learning=no change-tcp-mss=no local-address=0.0.0.0 name="null" only-one=yes remote-address=0.0.0.0 session-timeout=1s use-compression=no use-encryption=no use-mpls=no use-upnp=no
         }
     }
-
-    :local lppp [:len [/ppp secret find where name=$2]]
-
-    :local checkexist do={
-        :if ($lppp=0) do={
-            :error "\$SECRET: cannot find $2 in secret store"
-        }
-    }
-
-    # $SECRET
-    :if ([:typeof $1]!="str") do={
-        :put "\$SECRET"
-        :put "   uses /ppp/secrets to store stuff like REST apikeys, or other sensative data"
-        :put "\t\$SECRET print - prints stored secret passwords"
-        :put "\t\$SECRET get <name> - gets a stored secret"
-        :put "\t\$SECRET set <name> password=\"YOUR_SECRET\" - sets a secret password" 
-        :put "\t\$SECRET remove <name> - removes a secret" 
-        :return
-    }
-
-    # $SECRET print
-    :if ($1~"^pr") do={
-        /ppp secret print where comment~"\\\$SECRET"
-        :return
-    }
-
-    # $SECRET get
-    :if ($1~"get") do={
-        $checkexist
-        :local sid [/ppp secret find where name=$2]
-        :if ([:len $sid]=0) do={ :error "\$SECRET: cannot find $2 in secret store" }
-        :return [/ppp secret get $sid password]
-    }
-
-    # $SECRET set
-    :if ($1~"set|add") do={
-        :if ([:typeof $password]="str") do={} else={:error "\$SECRET: password= required"}
-        :if ($lppp=0) do={
-            /ppp secret add name=$2 password=$password 
-        } else={
-            /ppp secret set [/ppp secret find where name=$2] password=$password
-        }
-        $fixprofile
-        /ppp secret set [/ppp secret find where name=$2] comment="used by \$SECRET"
-        /ppp secret set [/ppp secret find where name=$2] profile="null"
-        /ppp secret set [/ppp secret find where name=$2] service="async"
-        :return [$SECRET get $2]
-    } 
-
-    # $SECRET remove
-    :if ($1~"rm|rem|del") do={
-        $checkexist
-        :return [/ppp secret remove [/ppp secret find where name=$2]]
-    }
-
-    :error "\$SECRET: bad command"
-}
 }
 
+# Example call
+# $globalSafeScriptCall "doImperialMarch" "STARTUP"
+# runs a script if it exists, never throws; $2 is an optional context postfix
+# uses :log directly - it may be called before globalNoteMe exists
+:global globalSafeScriptCall
+:if (!any $globalSafeScriptCall) do={
+    :global globalSafeScriptCall do={
 
-:global globalTgMessage;
+        :local targetScript [:tostr $1]
+        :local context ""
+        :if ([:len $2] > 0) do={ :set context " ($2 context)" }
+        :local itsOk false
+
+        :if ([:len $targetScript] = 0) do={ :return $itsOk }
+
+        :if ([:len [/system script find name=$targetScript]] = 0) do={
+            :log warning "Script not found: $targetScript$context"
+            :put "Script not found: $targetScript$context"
+            :return $itsOk
+        }
+
+        :onerror errorDescr in={
+            :log warning "Starting script: $targetScript$context"
+            :put "Starting script: $targetScript$context"
+            /system script run $targetScript
+            :set itsOk true
+        } do={
+            :log error "FAIL Starting script: $targetScript$context: $errorDescr"
+            :put "FAIL Starting script: $targetScript$context"
+        }
+
+        :return $itsOk
+    }
+}
+
+# Example call
+# $globalSecret
+# $globalSecret get <name>
+# $globalSecret set <name> password=<password>
+# $globalSecret remove <name>
+# $globalSecret print
+# stored entries are marked in /ppp secret with comment "used by $SECRET" - this marker is data on devices, do not rename
+:global globalSecret
+:if (!any $globalSecret) do={
+    :global globalSecret do={
+
+        :global globalSecret
+
+        # helpers
+        :local fixprofile do={
+            :if ([/ppp profile find name="null"]) do={ :put "nothing" } else={
+                /ppp profile add bridge-learning=no change-tcp-mss=no local-address=0.0.0.0 name="null" only-one=yes remote-address=0.0.0.0 session-timeout=1s use-compression=no use-encryption=no use-mpls=no use-upnp=no
+            }
+        }
+
+        :local lppp [:len [/ppp secret find where name=$2]]
+
+        :local checkexist do={
+            :if ($lppp = 0) do={
+                :error "\$globalSecret: cannot find $2 in secret store"
+            }
+        }
+
+        # $globalSecret
+        :if ([:typeof $1] != "str") do={
+            :put "\$globalSecret"
+            :put "   uses /ppp/secrets to store stuff like REST apikeys, or other sensitive data"
+            :put "\t\$globalSecret print - prints stored secret passwords"
+            :put "\t\$globalSecret get <name> - gets a stored secret"
+            :put "\t\$globalSecret set <name> password=\"YOUR_SECRET\" - sets a secret password"
+            :put "\t\$globalSecret remove <name> - removes a secret"
+            :return
+        }
+
+        # $globalSecret print
+        :if ($1~"^pr") do={
+            /ppp secret print where comment~"\\\$SECRET"
+            :return
+        }
+
+        # $globalSecret get
+        :if ($1~"get") do={
+            $checkexist
+            :local sid [/ppp secret find where name=$2]
+            :if ([:len $sid] = 0) do={ :error "\$globalSecret: cannot find $2 in secret store" }
+            :return [/ppp secret get $sid password]
+        }
+
+        # $globalSecret set
+        :if ($1~"set|add") do={
+            :if ([:typeof $password] = "str") do={} else={ :error "\$globalSecret: password= required" }
+            :if ($lppp = 0) do={
+                /ppp secret add name=$2 password=$password
+            } else={
+                /ppp secret set [/ppp secret find where name=$2] password=$password
+            }
+            $fixprofile
+            /ppp secret set [/ppp secret find where name=$2] comment="used by \$SECRET"
+            /ppp secret set [/ppp secret find where name=$2] profile="null"
+            /ppp secret set [/ppp secret find where name=$2] service="async"
+            :return [$globalSecret get $2]
+        }
+
+        # $globalSecret remove
+        :if ($1~"rm|rem|del") do={
+            $checkexist
+            :return [/ppp secret remove [/ppp secret find where name=$2]]
+        }
+
+        :error "\$globalSecret: bad command"
+    }
+}
+
+# Example call
+# $globalTgMessage value="text"
+:global globalTgMessage
 :if (!any $globalTgMessage) do={
-  :global globalTgMessage do={
+    :global globalTgMessage do={
 
-    :global globalNoteMe;
-    :global SECRET;
+        :global globalNoteMe
+        :global globalSecret
 
-    :local tToken "$[$SECRET get TELEGRAM_TOKEN]";
-    :local tGroupID "$[$SECRET get TELEGRAM_CHAT_ID]";
-    :local tURL "https://relay.usetheforce.io/bot$tToken/sendMessage\?chat_id=$tGroupID";
+        :local tToken "$[$globalSecret get TELEGRAM_TOKEN]"
+        :local tGroupId "$[$globalSecret get TELEGRAM_CHAT_ID]"
+        :local tUrl "https://relay.usetheforce.io/bot$tToken/sendMessage\?chat_id=$tGroupId"
 
-    :local sysname ("#" . [/system identity get name]);
-    :local scriptname [:jobname] ;
+        :local sysname ("#" . [/system identity get name])
+        :local scriptname [:jobname]
 
-    :local tgmessage  ("$scriptname %C2%A9%EF%B8%8F $sysname: $value");  
+        :local tgMessage ("$scriptname %C2%A9%EF%B8%8F $sysname: $value")
 
-    :local state ("Sending telegram message... $tgmessage");
-    $globalNoteMe value=$tgmessage;
+        :local state "Sending telegram message... $tgMessage"
+        $globalNoteMe value=$tgMessage
 
-    :do {
-      /tool fetch http-method=post mode=https url="$tURL" http-data="text=$tgmessage" keep-result=no;
-    } on-error= {
-      :local state ("Telegram notify error");
-      $globalNoteMe value=$state;
-    };
-  }
+        :onerror errorDescr in={
+            /tool fetch http-method=post mode=https url="$tUrl" http-data="text=$tgMessage" keep-result=no
+        } do={
+            :set state "Telegram notify error: $errorDescr"
+            $globalNoteMe value=$state
+        }
+    }
 }
 
-:global globalIPSECPolicyUpdateViaSSH;
+# Example call
+# $globalIPSECPolicyUpdateViaSSH 1.2.3.4
+:global globalIPSECPolicyUpdateViaSSH
 :if (!any $globalIPSECPolicyUpdateViaSSH) do={
-  :global globalIPSECPolicyUpdateViaSSH do={
+    :global globalIPSECPolicyUpdateViaSSH do={
 
-    :global globalRemoteIp;
-    :global globalNoteMe;
+        :global globalRemoteIp
+        :global globalNoteMe
 
-    :if ([:len $1] > 0) do={
-      :global globalRemoteIp ("$1" . "/32");
+        :if ([:len $1] > 0) do={
+            :global globalRemoteIp ("$1" . "/32")
+        }
+
+        :if (!any $globalRemoteIp) do={
+            :global globalRemoteIp "0.0.0.0/32"
+        }
+
+        :local state "RPC... $value"
+        $globalNoteMe value=$state
+        :local count [:len [/system script find name="doUpdatePoliciesRemotely"]]
+        :if ($count > 0) do={
+            :set state "Starting policies process... $globalRemoteIp"
+            $globalNoteMe value=$state
+            /system script run doUpdatePoliciesRemotely
+        }
     }
-
-    :if (!any $globalRemoteIp) do={
-      :global globalRemoteIp "0.0.0.0/32"
-    } else={
-    }
-
-    :local state ("RPC... $value");
-    $globalNoteMe value=$state;
-    :local count [:len [/system script find name="doUpdatePoliciesRemotely"]];
-    :if ($count > 0) do={
-       :local state ("Starting policies process... $globalRemoteIp ");
-       $globalNoteMe value=$state;
-       /system script run doUpdatePoliciesRemotely;
-     }
-  }
 }
 
-#Example call
-#$globalNewNetworkMember ip=192.168.90.130 mac=50:DE:06:25:C2:FC gip=192.168.98.130 comm=iPadAlxPro ssid="WiFi 5"
-:global globalNewNetworkMember;
+# Example call
+# $globalNewNetworkMember ip=192.168.90.130 mac=50:DE:06:25:C2:FC gip=192.168.98.130 comm=iPadAlxPro ssid="WiFi 5"
+:global globalNewNetworkMember
 :if (!any $globalNewNetworkMember) do={
-  :global globalNewNetworkMember do={
+    :global globalNewNetworkMember do={
 
-    :global globalNoteMe;
+        :global globalNoteMe
 
-    #to prevent connection
-    :local guestDHCP "guest-dhcp-server";
+        # to prevent connection
+        :local guestDhcp "guest-dhcp-server"
 
-    #to allow connection
-    :local mainDHCP "main-dhcp-server";
+        # to allow connection
+        :local mainDhcp "main-dhcp-server"
 
-    #when DHCP not using (add arp for leases)
-    :local arpInterface "main-infrastructure-br";
-    :local state ("Adding new network member... ");
+        # when DHCP not using (add arp for leases)
+        :local arpInterface "main-infrastructure-br"
+        :local state "Adding new network member... "
+        $globalNoteMe value=$state
 
-    $globalNoteMe value=$state;
-
-    # incoming named params
-    :local newIp [ :tostr $ip ];
-    :local newBlockedIp [ :tostr $gip ];
-    :local newMac [ :tostr $mac ];
-    :local comment [ :tostr $comm ];
-    :local newSsid [ :tostr $ssid ];
-    :if ([:len $newIp] > 0) do={
-        :if ([ :typeof [ :toip $newIp ] ] != "ip" ) do={
-
-            :local state ("Error: bad IP parameter passed - ($newIp)");
-            $globalNoteMe value=$state;
-            :return false;
-
-        }
-    } else={
-
-        :local state ("Error: bad IP parameter passed - ($newIp)");
-        $globalNoteMe value=$state;
-        :return false;
-
-    }
-
-    :do {
-
-        :local state ("Removing existing DHCP configuration for ($newIp/$newMac) on $mainDHCP");
-        $globalNoteMe value=$state;       
-        /ip dhcp-server lease remove [find address=$newIp];
-        /ip dhcp-server lease remove [find mac-address=$newMac];
-
-        :local state ("Adding DHCP configuration for ($newIp/$newMac) on $mainDHCP");
-        $globalNoteMe value=$state;
-        
-       :if ([ :len [ /ip dhcp-server find where name="$mainDHCP" ] ] > 0) do={
-            /ip dhcp-server lease add address=$newIp mac-address=$newMac server=$mainDHCP comment=$comment;
-            :local state ("Done.");
-            $globalNoteMe value=$state;
-       } else={
-        :local state ("Cant find DHCP server $mainDHCP. SKIPPED.");
-        $globalNoteMe value=$state;
-       }
-
-    } on-error={
-
-        :local state ("Error: something fail on DHCP configuration 'allow' step for ($newIp/$newMac) on $mainDHCP");
-        $globalNoteMe value=$state;
-        :return false;
-
-    }
-
-    :do {
-
-        /ip dhcp-server lease remove [find address=$newBlockedIp];
-        :local state ("Adding DHCP configuration for ($newBlockedIp/$newMac) on $guestDHCP (preventing connections to guest network)");
-        $globalNoteMe value=$state;
-
-       :if ([ :len [ /ip dhcp-server find where name="$guestDHCP" ] ] > 0) do={
-          /ip dhcp-server lease add address=$newBlockedIp block-access=yes mac-address=$newMac server=$guestDHCP comment=($comment . "(blocked)");
-          :local state ("Done.");
-          $globalNoteMe value=$state;
-       } else={
-        :local state ("Cant find DHCP server $guestDHCP. SKIPPED.");
-        $globalNoteMe value=$state;
-       }
-
-    } on-error={
-
-        :local state ("Error: something fail on DHCP configuration 'block' step for ($newBlockedIp/$newMac) on $guestDHCP");
-        $globalNoteMe value=$state;
-        :return false;
-
-    }
-
-    :do {
-
-        :local state ("Adding ARP static entries for ($newBlockedIp/$newMac) on $mainDHCP");
-        $globalNoteMe value=$state;
-        /ip arp remove [find address=$newIp];
-        /ip arp remove [find address=$newBlockedIp];
-        /ip arp remove [find mac-address=$newMac];
-
-     :if ([ :len [ /interface find where name="$arpInterface" ] ] > 0) do={
-        /ip arp add address=$newIp interface=$arpInterface mac-address=$newMac comment=$comment
-        :local state ("Done.");
-        $globalNoteMe value=$state;
-       } else={
-        :local state ("Cant find interface $arpInterface. SKIPPED.");
-        $globalNoteMe value=$state;
-       }
-
-    } on-error={
-
-        :local state ("Error: something fail on ARP configuration step");
-        $globalNoteMe value=$state;
-        :return false;
-
-    }
-
-    :do {
-
-        :local state ("Adding CAPs ACL static entries for ($newBlockedIp/$newMac) on $newSsid");
-        $globalNoteMe value=$state;
-        
-         # avoid parse errors using Execute when no wireless package installed
-       :if ( [ :len [ /system package find where name="wireless" and disabled=no ] ] > 0  ) do={
-          :local Cmd "/caps-man access-list remove [find mac-address=$newMac];";
-          :local jobid [:execute script=$Cmd];
-
-          :local Cmd "/caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment=\"$comment\" disabled=no mac-address=$newMac ssid-regexp=\"$newSsid\" place-before=1;";
-          :local jobid [:execute script=$Cmd];
-
-          }
-
-    } on-error={
-
-        :local state ("Error: something fail on CAPS configuration step");
-        $globalNoteMe value=$state;
-        :return false;
-
-    }
-
-    :return true;
-
-  }
-}
-
-
-
-#Example call
-#$globalNewClientCert argClients="anna.ipsec, mikrouter.ipsec" argUsage="tls-client,digital-signature,key-encipherment"
-#$globalNewClientCert argClients="anna.capsman, mikrouter.capsman" argUsage="digital-signature,key-encipherment"
-#$globalNewClientCert argClients="anna.proxy" argUsage="tls-server,digital-signature,key-encipherment" addSAN="*.anna.home"
-#$globalNewClientCert argClients="185.13.148.14" argUsage="tls-server" argBindAsIP="any"
-:if (!any $globalNewClientCert) do={
-  :global globalNewClientCert do={
-
-    # generates IPSEC certs CLIENT TEMPLATE, then requests SCEP to sign it
-    # This script is a SCEP-client, it request the server to provide a new certificate
-    # it ONLY form the request via API to remote SCEP server
-
-    # incoming named params
-    :local clients [ :tostr $argClients ];
-    :local prefs  [ :tostr $argUsage ];
-    :local asIp  $argBindAsIP;
-    :local san  $addSAN ;
-
-    # scope global functions
-    :global globalNoteMe;
-    :global globalScriptBeforeRun;
-
-    :if ([:len $clients] > 0) do={
-      :if ([ :typeof [ :tostr $clients ] ] != "str" ) do={
-
-          :local state ("Error: bad 'cients' parameter passed - ($clients)");
-          $globalNoteMe value=$state;
-          :return false;
-
-      }
-    } else={
-
-        :local state ("Error: bad 'cients' parameter passed - ($clients");
-        $globalNoteMe value=$state;
-        :return false;
-
-    }
-
-    :do {
-
-      #clients
-      :local IDs [:toarray "$clients"];
-      :local fakeDomain "myvpn.fake.org"
-      :local scepAlias "CHR"
-      :local state ("Started requests generation");
-
-      $globalNoteMe value=$state;
-
-      ## this fields should be empty IPSEC/ike2/RSA to work, i can't get it functional with filled fields
-      :local COUNTRY "RU"
-      :local STATE "MSC"
-      :local LOC "Moscow"
-      :local ORG "IKEv2 Home"
-      :local OU "IKEv2 Mikrotik"
-
-      # :local COUNTRY ""
-      # :local STATE ""
-      # :local LOC ""
-      # :local ORG ""
-      # :local OU ""
-
-
-      :local KEYSIZE "2048"
-
-      :local scepUrl "http://185.13.148.14/scep/grant";
-      :local itsOk true;
-
-      :local tname "";
-      :foreach USERNAME in=$IDs do={
-
-        :if ([:typeof $san ] != "str" ) do={
-           :set san $USERNAME;
+        # incoming named params
+        :local newIp [:tostr $ip]
+        :local newBlockedIp [:tostr $gip]
+        :local newMac [:tostr $mac]
+        :local comment [:tostr $comm]
+        :local newSsid [:tostr $ssid]
+        :if ([:len $newIp] > 0) do={
+            :if ([:typeof [:toip $newIp]] != "ip") do={
+                :set state "Error: bad IP parameter passed - ($newIp)"
+                $globalNoteMe value=$state
+                :return false
+            }
+        } else={
+            :set state "Error: bad IP parameter passed - ($newIp)"
+            $globalNoteMe value=$state
+            :return false
         }
 
-        ## create a client certificate (that will be just a template while not signed)
-        :if (  [:len $asIp ] > 0 ) do={
+        :onerror errorDescr in={
 
-                :local state "CLIENT TEMPLATE certificates generation as IP...  $USERNAME";
-                $globalNoteMe value=$state;
+            :set state "Removing existing DHCP configuration for ($newIp/$newMac) on $mainDhcp"
+            $globalNoteMe value=$state
+            /ip dhcp-server lease remove [find address=$newIp]
+            /ip dhcp-server lease remove [find mac-address=$newMac]
 
-                :set tname "S.$USERNAME@$scepAlias";
+            :set state "Adding DHCP configuration for ($newIp/$newMac) on $mainDhcp"
+            $globalNoteMe value=$state
 
-                :if ([ :len [ /certificate find where name="$tname" ] ] > 0) do={
-
-                  :local state ("Error: found certificate named ($tname) -  cannot create the same one");
-                  $globalNoteMe value=$state;
-                  :return false;
-
-                } else={
-
-                  /certificate add name="$tname" common-name="$USERNAME@$scepAlias" subject-alt-name="IP:$USERNAME,DNS:$fakeDomain" key-usage=$prefs country="$COUNTRY" state="$STATE" locality="$LOC" organization="$ORG" unit="$OU"  key-size="$KEYSIZE" days-valid=365;
-
-                };
-
+            :if ([:len [/ip dhcp-server find where name="$mainDhcp"]] > 0) do={
+                /ip dhcp-server lease add address=$newIp mac-address=$newMac server=$mainDhcp comment=$comment
+                $globalNoteMe value="Done"
             } else={
-
-                :local state "CLIENT TEMPLATE certificates generation as EMAIL...  $USERNAME";
-                $globalNoteMe value=$state;
-
-                :set tname "C.$USERNAME@$scepAlias";
-
-                :if ([ :len [ /certificate find where name="$tname" ] ] > 0) do={
-
-                  :local state ("Error: found certificate named ($tname) -  cannot create the same one");
-                  $globalNoteMe value=$state;
-                  :return false;
-
-                } else={
-
-                  /certificate add name="$tname" common-name="$USERNAME@$scepAlias" subject-alt-name="email:$USERNAME@$fakeDomain,DNS:$san" key-usage=$prefs  country="$COUNTRY" state="$STATE" locality="$LOC" organization="$ORG" unit="$OU"  key-size="$KEYSIZE" days-valid=365
-
-                };
-
-            }
-
-        :local state "Pushing sign request...";
-        $globalNoteMe value=$state;
-        /certificate add-scep template="$tname" scep-url="$scepUrl";
-
-        :delay 6s
-
-        ## we now have to wait while on remote [mikrotik] this request will be granted and pushed back ready-to-use certificate
-        :local state "We now have to wait while on remote [mikrotik] this request will be granted and pushed back ready-to-use certificate... ";
-        $globalNoteMe value=$state;
-
-        :local state "Proceed to remote SCEP please, find this request and appove it. I'll wait 30 seconds";
-        $globalNoteMe value=$state;
-
-        :delay 30s
-
-        :local baseLength 5;
-        :for j from=1 to=$baseLength do={
-          :if ([ :len [ /certificate find where status="idle" name="$tname" ] ] > 0) do={
-
-            :local state "Got it at last. Exporting to file";
-            $globalNoteMe value=$state;
-
-            /certificate set trusted=yes [find where name="$tname" and status="idle"]
-
-            ## export the CA, client certificate, and private key
-            # Configure CERTIFICATE_EXPORT_PASSPHRASE in $SECRET before requesting export.
-            /certificate export-certificate [find where name="$tname" and status="idle"] export-passphrase="$[$SECRET get CERTIFICATE_EXPORT_PASSPHRASE]" type=pkcs12
-
-            :return true;
-
-          } else={
-
-            :local state "Waiting for mikrotik to download the certificate...";
-            $globalNoteMe value=$state;
-            :delay 8s
-
-          };
-        }
-      };
-
-      :return false;
-
-    } on-error={
-
-        :local state ("Error: something fail on SCEP certifcates issuing step");
-        $globalNoteMe value=$state;
-        :return false;
-
-    }
-  }
-}
-
-#:put [$simplercurrdatetimestr]
-:if (!any $simplercurrdatetimestr) do={
-:global simplercurrdatetimestr do={
-    /system clock
-    :local vdate [get date]
-    :local vtime [get time]
-    :local vdoff [:toarray "0,4,5,7,8,10"]
-    :local MM    [:pick $vdate ($vdoff->2) ($vdoff->3)]
-    :local M     [:tonum $MM]
-    :if ($vdate ~ ".../../....") do={
-        :set vdoff [:toarray "7,11,1,3,4,6"]
-        :set M     ([:find "xxanebarprayunulugepctovecANEBARPRAYUNULUGEPCTOVEC" [:pick $vdate ($vdoff->2) ($vdoff->3)] -1] / 2)
-        :if ($M>12) do={:set M ($M - 12)}
-        :set MM    [:pick (100 + $M) 1 3]
-    }
-    :local yyyy [:pick $vdate ($vdoff->0) ($vdoff->1)]
-    :local dd   [:pick $vdate ($vdoff->4) ($vdoff->5)]
-    :local HH   [:pick $vtime 0  2]
-    :local mm   [:pick $vtime 3  5]
-    :local ss   [:pick $vtime 6  8]
-
-    :return "$yyyy$MM$dd-$HH$mm$ss"
-}
-
-}
-
-:if (!any $globalCallFetch) do={
-  :global globalCallFetch do={
-
-    # this one calls Fetch and catches its errors
-    :global globalNoteMe;
-    :if ([:len $1] > 0) do={
-
-        # something like "/tool fetch address=nas.home port=21 src-path=scripts/doSwitchDoHOn.rsc.txt user=git password=git dst-path=/REPO/doSwitchDoHOn.rsc.txt mode=ftp upload=yes"
-        :local fetchCmd "$1";
-
-        :local state "I'm now putting: $fetchCmd";
-        $globalNoteMe value=$state;
-
-        :global simplercurrdatetimestr;
-        :local stamp [$simplercurrdatetimestr];
-
-        :local salt [:rndstr length=6 from="HtsP2n8qZ"];        
-        :local logName "RAM/$stamp-$salt.log.txt";
-
-        /file remove [find where name="$logName"]
-        {
-            :local jobid [:execute file=$logName script=$fetchCmd]
-
-            :set state "Waiting the end of process for prototol $logName to be ready, max 30 seconds...";
-            $globalNoteMe value=$state;
-
-            :global Gltesec 0
-            :while (([:len [/sys script job find where .id=$jobid]] = 1) && ($Gltesec < 30)) do={
-                :set Gltesec ($Gltesec + 1)
-                :delay 1s
-
-                :set state "waiting fetch result... $Gltesec";
-                $globalNoteMe value=$state;
-
-            }
-
-            :set state "Done. Elapsed Seconds: $Gltesec\r\n";
-            $globalNoteMe value=$state;
-
-            :if ([:len [/file find where name="$logName"]] = 1) do={
- 
-                :local filecontent [/file get [/file find where name="$logName"] contents]
-                :set state "Result of Fetch:\r\n****************************\r\n$filecontent\r\n****************************";
-                $globalNoteMe value=$state;
-
-                /file remove [find where name="$logName"];
-
-            } else={
-
-                :set state "Result of Fetch:\r\n****************************\r\n 30Sec Timeout exceeded - still no log file \r\n****************************";
-                $globalNoteMe value=$state;
-
-            }
-        }
-    }
-  }
-}
-
-
-
-#Example call
-#:put [$globalOnPrimaryPartition]
-#test if we are boot up from a primary partition(not fallback or recovery)
-:global globalOnPrimaryPartition;
-:if (!any $globalOnPrimaryPartition) do={
-    :global globalOnPrimaryPartition do={
-        
-        :global globalNoteMe;
-        # 
-        :local partitionName "primary";
-        :local OnPrimaryPartition false;
-        
-        :local partitionsActivated [system/device-mode/get partitions];
-
-        :if (!$partitionsActivated) do={
-
-            :local state ("Investigation result - partitions disabled");
-            $globalNoteMe value=$state;
-            :local OnPrimaryPartition true;
-            :return $OnPrimaryPartition;
-        }
-       
-       
-      :local partition;
-      :onerror errorName in={ 
-            
-            # device may have no /partitions command if it is 16Mb
-            :set partition [/partitions find name=$partitionName];
-
-        } do={ 
-
-            :local state ("Investigation result - device has no /partitions submenu");
-            $globalNoteMe value=$state;
-            :local OnPrimaryPartition true;
-            :return $OnPrimaryPartition;
-        }
-
-        :onerror errorName in={ 
-            
-            # test if it exist in /partitions
-            
-            :if ([:len $partition] > 0) do={
-                :local running [/partition get $partition running];
-                :if ($running) do={
-                    :set OnPrimaryPartition true;
-                    :error "primary active";
-                } else={
-                    :set OnPrimaryPartition false;
-                    :error "primary inactive";
-                }
-            } else={
-                :set OnPrimaryPartition true;
-                :error "partitions not set";
-            }
-
-        } do={ 
-
-            :local state ("Investigation result - $errorName");
-            $globalNoteMe value=$state;
-
-            :return $OnPrimaryPartition;
-        }
-       
-        :put $OnPrimaryPartition 
-        :return $OnPrimaryPartition;
-    }
-
-}
-
-:global globalCallSSH;
-:if (!any $globalCallSSH) do={
-    :global globalCallSSH do={
-
-        :local cmd $1;
-
-        :if ([:len $cmd] = 0) do={
-            :return "RPC: ssh empty command";
-        }
-
-        :local sshServer "$[$SECRET get SSH_SERVER]";
-        :local sshPort "$[$SECRET get SSH_PORT]";
-        :local sshUser "$[$SECRET get SSH_USER]";
-        :local sshPass "$[$SECRET get SSH_PASSWORD]";
-
-        :local state "";
-
-        :onerror errName in={
-
-            :set state ("Call: /system ssh-exec address=$sshServer user=$sshUser port=$sshPort command=\"$cmd\" as-value");
-            $globalNoteMe value=$state;
-
-            :local result [/system ssh-exec address=$sshServer user=$sshUser password=$sshPass port=$sshPort command=$cmd as-value];
-            :local exitCode ([$result]->"exit-code");
-
-            :if ($exitCode != 0) do={
-                :set state ("RPC: ssh command returned exit code ($exitCode)");
-     } else={
-            
-              # no errors - success operation 
-              :set state "";
+                :set state "Cant find DHCP server $mainDhcp. SKIPPED."
+                $globalNoteMe value=$state
             }
 
         } do={
-            :set state ("RPC: ssh error when $state: $errName");
-            $globalNoteMe value=$state;
+            :set state "Error: something fail on DHCP configuration 'allow' step for ($newIp/$newMac) on $mainDhcp: $errorDescr"
+            $globalNoteMe value=$state
+            :return false
         }
 
-        :return $state;
-    };
+        :onerror errorDescr in={
+
+            /ip dhcp-server lease remove [find address=$newBlockedIp]
+            :set state "Adding DHCP configuration for ($newBlockedIp/$newMac) on $guestDhcp (preventing connections to guest network)"
+            $globalNoteMe value=$state
+
+            :if ([:len [/ip dhcp-server find where name="$guestDhcp"]] > 0) do={
+                /ip dhcp-server lease add address=$newBlockedIp block-access=yes mac-address=$newMac server=$guestDhcp comment=($comment . "(blocked)")
+                $globalNoteMe value="Done"
+            } else={
+                :set state "Cant find DHCP server $guestDhcp. SKIPPED."
+                $globalNoteMe value=$state
+            }
+
+        } do={
+            :set state "Error: something fail on DHCP configuration 'block' step for ($newBlockedIp/$newMac) on $guestDhcp: $errorDescr"
+            $globalNoteMe value=$state
+            :return false
+        }
+
+        :onerror errorDescr in={
+
+            :set state "Adding ARP static entries for ($newBlockedIp/$newMac) on $mainDhcp"
+            $globalNoteMe value=$state
+            /ip arp remove [find address=$newIp]
+            /ip arp remove [find address=$newBlockedIp]
+            /ip arp remove [find mac-address=$newMac]
+
+            :if ([:len [/interface find where name="$arpInterface"]] > 0) do={
+                /ip arp add address=$newIp interface=$arpInterface mac-address=$newMac comment=$comment
+                $globalNoteMe value="Done"
+            } else={
+                :set state "Cant find interface $arpInterface. SKIPPED."
+                $globalNoteMe value=$state
+            }
+
+        } do={
+            :set state "Error: something fail on ARP configuration step: $errorDescr"
+            $globalNoteMe value=$state
+            :return false
+        }
+
+        :onerror errorDescr in={
+
+            :set state "Adding CAPs ACL static entries for ($newBlockedIp/$newMac) on $newSsid"
+            $globalNoteMe value=$state
+
+            # avoid parse errors using Execute when no wireless package installed
+            :if ([:len [/system package find where name="wireless" and disabled=no]] > 0) do={
+                :local cmd "/caps-man access-list remove [find mac-address=$newMac];"
+                :local jobid [:execute script=$cmd]
+
+                :set cmd "/caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment=\"$comment\" disabled=no mac-address=$newMac ssid-regexp=\"$newSsid\" place-before=1;"
+                :set jobid [:execute script=$cmd]
+            }
+
+        } do={
+            :set state "Error: something fail on CAPS configuration step: $errorDescr"
+            $globalNoteMe value=$state
+            :return false
+        }
+
+        :return true
+
+    }
 }
 
+# Example call
+# $globalNewClientCert argClients="anna.ipsec, mikrouter.ipsec" argUsage="tls-client,digital-signature,key-encipherment"
+# $globalNewClientCert argClients="anna.capsman, mikrouter.capsman" argUsage="digital-signature,key-encipherment"
+# $globalNewClientCert argClients="anna.proxy" argUsage="tls-server,digital-signature,key-encipherment" addSAN="*.anna.home"
+# $globalNewClientCert argClients="185.13.148.14" argUsage="tls-server" argBindAsIP="any"
+:global globalNewClientCert
+:if (!any $globalNewClientCert) do={
+    :global globalNewClientCert do={
 
+        # generates IPSEC certs CLIENT TEMPLATE, then requests SCEP to sign it
+        # This script is a SCEP-client, it request the server to provide a new certificate
+        # it ONLY form the request via API to remote SCEP server
+
+        # incoming named params
+        :local clients [:tostr $argClients]
+        :local prefs [:tostr $argUsage]
+        :local asIp $argBindAsIP
+        :local san $addSAN
+
+        # scope global functions
+        :global globalNoteMe
+        :global globalSecret
+
+        :local state ""
+
+        :if ([:len $clients] > 0) do={
+            :if ([:typeof [:tostr $clients]] != "str") do={
+                :set state "Error: bad 'clients' parameter passed - ($clients)"
+                $globalNoteMe value=$state
+                :return false
+            }
+        } else={
+            :set state "Error: bad 'clients' parameter passed - ($clients)"
+            $globalNoteMe value=$state
+            :return false
+        }
+
+        :onerror errorDescr in={
+
+            # clients
+            :local ids [:toarray "$clients"]
+            :local fakeDomain "myvpn.fake.org"
+            :local scepAlias "CHR"
+            :set state "Started requests generation"
+            $globalNoteMe value=$state
+
+            # this fields should be empty IPSEC/ike2/RSA to work, i can't get it functional with filled fields
+            :local country "RU"
+            :local certState "MSC"
+            :local locality "Moscow"
+            :local organization "IKEv2 Home"
+            :local unit "IKEv2 Mikrotik"
+
+            :local keySize "2048"
+
+            :local scepUrl "http://185.13.148.14/scep/grant"
+
+            :local tname ""
+            :foreach userName in=$ids do={
+
+                :if ([:typeof $san] != "str") do={
+                    :set san $userName
+                }
+
+                # create a client certificate (that will be just a template while not signed)
+                :if ([:len $asIp] > 0) do={
+
+                    :set state "CLIENT TEMPLATE certificates generation as IP...  $userName"
+                    $globalNoteMe value=$state
+
+                    :set tname "S.$userName@$scepAlias"
+
+                    :if ([:len [/certificate find where name="$tname"]] > 0) do={
+                        :set state "Error: found certificate named ($tname) -  cannot create the same one"
+                        $globalNoteMe value=$state
+                        :return false
+                    } else={
+                        /certificate add name="$tname" common-name="$userName@$scepAlias" subject-alt-name="IP:$userName,DNS:$fakeDomain" key-usage=$prefs country="$country" state="$certState" locality="$locality" organization="$organization" unit="$unit" key-size="$keySize" days-valid=365
+                    }
+
+                } else={
+
+                    :set state "CLIENT TEMPLATE certificates generation as EMAIL...  $userName"
+                    $globalNoteMe value=$state
+
+                    :set tname "C.$userName@$scepAlias"
+
+                    :if ([:len [/certificate find where name="$tname"]] > 0) do={
+                        :set state "Error: found certificate named ($tname) -  cannot create the same one"
+                        $globalNoteMe value=$state
+                        :return false
+                    } else={
+                        /certificate add name="$tname" common-name="$userName@$scepAlias" subject-alt-name="email:$userName@$fakeDomain,DNS:$san" key-usage=$prefs country="$country" state="$certState" locality="$locality" organization="$organization" unit="$unit" key-size="$keySize" days-valid=365
+                    }
+
+                }
+
+                :set state "Pushing sign request..."
+                $globalNoteMe value=$state
+                /certificate add-scep template="$tname" scep-url="$scepUrl"
+
+                :delay 6s
+
+                # we now have to wait while on remote [mikrotik] this request will be granted and pushed back ready-to-use certificate
+                :set state "We now have to wait while on remote [mikrotik] this request will be granted and pushed back ready-to-use certificate... "
+                $globalNoteMe value=$state
+
+                :set state "Proceed to remote SCEP please, find this request and approve it. I'll wait 30 seconds"
+                $globalNoteMe value=$state
+
+                :delay 30s
+
+                :local baseLength 5
+                :for j from=1 to=$baseLength do={
+                    :if ([:len [/certificate find where status="idle" name="$tname"]] > 0) do={
+
+                        :set state "Got it at last. Exporting to file"
+                        $globalNoteMe value=$state
+
+                        /certificate set trusted=yes [find where name="$tname" and status="idle"]
+
+                        # export the CA, client certificate, and private key
+                        # Configure CERTIFICATE_EXPORT_PASSPHRASE in $globalSecret before requesting export.
+                        /certificate export-certificate [find where name="$tname" and status="idle"] export-passphrase="$[$globalSecret get CERTIFICATE_EXPORT_PASSPHRASE]" type=pkcs12
+
+                        :return true
+
+                    } else={
+
+                        :set state "Waiting for mikrotik to download the certificate..."
+                        $globalNoteMe value=$state
+                        :delay 8s
+
+                    }
+                }
+            }
+
+            :return false
+
+        } do={
+            :set state "Error: something fail on SCEP certificates issuing step: $errorDescr"
+            $globalNoteMe value=$state
+            :return false
+        }
+    }
+}
+
+# Example call
+# :put [$globalTimestamp]
+# returns "yyyyMMdd-HHmmss" for both old and new RouterOS date formats
+:global globalTimestamp
+:if (!any $globalTimestamp) do={
+    :global globalTimestamp do={
+        /system clock
+        :local vdate [get date]
+        :local vtime [get time]
+        :local vdoff [:toarray "0,4,5,7,8,10"]
+        :local mon2 [:pick $vdate ($vdoff->2) ($vdoff->3)]
+        :local mon [:tonum $mon2]
+        :if ($vdate ~ ".../../....") do={
+            :set vdoff [:toarray "7,11,1,3,4,6"]
+            :set mon ([:find "xxanebarprayunulugepctovecANEBARPRAYUNULUGEPCTOVEC" [:pick $vdate ($vdoff->2) ($vdoff->3)] -1] / 2)
+            :if ($mon > 12) do={ :set mon ($mon - 12) }
+            :set mon2 [:pick (100 + $mon) 1 3]
+        }
+        :local yyyy [:pick $vdate ($vdoff->0) ($vdoff->1)]
+        :local dd [:pick $vdate ($vdoff->4) ($vdoff->5)]
+        :local hh [:pick $vtime 0 2]
+        :local mm [:pick $vtime 3 5]
+        :local ss [:pick $vtime 6 8]
+
+        :return "$yyyy$mon2$dd-$hh$mm$ss"
+    }
+}
+
+# Example call
+# $globalCallFetch "/tool fetch url=sftp://host:port/dst src-path=file user=u password=p upload=yes"
+# calls Fetch as a background job and reports its output
+:global globalCallFetch
+:if (!any $globalCallFetch) do={
+    :global globalCallFetch do={
+
+        :global globalNoteMe
+        :global globalTimestamp
+        :global globalFetchWaitTicks
+
+        :if ([:len $1] > 0) do={
+
+            :local fetchCmd "$1"
+
+            :local state "I'm now putting: $fetchCmd"
+            $globalNoteMe value=$state
+
+            :local stamp [$globalTimestamp]
+
+            :local salt [:rndstr length=6 from="HtsP2n8qZ"]
+            :local logName "RAM/$stamp-$salt.log.txt"
+
+            /file remove [find where name="$logName"]
+
+            :local jobid [:execute file=$logName script=$fetchCmd]
+
+            :set state "Waiting the end of process for protocol $logName to be ready, max 30 seconds..."
+            $globalNoteMe value=$state
+
+            :set globalFetchWaitTicks 0
+            :while (([:len [/system script job find where .id=$jobid]] = 1) && ($globalFetchWaitTicks < 30)) do={
+                :set globalFetchWaitTicks ($globalFetchWaitTicks + 1)
+                :delay 1s
+
+                :set state "waiting fetch result... $globalFetchWaitTicks"
+                $globalNoteMe value=$state
+            }
+
+            :set state "Done. Elapsed Seconds: $globalFetchWaitTicks\r\n"
+            $globalNoteMe value=$state
+
+            :if ([:len [/file find where name="$logName"]] = 1) do={
+
+                :local filecontent [/file get [/file find where name="$logName"] contents]
+                :set state "Result of Fetch:\r\n****************************\r\n$filecontent\r\n****************************"
+                $globalNoteMe value=$state
+
+                /file remove [find where name="$logName"]
+
+            } else={
+
+                :set state "Result of Fetch:\r\n****************************\r\n 30Sec Timeout exceeded - still no log file \r\n****************************"
+                $globalNoteMe value=$state
+
+            }
+        }
+    }
+}
+
+# Example call
+# :put [$globalOnPrimaryPartition]
+# test if we are boot up from a primary partition (not fallback or recovery); predicate - returns true/false
+:global globalOnPrimaryPartition
+:if (!any $globalOnPrimaryPartition) do={
+    :global globalOnPrimaryPartition do={
+
+        :global globalNoteMe
+
+        :local partitionName "primary"
+        :local onPrimaryPartition false
+        :local state ""
+
+        :local partitionsActivated [system/device-mode/get partitions]
+
+        :if (!$partitionsActivated) do={
+            :set state "Investigation result - partitions disabled"
+            $globalNoteMe value=$state
+            :set onPrimaryPartition true
+            :return $onPrimaryPartition
+        }
+
+        :local partition
+        :onerror errorDescr in={
+
+            # device may have no /partitions command if it is 16Mb
+            :set partition [/partitions find name=$partitionName]
+
+        } do={
+
+            :set state "Investigation result - device has no /partitions submenu"
+            $globalNoteMe value=$state
+            :set onPrimaryPartition true
+            :return $onPrimaryPartition
+        }
+
+        :onerror errorDescr in={
+
+            # test if it exist in /partitions
+            :if ([:len $partition] > 0) do={
+                :local running [/partition get $partition running]
+                :if ($running) do={
+                    :set onPrimaryPartition true
+                    :error "primary active"
+                } else={
+                    :set onPrimaryPartition false
+                    :error "primary inactive"
+                }
+            } else={
+                :set onPrimaryPartition true
+                :error "partitions not set"
+            }
+
+        } do={
+
+            :set state "Investigation result - $errorDescr"
+            $globalNoteMe value=$state
+
+            :return $onPrimaryPartition
+        }
+
+        :return $onPrimaryPartition
+    }
+}
+
+# Example call
+# :local errorDef [$globalCallSSH ":global globalRemoteIp 1.2.3.4/32"]
+# operation - returns "" on success, error text otherwise; SSH target is taken from $globalSecret SSH_*
+:global globalCallSSH
+:if (!any $globalCallSSH) do={
+    :global globalCallSSH do={
+
+        :global globalNoteMe
+        :global globalSecret
+
+        :local cmd $1
+
+        :if ([:len $cmd] = 0) do={
+            :return "RPC: ssh empty command"
+        }
+
+        :local sshServer "$[$globalSecret get SSH_SERVER]"
+        :local sshPort "$[$globalSecret get SSH_PORT]"
+        :local sshUser "$[$globalSecret get SSH_USER]"
+        :local sshPass "$[$globalSecret get SSH_PASSWORD]"
+
+        :local state ""
+
+        :onerror errorDescr in={
+
+            :set state "Call: /system ssh-exec address=$sshServer user=$sshUser port=$sshPort command=\"$cmd\" as-value"
+            $globalNoteMe value=$state
+
+            :local result [/system ssh-exec address=$sshServer user=$sshUser password=$sshPass port=$sshPort command=$cmd as-value]
+            :local exitCode ([$result]->"exit-code")
+
+            :if ($exitCode != 0) do={
+                :set state "RPC: ssh command returned exit code ($exitCode)"
+            } else={
+                # no errors - success operation
+                :set state ""
+            }
+
+        } do={
+            :set state "RPC: ssh error when $state: $errorDescr"
+            $globalNoteMe value=$state
+        }
+
+        :return $state
+    }
+}

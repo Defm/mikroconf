@@ -1,22 +1,45 @@
+:local sysname [/system identity get name]
+:local scriptname "doFlushLogs"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doFlushLogs";
-
-:global globalNoteMe;
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
 :local state ""
 
-:set state "FLUSHING logs.."
-$globalNoteMe value=$state;
+:onerror errorDescr in={
 
-/system/logging/action {
-  :foreach memAction in=[find target=memory] do={
-    :local actName [get value-name=name $memAction]
+    :set state "FLUSHING logs.."
+    $globalNoteMe value=$state
 
-    clear action=$actName;
-
+    /system/logging/action {
+        :foreach memAction in=[find target=memory] do={
+            :local actName [get value-name=name $memAction]
+            clear action=$actName
+        }
     }
-  }
 
+    $globalNoteMe value="Done"
 
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
 
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: logs flushed"
+}
 
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

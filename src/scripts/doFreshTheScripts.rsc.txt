@@ -1,102 +1,80 @@
+:local sysname [/system identity get name]
+:local scriptname "doFreshTheScripts"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:local sysname [/system identity get name];
-:local scriptname "doFreshTheScripts";
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun $scriptname;
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-:local GitHubUserName "Defm";
-:local GitHubRepoName "mikrobackups";
+:local gitHubUserName "Defm"
+:local gitHubRepoName "mikroconf"
 
-#should be used for private repos
-:local GitHubAccessToken "";
+# should be used for private repos
+:local gitHubAccessToken ""
 
-:local RequestUrl "https://$GitHubAccessToken@relay.usetheforce.io/$GitHubUserName/$GitHubRepoName/master/scripts/";
+:local requestUrl "https://$gitHubAccessToken@relay.usetheforce.io/$gitHubUserName/$gitHubRepoName/master/src/scripts/"
 
-:local UseUpdateList true;
-:local UpdateList [:toarray "doBackup,doEnvironmentSetup,doEnvironmentClearance,doRandomGen,doFreshTheScripts,doCertificatesIssuing,doNetwatchHost, doIPSECPunch,doStartupScript,doHeatFlag,doPeriodicLogDump,doPeriodicLogParse,doTelegramNotify,doLEDoff,doLEDon,doCPUHighLoadReboot,doUpdatePoliciesRemotely,doUpdateExternalDNS,doSuperviseCHRviaSSH,doCoolConsole,doFlushLogs,doCloudBackup"];
+# whitelist: scripts absent on the device are skipped with a message
+:local useUpdateList true
+:local updateList [:toarray "doBackup,doEnvironmentSetup,doEnvironmentClearance,doRandomGen,doFreshTheScripts,doCertificatesIssuing,doSCEPClientCertificatesIssuing,doNetwatchHost,doNetwatchDNS,doDHCPLeaseTrack,doIPSECPunch,doStartupScript,doHeatFlag,doPeriodicLogDump,doPeriodicLogParse,doTelegramNotify,doLEDoff,doLEDon,doCPUHighLoadReboot,doUpdatePoliciesRemotely,doUpdateExternalDNS,doSuperviseCHRviaSSH,doCoolConsole,doFlushLogs,doCloudBackup,doDumpTheScripts,doKeepScriptsOwner,doFreshDNSAddressLists,doPushStatsToInfluxDB,doCreateTrafficAccountingQueues,doCheckPingRate,doStaleTSLConnectionsTrack,doCollectSpeedStats,doWestminister,doBumerSound,doSomeAlarm,doImperialMarch,flush_dns"]
 
-:global globalNoteMe;
-:local itsOk true;
-:local state "";
-
-:foreach scriptName in=$UpdateList do={
-
+:foreach scriptName in=$updateList do={
     :if ([:len [/system script find name=$scriptName]] = 0) do={
-
-      :set state "Script '$scriptName' skipped due to absence";
-      $globalNoteMe value=$state;
-
+        :set state "Script '$scriptName' skipped due to absence"
+        $globalNoteMe value=$state
     }
 }
-  
-:foreach scriptId in [/system script find] do={
 
-  :local code "";
-  :local theScript [/system script get $scriptId name];
-  :local skip false;
+:foreach scriptId in=[/system script find] do={
 
-  :if ( $UseUpdateList ) do={
-    :if ( [:len [find key=$theScript in=$UpdateList ]] > 0 ) do={
-    } else={
-      :set state "Script '$theScript' skipped due to setup";
-      $globalNoteMe value=$state;
-      :set skip true;
+    :local theScript [/system script get $scriptId name]
+
+    :onerror errorDescr in={
+
+        :if ($useUpdateList and [:len [find key=$theScript in=$updateList]] = 0) do={
+            :set state "Script '$theScript' skipped due to setup"
+            $globalNoteMe value=$state
+            :error "skip-continue"
+        }
+
+        :set state "/tool fetch url=$requestUrl$$theScript.rsc.txt output=user as-value"
+        $globalNoteMe value=$state
+
+        # Please keep care about consistency if size over 4096 bytes
+        :local answer [/tool fetch url="$requestUrl$$theScript.rsc.txt" output=user as-value]
+        :local code ($answer->"data")
+        $globalNoteMe value="Done"
+
+        :set state "Setting Up Script source for '$theScript'"
+        $globalNoteMe value=$state
+        /system script set $theScript source="$code"
+        $globalNoteMe value="Done"
+
+        :delay 1s
+
+    } do={
+        :if ($errorDescr != "skip-continue") do={
+            :set state "Error When $state: $errorDescr"
+            $globalNoteMe value=$state
+            :set itsOk false
+        }
     }
-  } else={
-  }
-
-  :if ( $itsOk and !$skip) do={
-    :do {
-
-      :set state "/tool fetch url=$RequestUrl$$theScript.rsc.txt output=user as-value";
-      $globalNoteMe value=$state;
- 
-      #Please keep care about consistency if size over 4096 bytes
-      :local answer ([ /tool fetch url="$RequestUrl$$theScript.rsc.txt" output=user as-value]);
-      :set code ( $answer->"data" );
-      $globalNoteMe value="Done";
-
-    } on-error= { 
-      :set state "Error When Downloading Script '$theScript' From GitHub";
-      $globalNoteMe value=$state;
-      :set itsOk false;
-    }
-  }
-
-  :if ( $itsOk and !$skip) do={
-    :do {
-      :set state "Setting Up Script source for '$theScript'";
-      $globalNoteMe value=$state;
-      /system script set $theScript source="$code";
-      $globalNoteMe value="Done";
-    } on-error= { 
-      :set state "Error When Setting Up Script source for '$theScript'";
-      $globalNoteMe value=$state;
-      :set itsOk false;
-    }
-  }
-
-  :delay 1s
 }
 
 :local inf ""
 :if ($itsOk) do={
-  :set inf "$scriptname on $sysname: scripts refreshed Successfully"
+    :set inf "✓ SUCCESS $scriptname on $sysname: scripts refreshed"
 }
 
 :if (!$itsOk) do={
-  :set inf "Error When $scriptname on $sysname: $state"  
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
 }
 
 $globalNoteMe value=$inf
 
 :if (!$itsOk) do={
-
-  :global globalTgMessage;
-  $globalTgMessage value=$inf;
-  :error $inf; 
-  
+    $globalTgMessage value=$inf
+    :error $inf
 }
-
-
-

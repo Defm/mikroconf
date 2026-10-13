@@ -1,39 +1,60 @@
+:local sysname [/system identity get name]
+:local scriptname "doHeatFlag"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:local sysname [/system identity get name];
-:local scriptname "doHeatFlag";
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun $scriptname;
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-:global globalNoteMe;
+# cpu temperature threshold, C
+:local maxTemp 68
 
-:local maxTemp;
-:local currentTemp [/system/health get [find name=cpu-temperature] value];
+:onerror errorDescr in={
 
-:set maxTemp 68;
+    :set state "Checking cpu temperature against $maxTemp C"
+    $globalNoteMe value=$state
+    :local currentTemp [/system/health get [find name=cpu-temperature] value]
 
-#
+    :if ($currentTemp > $maxTemp) do={
 
-:if ($currentTemp > $maxTemp) do= {
+        :set state "system overheat at $currentTemp C"
+        $globalNoteMe value=$state
+        :set itsOk false
 
-:local inf "$scriptname on $sysname: system overheat at $currentTemp C"  
+        /beep length=.1
+        :delay 250ms
+        /beep length=.1
+        :delay 800ms
+        /beep length=.1
+        :delay 250ms
+        /beep length=.1
+        :delay 800ms
+
+    } else={
+        :set state "cpu temperature ok ($currentTemp C)"
+        $globalNoteMe value=$state
+    }
+
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
+
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: $state"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
 
 $globalNoteMe value=$inf
 
-:global globalTgMessage;
-$globalTgMessage value=$inf;
-
-
-/beep length=.1
- :delay 250ms
- /beep length=.1
- :delay 800ms
- /beep length=.1
- :delay 250ms
- /beep length=.1
- :delay 800ms
-
-
-};
-
-
-
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

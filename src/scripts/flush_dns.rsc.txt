@@ -1,4 +1,36 @@
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "flush_dns";
+:local sysname [/system identity get name]
+:local scriptname "flush_dns"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-/ip/dns/cache/flush
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
+
+:onerror errorDescr in={
+    :set state "Flushing DNS cache"
+    $globalNoteMe value=$state
+    /ip/dns/cache/flush
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
+
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: DNS cache flushed"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}
