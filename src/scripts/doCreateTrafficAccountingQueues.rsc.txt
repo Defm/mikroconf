@@ -67,7 +67,7 @@ $globalScriptBeforeRun $scriptname
             }
 
         } do={
-            :if ($errorDescr != "skip-continue") do={
+            :if (!($errorDescr ~ "^skip-continue")) do={
                 :set state "Error When $state: $errorDescr"
                 $globalNoteMe value=$state
                 :set itsOk false
@@ -129,7 +129,7 @@ $globalScriptBeforeRun $scriptname
         }
 
     } do={
-        :if ($errorDescr != "skip-continue") do={
+        :if (!($errorDescr ~ "^skip-continue")) do={
             :set state "Error When $state: $errorDescr"
             $globalNoteMe value=$state
             :set itsOk false

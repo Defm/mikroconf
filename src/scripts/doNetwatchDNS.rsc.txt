@@ -85,7 +85,7 @@ $globalScriptBeforeRun $scriptname "NETWATCH"
             }
 
         } do={
-            :if ($errorDescr != "break-loop") do={
+            :if (!($errorDescr ~ "^break-loop")) do={
                 :error $errorDescr
             }
         }

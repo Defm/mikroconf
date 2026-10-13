@@ -486,7 +486,7 @@ $globalScriptBeforeRun $scriptname
         }
         ...
     } do={
-        :if ($errorDescr != "skip-continue") do={
+        :if (!($errorDescr ~ "^skip-continue")) do={
             :set state "Error When $state: $errorDescr"
             $globalNoteMe value=$state
             :set itsOk false
@@ -495,7 +495,7 @@ $globalScriptBeforeRun $scriptname
 }
 ```
 
-Маркеры: `"skip-continue"` — следующая итерация; `"break-loop"` — выход из цикла (внешний `:onerror` вокруг `:foreach`). Для последовательных шагов, которые раньше оборачивались в `:if ($itsOk) do={ :do {...} }`, тело скрипта заключается в один `:onerror`, а шаг при провале делает `:error` с текстом — так `itsOk` переключается в одном месте.
+Маркеры: `"skip-continue"` — следующая итерация; `"break-loop"` — выход из цикла (внешний `:onerror` вокруг `:foreach`). Сравнение — префикс через `~` (`^skip-continue` / `^break-loop`): в scheduler RouterOS может дописать локацию к тексту `:error` в `$errorDescr`. Для последовательных шагов, которые раньше оборачивались в `:if ($itsOk) do={ :do {...} }`, тело скрипта заключается в один `:onerror`, а шаг при провале делает `:error` с текстом — так `itsOk` переключается в одном месте.
 
 **Возвращаемые значения helper'ов** — два типа, без C-style `0/1`: предикаты возвращают `true/false` (`checkDisk`, `waitForFile`, `globalOnPrimaryPartition`); операции возвращают `""` при успехе и текст ошибки иначе (`globalCallSSH`). Вызывающая сторона операции: `:local errorDef [$globalCallSSH $remoteCommand]` → `:if ([:len $errorDef] > 0) do={ ... }`.
 

@@ -72,7 +72,7 @@ $globalScriptBeforeRun $scriptname
                 }
 
             } do={
-                :if ($errorDescr != "skip-continue") do={
+                :if (!($errorDescr ~ "^skip-continue")) do={
                     :set state "connection loop error: $errorDescr"
                     $globalNoteMe value=$state
                 }

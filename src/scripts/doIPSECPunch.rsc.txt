@@ -465,7 +465,7 @@ $globalNoteMe value=$state
 
     } do={
 
-        :if ($errorDescr != "skip-continue") do={
+        :if (!($errorDescr ~ "^skip-continue")) do={
             :set state "Error When $state: $errorDescr"
             $globalNoteMe value=$state
             :log error $state
