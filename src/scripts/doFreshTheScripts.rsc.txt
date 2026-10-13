@@ -55,7 +55,8 @@ $globalScriptBeforeRun $scriptname
         :delay 1s
 
     } do={
-        :if ($errorDescr != "skip-continue") do={
+        # scheduler may append location to :error text; match marker as prefix
+        :if (!($errorDescr ~ "^skip-continue")) do={
             :set state "Error When $state: $errorDescr"
             $globalNoteMe value=$state
             :set itsOk false
