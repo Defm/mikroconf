@@ -124,7 +124,6 @@ doStaleTSLConnectionsTrack
 doPushStatsToInfluxDB
 doFreshDNSAddressLists
 doUpdateExternalDNS
-doSuperviseCHRviaSSH
 doUpdatePoliciesRemotely
 doUpdateStaticDNSviaDHCP
 doCheckPingRate

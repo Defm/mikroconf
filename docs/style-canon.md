@@ -90,7 +90,7 @@ flowchart LR
 
 Состав семейств:
 
-- **B (канон):** `doFreshTheScripts`, `doSuperviseCHRviaSSH`, `doUpdatePoliciesRemotely`, `doUpdateExternalDNS`, `doCPUHighLoadReboot`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doRandomGen`, `doHeatFlag`, `doDumpTheScripts`.
+- **B (канон):** `doFreshTheScripts`, `doUpdatePoliciesRemotely`, `doUpdateExternalDNS`, `doCPUHighLoadReboot`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doRandomGen`, `doHeatFlag`, `doDumpTheScripts`.
 - **A (ранний batch):** `doBackup`, `doCoolConsole`, `doCloudBackup`, `doFlushLogs`, `doCheckPingRate`, `doKeepScriptsOwner`, `doStaleTSLConnectionsTrack`, `doFreshDNSAddressLists`.
 - **Event:** `doNetwatchHost`, `doNetwatchDNS`, `doDHCPLeaseTrack`.
 - **Minimal:** `doLEDon`, `doLEDoff`, `doWestminister`, `doBumerSound`, `doSomeAlarm`, `doImperialMarch`, `flush_dns`.
@@ -100,8 +100,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  UE["doUpdateExternalDNS<br/>(anna: IP изменился)"] -->|"/system script run"| SV["doSuperviseCHRviaSSH<br/>(anna)"]
-  SV -->|"ssh-exec: :global ...<br/>/system script run"| UP["doUpdatePoliciesRemotely<br/>(CHR)"]
+  UE["doUpdateExternalDNS<br/>(anna: IP + knockknock + RPC)"] -->|"ssh-exec: :global ...<br/>/system script run"| UP["doUpdatePoliciesRemotely<br/>(CHR)"]
   DL["doDHCPLeaseTrack"] -->|"/system script run"| WM["doWestminister"]
 ```
 
@@ -182,7 +181,7 @@ flowchart LR
 ```routeros
 
 :local sysname [/system identity get name];
-:local scriptname "doSuperviseCHRviaSSH";
+:local scriptname "doUpdateExternalDNS";
 :global globalScriptBeforeRun;
 $globalScriptBeforeRun $scriptname;
 
@@ -191,7 +190,7 @@ $globalScriptBeforeRun $scriptname;
 :local state "";
 ```
 
-Так написаны [`doFreshTheScripts`](src/scripts/doFreshTheScripts.rsc.txt), [`doSuperviseCHRviaSSH`](src/scripts/doSuperviseCHRviaSSH.rsc.txt), [`doUpdatePoliciesRemotely`](src/scripts/doUpdatePoliciesRemotely.rsc.txt), [`doUpdateExternalDNS`](src/scripts/doUpdateExternalDNS.rsc.txt), [`doCPUHighLoadReboot`](src/scripts/doCPUHighLoadReboot.rsc.txt), [`doPushStatsToInfluxDB`](src/scripts/doPushStatsToInfluxDB.rsc.txt), [`doCreateTrafficAccountingQueues`](src/scripts/doCreateTrafficAccountingQueues.rsc.txt), [`doHeatFlag`](src/scripts/doHeatFlag.rsc.txt). Порядок четырёх строк блока деклараций (`globalNoteMe` → `itsOk` → `state`) повторяется дословно.
+Так написаны [`doFreshTheScripts`](src/scripts/doFreshTheScripts.rsc.txt), [`doUpdatePoliciesRemotely`](src/scripts/doUpdatePoliciesRemotely.rsc.txt), [`doUpdateExternalDNS`](src/scripts/doUpdateExternalDNS.rsc.txt), [`doCPUHighLoadReboot`](src/scripts/doCPUHighLoadReboot.rsc.txt), [`doPushStatsToInfluxDB`](src/scripts/doPushStatsToInfluxDB.rsc.txt), [`doCreateTrafficAccountingQueues`](src/scripts/doCreateTrafficAccountingQueues.rsc.txt), [`doHeatFlag`](src/scripts/doHeatFlag.rsc.txt). Порядок четырёх строк блока деклараций (`globalNoteMe` → `itsOk` → `state`) повторяется дословно.
 
 **Форма A (ранняя).** Guard строковым литералом, `scriptname`/`sysname` объявляются позже или не объявляются:
 
@@ -212,7 +211,7 @@ $globalScriptBeforeRun "doBackup";
 - Конфигурационные константы — `:local` с заглавной буквы или ALLCAPS-префиксом: `FTPServer`, `FTPPort`, `FTPRoot`, `SMTPAddress`, `SMTPSubject`, `RamWarnLimit`, `CpuWarnLimit`, `ListName`, `ListTimeout`, `Interval`, `BackupPassword`, `UpdateList`, `GitHubUserName`, `RAMDiskName`, `KEYSIZE`, `COUNTRY`.
 - Флаги-переключатели — `:local <Что>Enable true` или `:local use<Что> false` / `:local save<Что> true`: `FTPEnable`, `FTPGitEnable`, `SMTPEnable`, `SSHFSEnable`, `useBandwidthTest`, `saveSysBackup`, `encryptSysBackup`, `verboseRawExport`, `progressiveDelay`, `impersonate`, `UseUpdateList`.
 - Над константой — однострочный `#`-комментарий с объяснением: `#directories have to exist!`, `#available (free) resource (percent), set it to 90 for testing`, `# sshfs disk dramatically SLOOOOOOWS any '/file find' operations`.
-- Секреты — всегда через интерполяцию в строке: `:local FTPServer "$[$SECRET get SSH_SERVER]"`. В более старых скриптах остались литералы (`doSuperviseCHRviaSSH`: `185.13.148.14`/`2223`/`automation`; `doPushStatsToInfluxDB`: токен). Не выносить в `SECRET` без задачи.
+- Секреты — всегда через интерполяцию в строке: `:local FTPServer "$[$SECRET get SSH_SERVER]"`. В более старых скриптах остались литералы (`doPushStatsToInfluxDB`: токен). Не выносить в `SECRET` без задачи.
 - Runtime-переменные — camelCase: `itsOk`, `state`, `inf`, `wanIp`, `fetchCmd`, `remoteCommand`, `errorDef`, `buFile`, `stamp`, `payLoad`, `skip`, `ticks`.
 
 ### 2.3. Повествование через `state` + `globalNoteMe`
@@ -281,7 +280,7 @@ $globalNoteMe value=$state
 }
 ```
 
-`doFreshTheScripts`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doSuperviseCHRviaSSH` (три `:if ($itsOk) do={ :do {...} }` подряд).
+`doFreshTheScripts`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues` (исторически цепочки `:if ($itsOk) do={ :do {...} }` подряд; новые фичи — form-B / `:onerror`).
 
 **Конвенция helper'ов «пустая строка = успех».** `callSSH` / `globalCallSSH` возвращают `""` при успехе и текст ошибки иначе; вызывающий код:
 
@@ -384,7 +383,7 @@ $globalNoteMe value=$inf
 - Аргументы локальных helper'ов — позиционные с явным распаковыванием в первых строках и комментарием `# reading params`: `:local cmd $1;`, `:local targetName $1`, `:local targetType $2`. Проверка наличия — `:if ([:len $0]!=0) do={ :if ([:len $1]!=0) do={`.
 - Именованные аргументы — только у глобальных: `value=`, `ip=`, `mac=`, `argClients=`, `ListName=`. Внутри глобалов `:global globalNoteMe;` переобъявляется в начале каждой функции.
 - Возвращаемые значения: строка-ошибка/`""`, `true/false`, либо C-style `0/1` (`checkDisk` возвращает `0` при успехе).
-- Дублирование вместо выноса: `SafeScriptCall` трижды (отличие — только `(NETWATCH context)`/`(DHCP context)` в логах), блок определения `rosVer`/`sysver` трижды, `callSSH` локально в `doSuperviseCHRviaSSH` при наличии `globalCallSSH`. Это осознанная изоляция, а не недосмотр.
+- Дублирование вместо выноса: `SafeScriptCall` трижды (отличие — только `(NETWATCH context)`/`(DHCP context)` в логах), блок определения `rosVer`/`sysver` трижды. Это осознанная изоляция, а не недосмотр.
 
 ### 2.9. Удалённое выполнение и команды-строки
 
@@ -458,8 +457,8 @@ Beep-скрипты: комментарий с нотами (`# E-660 D-588 C-52
 
 ## 3. Эталоны для копирования при новой фиче
 
-- Периодический job с внешним I/O (fetch/SFTP/e-mail): [`doBackup`](src/scripts/doBackup.rsc.txt) (тело) + заголовок формы B из [`doSuperviseCHRviaSSH`](src/scripts/doSuperviseCHRviaSSH.rsc.txt).
-- Цепочка RPC/SSH-вызовов: [`doSuperviseCHRviaSSH`](src/scripts/doSuperviseCHRviaSSH.rsc.txt).
+- Периодический job с внешним I/O (fetch/SFTP/e-mail): [`doBackup`](src/scripts/doBackup.rsc.txt) (тело) + заголовок формы B из [`doUpdateExternalDNS`](src/scripts/doUpdateExternalDNS.rsc.txt).
+- Цепочка RPC/SSH-вызовов на CHR: [`doUpdateExternalDNS`](src/scripts/doUpdateExternalDNS.rsc.txt) (после смены IP).
 - Обход объектов с per-item skip и push наружу: [`doPushStatsToInfluxDB`](src/scripts/doPushStatsToInfluxDB.rsc.txt).
 - Синхронизация двух таблиц (создать/обновить/удалить stale): [`doCreateTrafficAccountingQueues`](src/scripts/doCreateTrafficAccountingQueues.rsc.txt).
 - Порог + повторные замеры + действие: [`doCPUHighLoadReboot`](src/scripts/doCPUHighLoadReboot.rsc.txt).
@@ -507,7 +506,7 @@ $globalScriptBeforeRun $scriptname
 - Флаги-переключатели — только `use<Что>`; текущие значения по умолчанию сохраняются: `FTPEnable` → `useFtp`, `FTPGitEnable` → `useFtpGit`, `SMTPEnable` → `useSmtp`, `SSHFSEnable` → `useSshfs`, `saveSysBackup` → `useSysBackup`, `encryptSysBackup` → `useEncryption`, `verboseRawExport` → `useVerboseRawExport`, `progressiveDelay` → `useProgressiveDelay`, `impersonate` → `useImpersonation`, `UseUpdateList` → `useUpdateList`, `useBandwidthTest` — без изменений.
 - Служебные имена остаются: `sysname`, `scriptname`, `itsOk`, `state`, `inf`, `skip`, `stamp`, `asyncCmd`, `errorDef`. Loop-переменные `x`, `y`, `z`, `i` и префикс `the` допустимы.
 - Внешние глобалы event-хуков — с префиксом `global`: `GleaseBound` → `globalLeaseBound`, `GleaseServerName` → `globalLeaseServerName`, `GleaseActMAC` → `globalLeaseActMac`, `GleaseActIP` → `globalLeaseActIp`, `Guser` → `globalHotspotUser`, `NetwatchHostName` → `globalNetwatchHostName`, `NetwatchHostState` → `globalNetwatchHostState`. Снимок в locals: `:local netwatchHostName $globalNetwatchHostName`.
-- Секреты и учётные данные — только через `"$[$globalSecret get KEY]"`. Имена ключей — из `docs/security/credentials.md` и `docs/script-audit.md`: `SSH_SERVER`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD` (`doBackup`, `doDumpTheScripts`, `globalCallSSH`; `doSuperviseCHRviaSSH` переходит на `globalCallSSH`), `INFLUXDB_TOKEN`, `INFLUXDB_USER`, `INFLUXDB_PASSWORD` (`doPushStatsToInfluxDB`), `BANDWIDTH_TEST_USER`, `BANDWIDTH_TEST_PASSWORD` (`doCollectSpeedStats`, `doPushStatsToInfluxDB`), `BACKUP_PASSWORD` (`doCloudBackup`), `CERTIFICATE_EXPORT_PASSPHRASE` (cert-скрипты, `globalNewClientCert`), `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (`globalTgMessage`). IP/хосты (CHR, SCEP URL, mynetname) — не секреты; остаются camelCase-константами в заголовке.
+- Секреты и учётные данные — только через `"$[$globalSecret get KEY]"`. Имена ключей — из `docs/security/credentials.md` и `docs/script-audit.md`: `SSH_SERVER`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD` (`doBackup`, `doDumpTheScripts`, `globalCallSSH` / CHR RPC в `doUpdateExternalDNS`), `INFLUXDB_TOKEN`, `INFLUXDB_USER`, `INFLUXDB_PASSWORD` (`doPushStatsToInfluxDB`), `BANDWIDTH_TEST_USER`, `BANDWIDTH_TEST_PASSWORD` (`doCollectSpeedStats`, `doPushStatsToInfluxDB`), `BACKUP_PASSWORD` (`doCloudBackup`), `CERTIFICATE_EXPORT_PASSPHRASE` (cert-скрипты, `globalNewClientCert`), `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (`globalTgMessage`). IP/хосты (CHR, SCEP URL, mynetname) — не секреты; остаются camelCase-константами в заголовке.
 
 ### 4.3. Структура выполнения
 
@@ -614,8 +613,8 @@ $globalNoteMe value=$inf
 
 - `SafeScriptCall` переезжает в `doEnvironmentSetup` как `globalSafeScriptCall` с двумя аргументами: `$1` — имя скрипта, `$2` — контекст для постфикса в логе (`"NETWATCH"`, `"DHCP"`, `"STARTUP"`); при пустом `$2` постфикс не выводится.
 - `globalScriptBeforeRun` получает второй необязательный аргумент — тот же контекст: `$globalScriptBeforeRun $scriptname "NETWATCH"` → `Starting script: doNetwatchHost (NETWATCH context)`.
-- Локальный `callSSH` в `doSuperviseCHRviaSSH` удаляется в пользу `globalCallSSH`.
-- SFTP knockknock на CHR — только через `$globalKnockKnock $scriptname` (опционально `$2` = IP); дублировать address-list RPC в batch-скриптах нельзя.
+- CHR RPC — через `$globalCallSSH` / `$globalKnockKnock` внутри `doUpdateExternalDNS` (отдельный `doSuperviseCHRviaSSH` снят).
+- SFTP/SSH knockknock на CHR — только через `$globalKnockKnock $scriptname` (опционально `$2` = IP); дублировать address-list RPC в batch-скриптах нельзя. Потребители: `doBackup`, `doDumpTheScripts`, `doUpdateExternalDNS`.
 - Блок определения `rosVer`/`sysver` (3 копии) остаётся локальным в каждом скрипте — это не helper, а две строки конфигурации; переименования по 4.2.
 - `#Example call` перед каждым глобальным helper'ом сохраняется.
 
@@ -666,12 +665,12 @@ $globalScriptBeforeRun $scriptname "NETWATCH"
 
 1. **Narrated pipeline:** `$state` → `$globalNoteMe` → действие. Шаг сначала озвучивается английской фразой, потом выполняется (`doBackup`, `doCoolConsole`, `doFreshTheScripts`, `doPushStatsToInfluxDB`).
 2. **Веха `"Done"`** отдельным тикером после блочной операции (`doLEDon`/`doLEDoff`, `doFreshTheScripts`, `doCloudBackup`, `flush_dns`).
-3. **Footer-ритуал:** `itsOk` и **два независимых** `:if ($itsOk)` / `:if (!$itsOk)` с `✓ SUCCESS` / `✗ FAILED` и `$scriptname on $sysname`; Telegram и `:error` почти только при провале (`doSuperviseCHRviaSSH`, `doBackup`, `doCollectSpeedStats`).
+3. **Footer-ритуал:** `itsOk` и **два независимых** `:if ($itsOk)` / `:if (!$itsOk)` с `✓ SUCCESS` / `✗ FAILED` и `$scriptname on $sysname`; Telegram и `:error` почти только при провале (`doUpdateExternalDNS`, `doBackup`, `doCollectSpeedStats`).
 4. **Config-first:** локальные флаги/`use*` и константы сверху, короткий комментарий «зачем / осторожно» (`doBackup`, `doDumpTheScripts`, `doPushStatsToInfluxDB`).
 5. **Preflight как WARNING:** проверка partition/resolve/сервиса → note/log → жёсткий `:error` (`doBackup`, `doDumpTheScripts`, `doCloudBackup`).
 6. **Два независимых `:if`** вместо else для опций и footer (`doBackup`, почти все канонические batch).
 7. **Команда сначала строкой:** локаль `asyncCmd`, показ оператору, потом `$globalCallFetch` / `$globalCallSSH` / `:execute` (`doBackup`, `doDumpTheScripts`, `doCreateTrafficAccountingQueues`).
-8. **SSH/RPC как ремарки:** `"Calling --- …"`, `"Success RPC call"`, `"Waiting backdoor…"`; knockknock вынесен в `$globalKnockKnock` (`doSuperviseCHRviaSSH`, `doBackup`, `doDumpTheScripts`).
+8. **SSH/RPC как ремарки:** `"Calling --- …"`, `"Success RPC call"`, `"Waiting backdoor…"`; knockknock вынесен в `$globalKnockKnock` (`doUpdateExternalDNS`, `doBackup`, `doDumpTheScripts`).
 9. **Цикл `the*`:** `theScript`, `thePeer`, `thePass` — экземпляр под лупой (`doFreshTheScripts`, `doUpdatePoliciesRemotely`, `doKeepScriptsOwner`).
 10. **`:delay` как сюжетный шаг** с state «Waiting…» (`doBackup`, `doCertificatesIssuing`, `doUpdateExternalDNS`).
 11. **`:error` с маркерами** `skip-continue` / `break-loop` как continue/break (`doFreshTheScripts`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doIPSECPunch`).
@@ -705,13 +704,13 @@ $globalScriptBeforeRun $scriptname "NETWATCH"
 flowchart LR
   Runtime["инфраструктура<br/>Setup Clear Startup"] --> Canon["единый дух<br/>batch"]
   Runtime --> Event["event-хуки"]
-  Canon --> Rpc["UE Supervise Policies"]
+  Canon --> Rpc["UE Policies on CHR"]
   Edge["край формы<br/>StaleTLS CPU Punch"]
   Special["особые вне batch"]
 ```
 
 **Единый дух (каноническая манера):**  
-`doBackup`, `doDumpTheScripts`, `doSuperviseCHRviaSSH`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doFreshTheScripts`, `doCoolConsole`, `doUpdateExternalDNS`, `doCloudBackup`, `doCheckPingRate`, `doCollectSpeedStats`, `doFlushLogs`, `doHeatFlag`, `doLEDon`, `doLEDoff`, `flush_dns`, `doSomeAlarm`, `doWestminister`, `doBumerSound`, `doImperialMarch`, `doCertificatesIssuing`, `doSCEPClientCertificatesIssuing`, `doUpdatePoliciesRemotely`, `doRandomGen`, `doKeepScriptsOwner`, `doFastTrackActivation`, `doTranstaleMAC2IP`, `doAdblock` (StopAD в оболочке form-B), `doUpdateStaticDNSviaDHCP` (vendor-логика в оболочке form-B), авторская голова `doFreshDNSAddressLists` (до хвоста `$update`).
+`doBackup`, `doDumpTheScripts`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doFreshTheScripts`, `doCoolConsole`, `doUpdateExternalDNS` (DNS + бывший CHR RPC), `doCloudBackup`, `doCheckPingRate`, `doCollectSpeedStats`, `doFlushLogs`, `doHeatFlag`, `doLEDon`, `doLEDoff`, `flush_dns`, `doSomeAlarm`, `doWestminister`, `doBumerSound`, `doImperialMarch`, `doCertificatesIssuing`, `doSCEPClientCertificatesIssuing`, `doUpdatePoliciesRemotely`, `doRandomGen`, `doKeepScriptsOwner`, `doFastTrackActivation`, `doTranstaleMAC2IP`, `doAdblock` (StopAD в оболочке form-B), `doUpdateStaticDNSviaDHCP` (vendor-логика в оболочке form-B), авторская голова `doFreshDNSAddressLists` (до хвоста `$update`).
 
 **Тот же автор, особый каркас:**  
 `doStaleTSLConnectionsTrack` (вечный монитор без SUCCESS footer — допустимое исключение), `doCPUHighLoadReboot` (`itsOk`=вердикт нагрузки, reboot при high-load), `doIPSECPunch` (библиотечный batch); event: `doNetwatchHost`, `doNetwatchDNS`, `doDHCPLeaseTrack`, `doHotspotLoginTrack`.

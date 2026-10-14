@@ -62,7 +62,7 @@
 | `doSomeAlarm.rsc.txt` | current | Звуковой alarm | Низкий | Секреты не обнаружены |
 | `doStaleTSLConnectionsTrack.rsc.txt` | current | Ищет stale TLS connections и ведёт address list | Средний: меняет firewall address list | Секреты не обнаружены |
 | `doStartupScript.rsc.txt` | current | Ждёт NTP и запускает startup-цепочку | Высокий: оркестрация boot | Секреты не обнаружены |
-| `doSuperviseCHRviaSSH.rsc.txt` | current | Управляет удалённым CHR по SSH | Высокий: remote privileged operations | Рассчитан на SSH keys; literal password отсутствует |
+| ~~`doSuperviseCHRviaSSH.rsc.txt`~~ | удалён | Логика в `doUpdateExternalDNS`; с устройств снимать вручную | — | — |
 | `doTelegramNotify.rsc.txt` | historical trio | Отправляет Telegram message | Высокий: внешний bot API | Token и chat ID заменены на `TELEGRAM_TOKEN/CHAT_ID` в `$globalSecret` |
 | `doTranstaleMAC2IP.rsc.txt` | current | Преобразует MAC в IP/hostname | Низкий | Секреты не обнаружены |
 | `doUpdateExternalDNS.rsc.txt` | current | Обновляет внешний DNS и запускает CHR supervision | Высокий: DNS/VPN orchestration | Секреты не обнаружены |
@@ -96,7 +96,7 @@ Whitelist в `doFreshTheScripts` расширен унифицируемыми �
 
 ## Scheduler-only и другие точки входа
 
-По сохранённым конфигурациям и связям между скриптами scheduler-driven, без прямого вызова из другого файла набора: `doBackup`, `doCPUHighLoadReboot`, `doCheckPingRate`, `doCloudBackup`, `doCollectSpeedStats`, `doCreateTrafficAccountingQueues`, `doFlushLogs`, `doFreshDNSAddressLists`, `doFreshTheScripts` (не на всех устройствах), `doHeatFlag`, `doIPSECPunch`, `doLEDoff`, `doLEDon`, `doRandomGen`, `doStaleTSLConnectionsTrack`, `doUpdateStaticDNSviaDHCP`. `doUpdateExternalDNS` также запускается scheduler, но вызывает `doSuperviseCHRviaSSH`; `doCoolConsole` запускается и scheduler, и startup.
+По сохранённым конфигурациям и связям между скриптами scheduler-driven, без прямого вызова из другого файла набора: `doBackup`, `doCPUHighLoadReboot`, `doCheckPingRate`, `doCloudBackup`, `doCollectSpeedStats`, `doCreateTrafficAccountingQueues`, `doFlushLogs`, `doFreshDNSAddressLists`, `doFreshTheScripts` (не на всех устройствах), `doHeatFlag`, `doIPSECPunch`, `doLEDoff`, `doLEDon`, `doRandomGen`, `doStaleTSLConnectionsTrack`, `doUpdateStaticDNSviaDHCP`. `doUpdateExternalDNS` также запускается scheduler и сам обновляет CHR IPSEC (knockknock + RPC); `doCoolConsole` запускается и scheduler, и startup.
 
 Не scheduler-only:
 
@@ -114,7 +114,7 @@ Whitelist в `doFreshTheScripts` расширен унифицируемыми �
 - `:error $inf` при необъявленном `inf` в `doNetwatchHost` / `doDHCPLeaseTrack` → `:error $state`;
 - лишняя закрывающая `}` в `doSCEPClientCertificatesIssuing` закрыта переходом на `:onerror`;
 - shadowing `ipsecState` в `doCoolConsole` (`:local` внутри цикла → `:set`);
-- `doSuperviseCHRviaSSH` перешёл на `globalCallSSH` (литералы dst/port/user убраны);
+- CHR RPC из `doSuperviseCHRviaSSH` влит в `doUpdateExternalDNS` (`$globalKnockKnock` + `$globalCallSSH`); в whitelist Fresh — `doUpdateExternalDNS`;
 - `doDHCPLeaseTrack` больше не вызывает `doWestminister`; неиспользуемые `Data`/`json` удалены.
 
 На устройствах в том же окне, что и выкат, нужно заменить имена event-глобалов в netwatch `on-up`/`on-down` (`anna`, `CHR`, `mikrouter`), `lease-script` guest DHCP на `anna` и hotspot `on-login`: `NetwatchHostName` → `globalNetwatchHostName`, `Glease*` → `globalLease*`, `Guser` → `globalHotspotUser`. Это изменение конфигурации, не файлов `src/scripts/`.
