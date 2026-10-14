@@ -18,7 +18,7 @@ $globalScriptBeforeRun $scriptname
 
 # whitelist: scripts absent on the device are skipped with a message
 :local useUpdateList true
-:local updateList [:toarray "doBackup,doEnvironmentSetup,doEnvironmentClearance,doRandomGen,doFreshTheScripts,doCertificatesIssuing,doSCEPClientCertificatesIssuing,doNetwatchHost,doNetwatchDNS,doDHCPLeaseTrack,doHotspotLoginTrack,doIPSECPunch,doStartupScript,doHeatFlag,doLEDoff,doLEDon,doCPUHighLoadReboot,doUpdatePoliciesRemotely,doUpdateExternalDNS,doSuperviseCHRviaSSH,doCoolConsole,doFlushLogs,doCloudBackup,doDumpTheScripts,doKeepScriptsOwner,doFreshDNSAddressLists,doPushStatsToInfluxDB,doCreateTrafficAccountingQueues,doCheckPingRate,doStaleTSLConnectionsTrack,doCollectSpeedStats,doWestminister,doBumerSound,doSomeAlarm,doImperialMarch,flush_dns,doAdblock,doUpdateStaticDNSviaDHCP,doFastTrackActivation,doTranstaleMAC2IP"]
+:local updateList [:toarray "doBackup,doEnvironmentSetup,doEnvironmentClearance,doRandomGen,doFreshTheScripts,doCertificatesIssuing,doSCEPClientCertificatesIssuing,doNetwatchHost,doNetwatchDNS,doDHCPLeaseTrack,doHotspotLoginTrack,doIPSECPunch,doStartupScript,doHeatFlag,doLEDoff,doLEDon,doCPUHighLoadReboot,doUpdatePoliciesRemotely,doUpdateExternalDNS,doCoolConsole,doFlushLogs,doCloudBackup,doDumpTheScripts,doKeepScriptsOwner,doFreshDNSAddressLists,doPushStatsToInfluxDB,doCreateTrafficAccountingQueues,doCheckPingRate,doStaleTSLConnectionsTrack,doCollectSpeedStats,doWestminister,doBumerSound,doSomeAlarm,doImperialMarch,flush_dns,doAdblock,doUpdateStaticDNSviaDHCP,doFastTrackActivation,doTranstaleMAC2IP"]
 
 :foreach scriptName in=$updateList do={
     :if ([:len [/system script find name=$scriptName]] = 0) do={

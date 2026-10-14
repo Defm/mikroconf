@@ -28,7 +28,7 @@
 
 ## Backlog: бэкдор SFTP / knockknock
 
-**Проблема (anna canary, 2026-10-14):** публичный IP устройства (`/ip cloud public-address`) быстро попадает в бан SSH на CHR, если до установки `alist-fw-knockknock` или рядом с ним идут несколько `ssh-exec` / пачка мелких SFTP (`doSuperviseCHRviaSSH`, `doDumpTheScripts`, повторные probe). Типичный симптом — `action timed out` на `/system ssh-exec`, затем `sftp status: 20` / обрыв upload.
+**Проблема (anna canary, 2026-10-14):** публичный IP устройства (`/ip cloud public-address`) быстро попадает в бан SSH на CHR, если до установки `alist-fw-knockknock` или рядом с ним идут несколько `ssh-exec` / пачка мелких SFTP (`doUpdateExternalDNS` RPC, `doDumpTheScripts`, повторные probe). Типичный симптом — `action timed out` на `/system ssh-exec`, затем `sftp status: 20` / обрыв upload.
 
 **Ложный SUCCESS у `$globalCallFetch`:** helper дожидается конца job и пишет протокол, но не возвращает ошибку при `status: failed` / `sftp status: 20`. Этот helper остаётся для FTP на localhost, HTTPS и HTTP POST. SFTP в `doDumpTheScripts` и `doBackup` идёт через `$globalCallSftp`: такие исходы — ошибка, на потолке 30 с job снимается. Контракт — [fetch](fetch.md).
 

@@ -74,7 +74,6 @@ expected_scripts=(
   doSomeAlarm.rsc.txt
   doStaleTSLConnectionsTrack.rsc.txt
   doStartupScript.rsc.txt
-  doSuperviseCHRviaSSH.rsc.txt
   doTranstaleMAC2IP.rsc.txt
   doUpdateExternalDNS.rsc.txt
   doUpdatePoliciesRemotely.rsc.txt
@@ -89,8 +88,8 @@ mapfile -t actual_scripts < <(
   done | LC_ALL=C sort
 )
 
-if [[ "${#actual_scripts[@]}" -ne 41 ]]; then
-  fail "ожидалось 41 RouterOS-скрипта, найдено ${#actual_scripts[@]}"
+if [[ "${#actual_scripts[@]}" -ne 40 ]]; then
+  fail "ожидалось 40 RouterOS-скриптов, найдено ${#actual_scripts[@]}"
 fi
 for name in "${expected_scripts[@]}"; do
   [[ -f "src/scripts/$name" ]] || fail "нет ожидаемого скрипта: $name"
@@ -217,4 +216,4 @@ if ((errors)); then
   exit 1
 fi
 
-printf 'OK: структура, 41 скрипт, private patterns и JSON/YAML проверены.\n'
+printf 'OK: структура, 40 скриптов, private patterns и JSON/YAML проверены.\n'
