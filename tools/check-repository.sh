@@ -21,7 +21,7 @@ required=(
   docs/script-audit.md docs/style-canon.md docs/routeros-skills-review.md
   docs/migration-report.md docs/cutover-plan.md
   config/inventory.example.yml
-  bin/README.md src/safe/README.md src/config/README.md vendor/README.md
+  bin/README.md src/config/README.md vendor/README.md
   vendor/rosetta/LICENSE vendor/rosetta/UPSTREAM_COMMIT
   vendor/routeros-skills/LICENSE vendor/routeros-skills/UPSTREAM_COMMIT
   vendor/mikrotik-mcp/LICENSE vendor/mikrotik-mcp/UPSTREAM_COMMIT
@@ -34,10 +34,10 @@ done
 
 while IFS= read -r path; do
   case "$path" in
-    bin/README.md|src/safe/README.md) ;;
+    bin/README.md) ;;
     *) fail "в Git запрещено содержимое private-каталога: $path" ;;
   esac
-done < <(git ls-files -- bin src/safe)
+done < <(git ls-files -- bin)
 
 expected_scripts=(
   doAdblock.rsc.txt
@@ -68,8 +68,6 @@ expected_scripts=(
   doNetwatchDNS.rsc.txt
   doNetwatchHost.rsc.txt
   doPerfectRestore.rsc.txt
-  doPeriodicLogDump.rsc.txt
-  doPeriodicLogParse.rsc.txt
   doPushStatsToInfluxDB.rsc.txt
   doRandomGen.rsc.txt
   doSCEPClientCertificatesIssuing.rsc.txt
@@ -77,7 +75,6 @@ expected_scripts=(
   doStaleTSLConnectionsTrack.rsc.txt
   doStartupScript.rsc.txt
   doSuperviseCHRviaSSH.rsc.txt
-  doTelegramNotify.rsc.txt
   doTranstaleMAC2IP.rsc.txt
   doUpdateExternalDNS.rsc.txt
   doUpdatePoliciesRemotely.rsc.txt
@@ -92,8 +89,8 @@ mapfile -t actual_scripts < <(
   done | LC_ALL=C sort
 )
 
-if [[ "${#actual_scripts[@]}" -ne 44 ]]; then
-  fail "ожидалось 44 RouterOS-скрипта, найдено ${#actual_scripts[@]}"
+if [[ "${#actual_scripts[@]}" -ne 41 ]]; then
+  fail "ожидалось 41 RouterOS-скрипта, найдено ${#actual_scripts[@]}"
 fi
 for name in "${expected_scripts[@]}"; do
   [[ -f "src/scripts/$name" ]] || fail "нет ожидаемого скрипта: $name"
@@ -124,7 +121,7 @@ done
 while IFS= read -r -d '' path; do
   case "$path" in
     *.backup|*.npk|*.p12|*.pfx|*.pem|*.key|*.der|*.cer|*.crt|\
-    rawconf_*.rsc|*/rawconf_*.rsc|*/id_rsa|*/id_rsa.*|*/id_ed25519|*/id_ed25519.*)
+    rawconf_*.rsc|*/rawconf_*.rsc|*.safe.rsc|*/*.safe.rsc|*/id_rsa|*/id_rsa.*|*/id_ed25519|*/id_ed25519.*)
       fail "обнаружен запрещённый private/backup-файл: $path"
       ;;
   esac
@@ -220,4 +217,4 @@ if ((errors)); then
   exit 1
 fi
 
-printf 'OK: структура, 44 скрипта, private patterns и JSON/YAML проверены.\n'
+printf 'OK: структура, 41 скрипт, private patterns и JSON/YAML проверены.\n'

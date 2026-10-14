@@ -13,30 +13,30 @@ $globalScriptBeforeRun $scriptname
 :onerror errorDescr in={
 
     :local policyComment [/ip dns static get value-name=text [find where type=TXT and name="special-remote-CHR-ipsec-policy-comment"]]
-    :local remoteCommand ":global globalPolicyComment $policyComment"
+    :local asyncCmd ":global globalPolicyComment $policyComment"
 
-    :set state "Calling --- $remoteCommand"
+    :set state "Calling --- $asyncCmd"
     $globalNoteMe value=$state
-    :local errorDef [$globalCallSSH $remoteCommand]
+    :local errorDef [$globalCallSSH $asyncCmd]
     :if ([:len $errorDef] > 0) do={ :error $errorDef }
     :set state "RPC: set remote preferred policy comment variable: ($policyComment) - Ok"
     $globalNoteMe value=$state
 
     :local wanIp [/ip cloud get public-address]
-    :set remoteCommand ":global globalRemoteIp $wanIp/32"
+    :set asyncCmd ":global globalRemoteIp $wanIp/32"
 
-    :set state "Calling --- $remoteCommand"
+    :set state "Calling --- $asyncCmd"
     $globalNoteMe value=$state
-    :set errorDef [$globalCallSSH $remoteCommand]
+    :set errorDef [$globalCallSSH $asyncCmd]
     :if ([:len $errorDef] > 0) do={ :error $errorDef }
     :set state "RPC: set remote preferred policy IP variable: ($wanIp) - Ok"
     $globalNoteMe value=$state
 
-    :set remoteCommand "/system script run doUpdatePoliciesRemotely"
+    :set asyncCmd "/system script run doUpdatePoliciesRemotely"
 
-    :set state "Calling --- $remoteCommand"
+    :set state "Calling --- $asyncCmd"
     $globalNoteMe value=$state
-    :set errorDef [$globalCallSSH $remoteCommand]
+    :set errorDef [$globalCallSSH $asyncCmd]
     :if ([:len $errorDef] > 0) do={ :error $errorDef }
     :set state "RPC: call remote script: doUpdatePoliciesRemotely - Ok"
     $globalNoteMe value=$state

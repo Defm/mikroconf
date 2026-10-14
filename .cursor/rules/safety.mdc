@@ -6,7 +6,7 @@ alwaysApply: true
 # Безопасность
 
 - Не выводи, не копируй и не сохраняй значения секретов.
-- Не читай содержимое `bin/`, `src/safe/`, `.env*`, приватных ключей, backup-файлов или локального inventory.
+- Не читай содержимое `bin/`, `.env*`, приватных ключей, backup-файлов или локального inventory.
 - Не выполняй SSH, SFTP, SCP, RouterOS MCP write-tools и любые удалённые изменения без явного разрешения пользователя на конкретную операцию.
 - Считай restore, import, reset, reboot, package update, firewall/user/certificate changes опасными.
 - Используй fail-closed поведение: при сомнении остановись и запроси решение оператора.

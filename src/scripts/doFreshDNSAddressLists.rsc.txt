@@ -78,7 +78,7 @@ $globalScriptBeforeRun $scriptname
         :local url ("\"https://iplist.opencck.org/?format=custom&data=$data&wildcard=1&$mode=$target&template=" . $template . "\"")
 
         :local outputFile "$alist.rsc"
-        :local fetchCmd "/tool/fetch idle-timeout=20s mode=https url=$url dst-path=$outputFile"
+        :local asyncCmd "/tool/fetch idle-timeout=20s mode=https url=$url dst-path=$outputFile"
 
         # remove old files
         /file remove [find where name="$outputFile"]
@@ -90,7 +90,7 @@ $globalScriptBeforeRun $scriptname
             $globalNoteMe value=$state
 
             # no timeout for fetch, so it will still batch after 20sec of polling, thats why we need to waitForFile polling for additional amount of time
-            $globalCallFetch $fetchCmd
+            $globalCallFetch $asyncCmd
 
             :set i ($i - 1)
 

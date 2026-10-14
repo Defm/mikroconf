@@ -1,5 +1,4 @@
 bin/*
-src/safe/*
 vendor/rosetta/node_modules/
 vendor/mikrotik-mcp/.venv/
 .cache/
@@ -13,6 +12,7 @@ vendor/mikrotik-mcp/.venv/
 *.key
 *.der
 rawconf_*.rsc
+*.safe.rsc
 .env
 .env.*
 inventory.yml

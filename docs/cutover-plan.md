@@ -9,8 +9,8 @@
 
 В исходниках пути уже переведены: `doFreshTheScripts` качает оттуда,
 `doDumpTheScripts` выгружает в `REPO/raw/src/scripts/` (host `/REPO/raw` =
-clone, Docker gitwatch → `_autobranch`). Binary backup — `REPO/backups/`;
-rawconf — `REPO/raw/rawconf_*` (в working tree clone, не tracked).
+clone, Docker gitwatch → `_autobranch`). Binary + show-sensitive — `REPO/raw/bin/`;
+`<device>.safe.rsc` без show-sensitive — `REPO/raw/src/config/` (gitignored, кроме README).
 
 ## Предусловия
 
@@ -31,7 +31,7 @@ rawconf — `REPO/raw/rawconf_*` (в working tree clone, не tracked).
 - `doFreshTheScripts`: `gitHubRepoName=mikroconf`, path `master/src/scripts/`;
 - `doDumpTheScripts`: SFTP/SSHFS target `REPO/raw/src/scripts/` (легаси было
   `REPO/raw/scripts/`);
-- `doBackup`: без изменений (`REPO/backups/`, `REPO/raw/rawconf_*`);
+- `doBackup`: `.backup`/`.unsafe.rsc` → `REPO/raw/bin/`, `<device>.safe.rsc` → `REPO/raw/src/config/`;
 - `UpdateList` в том же change не трогать попутно.
 
 ## Порядок на устройствах

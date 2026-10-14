@@ -1,19 +1,52 @@
+:local sysname [/system identity get name]
+:local scriptname "doTranstaleMAC2IP"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
 
-:global globalScriptBeforeRun;
-$globalScriptBeforeRun "doTranstaleMAC2IP";
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
 
-#get IP and hostname by MAC address
-#
-{
-  :local arr {"00:CD:FE:EC:B5:52" ; "AC:61:EA:EA:CC:84"}; 
-  
-  foreach v in $arr do={
-    if ([len [/ip arp find where mac-address=$v]] >0) do= {
-      :put [/ip arp get [find where mac-address=$v] address]
-    }; 
-    if ([len [/ip dhcp-server lease find where active-mac-address=$v]] >0) do= {
-      :put [/ip dhcp-server lease get [find where active-mac-address=$v] host-name]
+# MAC addresses to resolve (config)
+:local macList {"00:CD:FE:EC:B5:52"; "AC:61:EA:EA:CC:84"}
+
+:onerror errorDescr in={
+    :set state "Resolving IP and hostname by MAC"
+    $globalNoteMe value=$state
+
+    :foreach theMac in=$macList do={
+        :if ([:len [/ip arp find where mac-address=$theMac]] > 0) do={
+            :local theIp [/ip arp get [find where mac-address=$theMac] address]
+            :set state "ARP $theMac -> $theIp"
+            $globalNoteMe value=$state
+        }
+        :if ([:len [/ip dhcp-server lease find where active-mac-address=$theMac]] > 0) do={
+            :local theHost [/ip dhcp-server lease get [find where active-mac-address=$theMac] host-name]
+            :set state "DHCP $theMac -> $theHost"
+            $globalNoteMe value=$state
+        }
     }
-  }
+
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
 }
 
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: MAC lookup finished"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

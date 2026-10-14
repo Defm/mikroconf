@@ -17,9 +17,8 @@
 5. `src/scripts` — канонический каталог в Git и цель fetch/dump.
 6. `doFreshTheScripts` загружает скрипты из
    `Defm/mikroconf` / `master/src/scripts` (через relay).
-7. `doBackup` шлёт `.backup` в `REPO/backups/` (рядом с clone, вне Git) и
-   rawconf в `REPO/raw/rawconf_*` (файлы лежат в working tree clone, но
-   игнорируются `.gitignore` и не коммитятся).
+7. `doBackup` шлёт `.backup` и show-sensitive `.unsafe.rsc` в `REPO/raw/bin/`,
+   а `/export` без show-sensitive — в `REPO/raw/src/config/<device>.safe.rsc`.
 
 ## Потоки доверия
 
@@ -28,8 +27,8 @@
 - Устройство → `REPO/raw/src/scripts` → gitwatch → `_autobranch`: operational
   feedback; review и осознанный merge в `master` остаются обязательными перед
   изменением release-поведения.
-- Устройство → `REPO/backups` и `REPO/raw/rawconf_*`: чувствительный
-  backup/raw поток; в tracked Git не попадает.
+- Устройство → `REPO/raw/bin` (restore) и `REPO/raw/src/config` (latest без
+  секретов в имени show-sensitive); чувствительное в tracked Git не попадает.
 - Локальный агент → внешняя система: запрещено по умолчанию.
 
 ## Инварианты

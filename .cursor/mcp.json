@@ -14,7 +14,7 @@
     },
     "mikrotik-readonly": {
       "type": "stdio",
-      "command": "${workspaceFolder}/vendor/mikrotik-mcp/.venv/bin/mcp-server-mikrotik-hardened",
+      "command": "${workspaceFolder}/tools/run-mikrotik-mcp-hardened.sh",
       "args": [],
       "env": {
         "MIKROTIK_INVENTORY_FILE": "${userHome}/.config/mikrobackups/inventory.yml",

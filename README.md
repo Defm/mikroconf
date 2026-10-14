@@ -11,9 +11,8 @@
 ## Структура
 
 - `src/scripts/` — 44 RouterOS-скрипта, предназначенные для публикации;
-- `src/config/` — будущая tracked-конфигурация; формат выбирается после raw-аудита;
-- `src/safe/` — полные чувствительные text restore-exports; содержимое не коммитится;
-- `bin/` — локальные бинарные backup-файлы; содержимое не коммитится;
+- `src/config/` — `<device>.safe.rsc` без show-sensitive (операционный снимок);
+- `bin/` — самодостаточные restore-артефакты (`.backup`, `.unsafe.rsc`); содержимое не коммитится;
 - `docs/` — архитектура, инвентарь, безопасность и runbooks;
 - `vendor/` — локальные копии исходников Rosetta, RouterOS skills и усиленного MikroTik MCP с upstream-лицензиями и provenance;
 - `tools/check-repository.sh` — локальная проверка репозитория.
@@ -31,6 +30,7 @@
 - [Архитектура](docs/architecture.md)
 - [Инвентарь устройств](docs/devices/inventory.md)
 - [Конвейер резервного копирования](docs/operations/backup-pipeline.md)
+- [Fetch и SFTP-upload](docs/operations/fetch.md)
 - [Политика raw-экспортов](docs/operations/raw-policy.md)
 - [Учётные данные](docs/security/credentials.md)
 - [Проектирование путей записи](docs/security/write-path-design.md)

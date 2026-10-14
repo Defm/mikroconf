@@ -24,15 +24,16 @@ node_modules/
 id_rsa*
 id_ed25519*
 rawconf_*.rsc
+*.safe.rsc
 /BACKUP-*
+
 
 # Private working areas: keep documentation only
 bin/*
 !bin/README.md
-src/safe/*
-!src/safe/README.md
 src/config/*
 !src/config/README.md
+
 
 # Local configuration
 .env

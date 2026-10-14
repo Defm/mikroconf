@@ -7,6 +7,7 @@ $globalScriptBeforeRun $scriptname
 :global globalTgMessage
 :local itsOk true
 :local state ""
+:local doReboot false
 
 # available (free) resource (percent), set it to 90 for testing
 :local ramWarnLimit 15
@@ -16,50 +17,62 @@ $globalScriptBeforeRun $scriptname
 :local delayTime 7
 :local useProgressiveDelay true
 
-:local usedCpu [/system resource get cpu-load]
-:local freeCpu (100 - $usedCpu)
-:local freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])
+:onerror errorDescr in={
 
-:set state "Checking for free CPU/RAM resources over $ticks times to be more than $cpuWarnLimit%/$ramWarnLimit% each time"
-$globalNoteMe value=$state
+    :local usedCpu [/system resource get cpu-load]
+    :local freeCpu (100 - $usedCpu)
+    :local freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])
 
-:set state "Step 0: free CPU/RAM $freeCpu%/$freeRam%, going deeper.."
-$globalNoteMe value=$state
+    :set state "Checking for free CPU/RAM resources over $ticks times to be more than $cpuWarnLimit%/$ramWarnLimit% each time"
+    $globalNoteMe value=$state
 
-:if ($freeRam < $ramWarnLimit or $freeCpu < $cpuWarnLimit) do={
-    # this tick is high-HighLoad
-    :set itsOk false
-    :delay $delayTime
-}
+    :set state "Step 0: free CPU/RAM $freeCpu%/$freeRam%, going deeper.."
+    $globalNoteMe value=$state
 
-:for i from=1 to=$ticks do={
-
-    :if (!$itsOk) do={
-        :set usedCpu [/system resource get cpu-load]
-        :set freeCpu (100 - $usedCpu)
-        :set freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])
-
-        :set state "Recalc stats"
-        $globalNoteMe value=$state
+    :if ($freeRam < $ramWarnLimit or $freeCpu < $cpuWarnLimit) do={
+        # this tick is high-HighLoad
+        :set itsOk false
+        :delay $delayTime
     }
 
-    :if (!$itsOk and ($freeRam < $ramWarnLimit or $freeCpu < $cpuWarnLimit)) do={
+    :for i from=1 to=$ticks do={
 
-        # keep $itsOk = false
-        :local delaySec $delayTime
-        :if ($useProgressiveDelay) do={
-            :set delaySec ($delayTime + $i)
+        :if (!$itsOk) do={
+            :set usedCpu [/system resource get cpu-load]
+            :set freeCpu (100 - $usedCpu)
+            :set freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])
+
+            :set state "Recalc stats"
+            $globalNoteMe value=$state
         }
 
-        :set state "Step $i: free CPU/RAM $freeCpu%/$freeRam%, its too low, sleep $delaySec and recheck.."
-        $globalNoteMe value=$state
+        :if (!$itsOk and ($freeRam < $ramWarnLimit or $freeCpu < $cpuWarnLimit)) do={
 
-        :delay $delaySec
+            # keep $itsOk = false
+            :local delaySec $delayTime
+            :if ($useProgressiveDelay) do={
+                :set delaySec ($delayTime + $i)
+            }
 
-    } else={
-        # if one step is non-HighLoad, then the whole result is non-HighLoad
-        :set itsOk true
+            :set state "Step $i: free CPU/RAM $freeCpu%/$freeRam%, its too low, sleep $delaySec and recheck.."
+            $globalNoteMe value=$state
+
+            :delay $delaySec
+
+        } else={
+            # if one step is non-HighLoad, then the whole result is non-HighLoad
+            :set itsOk true
+        }
     }
+
+    :if (!$itsOk) do={
+        :set doReboot true
+    }
+
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
 }
 
 :local inf ""
@@ -68,12 +81,20 @@ $globalNoteMe value=$state
 }
 
 :if (!$itsOk) do={
-    :set inf "✗ FAILED $scriptname on $sysname: CPU load too high, I'm going reboot"
+    :if ($doReboot) do={
+        :set inf "✗ FAILED $scriptname on $sysname: CPU load too high, I'm going reboot"
+    } else={
+        :set inf "✗ FAILED $scriptname on $sysname: $state"
+    }
 }
 
 $globalNoteMe value=$inf
 
 :if (!$itsOk) do={
     $globalTgMessage value=$inf
-    /system reboot
+    :if ($doReboot) do={
+        /system reboot
+    } else={
+        :error $inf
+    }
 }
