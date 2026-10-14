@@ -6,8 +6,8 @@ $globalScriptBeforeRun $scriptname
 :global globalNoteMe
 :global globalTgMessage
 :global globalSecret
-:global globalCallFetch
-:global globalCallSSH
+:global globalCallSftp
+:global globalKnockKnock
 :global globalOnPrimaryPartition
 :global globalScriptId
 :local itsOk true
@@ -21,9 +21,6 @@ $globalScriptBeforeRun $scriptname
 :local ftpSubDir "raw/src/scripts/"
 :local useFtp true
 :local ftpServer "$[$globalSecret get SSH_SERVER]"
-:local ftpPort "$[$globalSecret get SSH_PORT]"
-:local ftpUser "$[$globalSecret get SSH_USER]"
-:local ftpPass "$[$globalSecret get SSH_PASSWORD]"
 
 # sshfs disk dramatically SLOOOOOOWS any '/file find' operations
 :local useSshfs false
@@ -141,83 +138,77 @@ $globalNoteMe value="Scripts source export.."
     }
 }
 
-# we're going to upload lots of tiny files opening new SFTP connection each time - it looks like bruteforce, so make some backdoor
-:local wanIp [/ip cloud get public-address]
-:local remoteCommand "{ /ip/firewall/address-list remove [find list=alist-fw-knockknock address=$wanIp]; /ip/firewall/address-list/add address=$wanIp list=alist-fw-knockknock comment=doDumpTheScripts timeout=5m dynamic=yes }"
-
-:set state "Making SFTP backdoor for $wanIp via SSH"
-$globalNoteMe value=$state
-
-:local errorDef [$globalCallSSH $remoteCommand]
+# lots of tiny SFTP uploads look like bruteforce on CHR without knockknock
+:local errorDef [$globalKnockKnock $scriptname]
 :if ([:len $errorDef] > 0) do={
     :set state $errorDef
     $globalNoteMe value=$state
     :set itsOk false
-} else={
-    :set state "Success RPC call: $state"
-    $globalNoteMe value=$state
 }
-
-# we have to wait while backdoor alist-fw-ssh-stage1 flushes our first-call Ip, otherwise we get banned
-:set state "Waiting backdoor for $wanIp for some seconds.."
-$globalNoteMe value=$state
-:delay 15s
 
 $globalNoteMe value="Scripts source pushing.."
 
 :if ($itsOk) do={
 
+    :local stopBatch false
+
     :foreach backupFile in=[/file find where name~"$dumpPath"] do={
 
-        :local scriptPath [/file get $backupFile name]
+        :if (!$stopBatch) do={
 
-        :if ([:typeof [:find $scriptPath ".rsc.txt"]] != "nil") do={
+            :local scriptPath [/file get $backupFile name]
 
-            # FTP upload
-            :if ($useFtp) do={
+            :if ([:typeof [:find $scriptPath ".rsc.txt"]] != "nil") do={
 
-                :local dst [$searchReplace $scriptPath $ramDiskName $ftpRoot]
-                :set dst [$searchReplace $dst $ramSubDir $ftpSubDir]
+                # FTP upload
+                :if ($useFtp) do={
 
-                :onerror errorDescr in={
+                    :local dst [$searchReplace $scriptPath $ramDiskName $ftpRoot]
+                    :set dst [$searchReplace $dst $ramSubDir $ftpSubDir]
 
-                    :set state "Uploading $scriptPath to SFTP - $dst"
-                    $globalNoteMe value=$state
+                    :onerror errorDescr in={
 
-                    :local fetchCmd "/tool fetch url=sftp://$ftpServer:$ftpPort/$dst src-path=$scriptPath user=$ftpUser password=$ftpPass upload=yes"
-                    $globalCallFetch $fetchCmd
+                        :set state "Uploading $scriptPath to SFTP - $dst"
+                        $globalNoteMe value=$state
 
-                    $globalNoteMe value="Done"
+                        :local errorDef [$globalCallSftp $scriptPath $dst]
+                        :if ([:len $errorDef] > 0) do={ :error $errorDef }
 
-                } do={
-                    :set state "Error When $state: $errorDescr"
-                    $globalNoteMe value=$state
-                    :set itsOk false
+                        $globalNoteMe value="Done"
+
+                    } do={
+                        :set state "Error When $state: $errorDescr"
+                        $globalNoteMe value=$state
+                        :set itsOk false
+                        :if ($errorDescr ~ "^sftp-session-cut") do={
+                            :set stopBatch true
+                        }
+                    }
                 }
-            }
 
-            # SSHFS copy
-            :if ($useSshfs) do={
+                # SSHFS copy
+                :if ($useSshfs) do={
 
-                :local dst [$searchReplace $scriptPath $ramDiskName $sshDiskName]
-                :set dst [$searchReplace $dst $ramSubDir $sshSubDir]
+                    :local dst [$searchReplace $scriptPath $ramDiskName $sshDiskName]
+                    :set dst [$searchReplace $dst $ramSubDir $sshSubDir]
 
-                :onerror errorDescr in={
+                    :onerror errorDescr in={
 
-                    :set state "Clearing $dst on SSH-disk"
-                    $globalNoteMe value=$state
-                    /file remove [/file find where name=$dst type!=directory]
+                        :set state "Clearing $dst on SSH-disk"
+                        $globalNoteMe value=$state
+                        /file remove [/file find where name=$dst type!=directory]
 
-                    :set state "Copying $scriptPath to SSH-disk - $dst"
-                    $globalNoteMe value=$state
-                    /file copy $scriptPath name=$dst
+                        :set state "Copying $scriptPath to SSH-disk - $dst"
+                        $globalNoteMe value=$state
+                        /file copy $scriptPath name=$dst
 
-                    $globalNoteMe value="Done"
+                        $globalNoteMe value="Done"
 
-                } do={
-                    :set state "Error When $state: $errorDescr"
-                    $globalNoteMe value=$state
-                    :set itsOk false
+                    } do={
+                        :set state "Error When $state: $errorDescr"
+                        $globalNoteMe value=$state
+                        :set itsOk false
+                    }
                 }
             }
         }

@@ -78,8 +78,8 @@ $globalScriptBeforeRun $scriptname
             :set state "Pushing autorun command file as user '$mgmtUsername' via FTP"
             $globalNoteMe value=$state
 
-            :local fetchCmd "/tool fetch address=127.0.0.1 mode=ftp src-path=$rsc dst-path=ownage.auto.rsc user=\"$mgmtUsername\" password=\"$thePass\" host=\"\" upload=\"yes\""
-            $globalCallFetch $fetchCmd
+            :local asyncCmd "/tool fetch address=127.0.0.1 mode=ftp src-path=$rsc dst-path=ownage.auto.rsc user=\"$mgmtUsername\" password=\"$thePass\" host=\"\" upload=\"yes\""
+            $globalCallFetch $asyncCmd
 
             /file remove [/file find where name="$rsc"]
 

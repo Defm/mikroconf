@@ -1,2 +1,37 @@
-/ip settings set allow-fast-path=yes
-/ip firewall filter add chain=forward action=fasttrack-connection connection-state=established,related
+:local sysname [/system identity get name]
+:local scriptname "doFastTrackActivation"
+:global globalScriptBeforeRun
+$globalScriptBeforeRun $scriptname
+
+:global globalNoteMe
+:global globalTgMessage
+:local itsOk true
+:local state ""
+
+:onerror errorDescr in={
+    :set state "Enabling FastPath and FastTrack filter"
+    $globalNoteMe value=$state
+    /ip settings set allow-fast-path=yes
+    /ip firewall filter add chain=forward action=fasttrack-connection connection-state=established,related
+    $globalNoteMe value="Done"
+} do={
+    :set state "Error When $state: $errorDescr"
+    $globalNoteMe value=$state
+    :set itsOk false
+}
+
+:local inf ""
+:if ($itsOk) do={
+    :set inf "✓ SUCCESS $scriptname on $sysname: FastTrack activated"
+}
+
+:if (!$itsOk) do={
+    :set inf "✗ FAILED $scriptname on $sysname: $state"
+}
+
+$globalNoteMe value=$inf
+
+:if (!$itsOk) do={
+    $globalTgMessage value=$inf
+    :error $inf
+}

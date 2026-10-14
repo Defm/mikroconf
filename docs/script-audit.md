@@ -88,13 +88,11 @@
 - `doPeriodicLogDump.rsc.txt` — 4464;
 - `doPushStatsToInfluxDB.rsc.txt` — 5046.
 
-`doFreshTheScripts` получает весь `source` через `fetch output=user` и сам предупреждает о пороге 4096. Для перечисленных файлов это риск усечения/неполного обновления; исправление механизма обновления отложено как отдельное behavioral change. На 7.2x текущий `doIPSECPunch` (~19 КБ) и `doEnvironmentSetup` (~25 КБ) уже работают через `fetch output=user as-value`.
+`doFreshTheScripts` получает весь `source` через `fetch output=user` и сам предупреждает о пороге 4096. 4096 — не потолок `output=user`: в manual тело молча обрезается на 64512 байт, без ошибки. 4095 — потолок `/file add`. Для перечисленных файлов риск усечения остаётся только у внешнего скачивания source; исправление механизма обновления отложено как отдельное behavioral change. На 7.2x текущий `doIPSECPunch` (~19 КБ) и `doEnvironmentSetup` (~25 КБ) уже работают через `fetch output=user as-value`.
 
 ## Drift `UpdateList`
 
-Whitelist в `doFreshTheScripts` расширен унифицируемыми семействами; историческая тройка `doPeriodicLogDump` / `doPeriodicLogParse` / `doTelegramNotify` сохранена; пробел перед `doIPSECPunch` убран. Вне списка остаются изолированные скрипты, которые не унифицировались:
-
-`doAdblock`, `doFastTrackActivation`, `doHotspotLoginTrack`, `doPerfectRestore`, `doTranstaleMAC2IP`, `doUpdateStaticDNSviaDHCP`.
+Whitelist в `doFreshTheScripts` расширен унифицируемыми семействами (включая бывшие isolated: Adblock, StaticDNS, FastTrack, TranstaleMAC2IP, HotspotLoginTrack); пробел перед `doIPSECPunch` убран. Историческая тройка `doPeriodicLogDump` / `doPeriodicLogParse` / `doTelegramNotify` **упразднена**. Вне whitelist намеренно остаётся только `doPerfectRestore`.
 
 ## Scheduler-only и другие точки входа
 
@@ -104,7 +102,6 @@ Whitelist в `doFreshTheScripts` расширен унифицируемыми �
 
 - event hooks: `doDHCPLeaseTrack`, `doHotspotLoginTrack`, `doNetwatchDNS`, `doNetwatchHost`;
 - startup entry: `doStartupScript`;
-- цепочка log parser: `doPeriodicLogDump` → `doPeriodicLogParse`;
 - remote/RPC target: `doUpdatePoliciesRemotely`;
 - прочие — manual/library/utility либо вызываются другими скриптами.
 
@@ -131,7 +128,7 @@ Whitelist в `doFreshTheScripts` расширен унифицируемыми �
 - `doRandomGen` логирует сгенерированный password и отправляет его часть;
 - часть telemetry/SCEP endpoint использует HTTP;
 - `doFreshTheScripts` ограничен `fetch output=user` для крупных source;
-- статическая проверка баланса по-прежнему обнаруживает дополнительную закрывающую `}` в исторических `doPeriodicLogDump` и `doPeriodicLogParse` (не входят в унификацию). Finding по `doSCEPClientCertificatesIssuing` закрыт.
+- Finding по `doSCEPClientCertificatesIssuing` закрыт; historical trio удалена.
 
 ## Проверки
 

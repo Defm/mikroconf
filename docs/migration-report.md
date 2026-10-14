@@ -5,13 +5,13 @@
 ## Перенесено
 
 - 41 файл из текущего `scripts/*.rsc.txt`;
-- `doPeriodicLogDump`, `doPeriodicLogParse`, `doTelegramNotify` из последнего
-  полноразмерного tree старого Git (`3f5b2a1…`);
+- ранее также `doPeriodicLogDump`, `doPeriodicLogParse`, `doTelegramNotify` из последнего
+  полноразмерного tree старого Git (`3f5b2a1…`) — **позже упразднены** (см. `docs/style-canon.md` §5.5);
 - архитектурная и эксплуатационная документация;
 - локальные копии Rosetta, RouterOS skills и усиленного MikroTik MCP;
 - MIT license и upstream license/provenance каждой зависимости.
 
-Все 44 RouterOS-скрипта находятся в `src/scripts`. Имена сохранены.
+В `src/scripts` сейчас 41 RouterOS-скрипт.
 
 ## Санитизация
 
@@ -37,7 +37,7 @@ credentials.
 ## Отложенные решения
 
 - формат tracked `src/config`;
-- долговременное закрытое хранилище для `src/safe` и `bin`;
+- долговременное закрытое хранилище для `bin`;
 - публикация remote `Defm/mikroconf` (в т.ч. ветка `_autobranch` для gitwatch)
   и rollout на устройствах (пути в скриптах уже `mikroconf` / `src/scripts`;
   canary ещё не выполнен);

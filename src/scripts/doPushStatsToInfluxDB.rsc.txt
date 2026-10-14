@@ -59,8 +59,8 @@ $globalScriptBeforeRun $scriptname
         :set rxAvg ($"rx-total-average" / 1048576)
     }
 
-    :local fetchCmd "/tool fetch http-method=post port=8086 mode=http url=\"$tUrl\" http-header-field=\"$authHeader, content-type: text/plain\" http-data=\"bandwidth,host=$sysname,target=CHR transmit=$txAvg,receive=$rxAvg\" keep-result=no"
-    $globalCallFetch $fetchCmd
+    :local asyncCmd "/tool fetch http-method=post port=8086 mode=http url=\"$tUrl\" http-header-field=\"$authHeader, content-type: text/plain\" http-data=\"bandwidth,host=$sysname,target=CHR transmit=$txAvg,receive=$rxAvg\" keep-result=no"
+    $globalCallFetch $asyncCmd
 }
 
 /queue simple

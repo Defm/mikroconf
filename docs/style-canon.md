@@ -1,10 +1,79 @@
 # Канон стиля RouterOS-скриптов
 
-Документ зафиксирован рядом с кодом: раздел 2 описывает исходное состояние скриптов (as-is, до унификации), раздел 4 — обязательный целевой канон (to-be) для всех новых фич и для рефакторинга существующих скриптов. Там, где раздел 2 и раздел 4 расходятся, действует раздел 4.
+Документ зафиксирован рядом с кодом.
 
-Все пути указаны относительно `src/scripts/`. Программа унификации (разделы 5–9 исходного плана) здесь не дублируется: ссылки вида «см. 5.2» относятся к ней и после завершения унификации носят исторический характер.
+- **Раздел 0** — исходный запрос на анализ (постановка и уточнения; поправки унификации — отдельно).
+- **Разделы 1–3** — **первичная итерация** анализа (снимок до/во время первой унификации). Не удалять; для новой работы по стилю на них не опираться.
+- **Раздел 4** — обязательный целевой канон оформления (to-be) для новых фич и рефакторинга. Там, где раздел 2 и раздел 4 расходятся по синтаксису/форме, действует раздел 4.
+- **Раздел 5** — **вторичная итерация**: стилистический анализ текущего слепка `src/scripts` (дух, манера, границы). Дальше опираться на раздел 5; `doPerfectRestore` в него не входит.
+
+Все пути указаны относительно `src/scripts/`. Программа унификации (разделы 5–9 исходного плана) здесь не дублируется: ссылки вида «см. 5.2» относятся к ней и после завершения унификации носят исторический характер. Номер «5» у вторичной итерации ниже — раздел этого файла, не программа плана.
+
+## 0. Запрос на анализ
+
+Формулировки лежат в чате от 12 октября, репозиторий `mikrobackups`. Ниже они дословно, в том порядке, в котором они были написаны. После правок скриптов полный глубокий анализ повторяется по этому тексту, по текущему `src/scripts`.
+
+**Постановка, 16:10.** Только анализ, без оптимизации и без рефакторинга в ущерб текущему стилю. Канон на ближайшие 10–15 фич — уже применённые паттерны, даже если они неэффективны или расходятся с лучшими практиками.
+
+> Нужно исследовать текущую стилистику, манеру и подход к написанию скриптов из текущего проекта. Общий обороты, наименованиепеременных, применение средств языка характерное именно для разработчика который писал эти скрипты. На текущий моемнт и ближайщие несколько фич нужно сохранить этот подход. и не пытаться излишне оптимизировать, и применять рефакторинг в ущерб текущему стилю. Не все скрипты даже сейчас могут быть выполнены в едином духе, поэтому важно выделить только те, которые практикуют единую схемотехнику операций, формат функций, порядок выполнения и постараться существующий скрипты которые вне этого концепта все-таки "унифицировать"
+> На текущий момент только анализ, и попытки выделить\сформулировать стилистику которую мы далее будем применять, даже если она неэффективная, ошибочная или не соответствует лучшим практикам. Сейчас основоый посыл в проекту - выявление уже примененных патернов разработки и следование им на протяжении следующих 10-15 фич.
+
+**Уточнение глубины, 16:16.** После смены модели — повторный разбор того же запроса и сверка с уже составленным планом:
+
+> Я поменял модель, сделай повторный анализ запроса и сравни с уже составленным планом, нужно сильнее\глубже\детальнее развернуть паттерны уде существующих скриптов
+
+**Уточнения к плану, 16:33 и 16:35:**
+
+> Схема оченьм елкая в плане, перерисуй
+
+> Не совсем понятно, в чем именно деление на семейства, что именно отличает эти семейства, опиши в плане
+
+**Поправки к плану унификации, 17:49.** Это уже не «только анализ»: вы задали шаги унификации и попросили поправить отмеченные строки плана `канон_стиля_routeros_6de8519e.plan.md` (287–291 и 295).
+
+> Скорректируй план - добавь шаги в план унификации -
+>
+> * гард везде через переменную - $globalScriptBeforeRun $scriptname
+> * нужно унифицировать сприпты, привести А и форму В
+> * Minimal - тоже привести к В
+> * разорвать цепочку doDHCPLeaseTrack --> doWestminister (просто не вызывать)
+> * В Event-хук сделать по схеме SafeScriptCall → "doEnvironmentSetup" а не localScriptBeforeRun/localNoteMe (но сохранить "контекстный" постфикс)
+> * вализировать входные глобалы в Хуках по схеме :if (!any $X) do={ ...; :error $inf }
+> * doIPSECPunch — унифицировать с кодом автора и В, исправить guard, сохранить :error "skip-continue" как continue, другие Изолированные не трогай
+> * config-first - тоже приведи к В
+> * функцию simplercurrdatetimestr переименуй везде в globalTimestamp, SECRET в globalSecret
+> * Конфигурационные константы — :local с заглавной буквы или ALLCAPS-префиксом: - приводим в обычному camelCase, да и вообще все переменные приводим к camelCase. Отказываемся от PascalCase
+> * Флаги-переключатели — :local <Что>Enable true или :local use<Что> false - все такие флаги приведи к формату :local use<Что> false
+> * В более старых скриптах остались литералы - поправить через globalSecret
+> * Внутри do={}-closures и :do {} блоков автор часто пишет :local state ("...") заново вместо :set (shadowing)  - привести такие кейсы к :set
+> * Внутри do={}-closures и :do {} блоков автор часто пишет :local state ("...") заново вместо :set (shadowing)  - унифицировать везде, использовать бесскобочный подход
+> * Preflight и ранний выход - это считать хорошей манерой, и применять далее
+> * Возвращаемые значения: строка-ошибка/"", true/false, либо C-style 0/1 - привести к единообразию
+> * Обработка ошибок - все отрефакторить чтобы применялась более современная форма :onerror errorName in={ ... } do={ :set state "Error When $state: $errorName" ... } - переменная для  ошибки всегда errorDescr
+> * Аккуратоно переработать все Gate-паттерн вместо break/continue. Раньше в языке не было возможности прервать цикл или перескочить итерацию, или в целом прервать скрипт. Изучи - в проекте есть другие практики, когда появились новые возможности в языке, в частности :error как break/continue
+> * Два независимых :if - позволяет экономить когнитивную сложность, оставляем
+> * Success-строка  - привести к единообразвию в виде ✓ SUCCESS / ✗ FAILED
+> * Дублирование вместо выноса: SafeScriptCall  - устранить
+> * Точки с запятой — смешанно внутри одного файла - привести к единообразию, везде убрать ;
+> * Отступы - стандартизировать везде, применять 4 пробелма на сдвиг
+> * Комментарии: # без пробела или с одним - стандартизировать одним пробелом. ## - не использовать.
+> * Скобки в условиях с лишними пробелами: - унифицировать, не применять лишние пробелы
+> * для Event-скриптов привести переменные GleaseBound, GleaseServerName, GleaseActMAC, GleaseActIP, Guser, NetwatchHostName и пр. в формат <global>XXX
+
+Два пункта про shadowing вы написали подряд и по-разному: сначала «привести такие кейсы к `:set`», сразу следом «унифицировать везде, использовать бесскобочный подход».
+
+**Граница репозитория, 17:57:**
+
+> Этот план нужно реализовать в контекте проекта /Users/Defm/repos/mikrobackups-next,
+> а не в текущем
+> Как это сделать?
+
+Дальше, уже в чате по репозиторию next, задано исполнение, а не новый анализ:
+
+> Возьми план /Users/Defm/.cursor/plans/канон_стиля_routeros_6de8519e.plan.md и выполнить разделы 4–7 с поправками из нового раздела 8. Первым шагом — скопировать канон (разделы 1–4) в docs/style-canon.md репозитория next, чтобы он жил рядом с кодом.
 
 ## 1. Карта семейств
+
+> **Первичная итерация.** Разделы 1–3 — исторический снимок семейств и идиом до полной унификации. Актуальная стилистическая сводка — **раздел 5**.
 
 Кто от чего зависит (семейства, не отдельные файлы):
 
@@ -197,7 +266,7 @@ $globalNoteMe value=$state
 }
 ```
 
-**Новая форма** (появляется в более поздних скриптах и в `doEnvironmentSetup`): `:onerror errorName in={ ... } do={ :set state "Error When $state: $errorName" ... }`. Имя переменной — `errorName`, `errName` или `err`. Используется в `doDumpTheScripts`, `doNetwatchDNS`, `doStaleTSLConnectionsTrack`, `doFreshDNSAddressLists`, `globalOnPrimaryPartition`, `globalCallSSH`. Для новых фич допустимы обе формы; внутри одного файла — та, что уже доминирует.
+**Новая форма** (появляется в более поздних скриптах и в `doEnvironmentSetup`): `:onerror errorDescr in={ ... } do={ :set state "Error When $state: $errorDescr" ... }`. Исторически в тексте встречались и другие имена (`errorName` / `err`); **канон (раздел 4) — только `errorDescr`**.
 
 **Gate-паттерн вместо break/continue.** Последовательные шаги оборачиваются в `:if ($itsOk) do={ :do { ... } }`; в циклах — per-item флаг `skip`:
 
@@ -319,12 +388,14 @@ $globalNoteMe value=$inf
 
 ### 2.9. Удалённое выполнение и команды-строки
 
-- Команда формируется строкой и передаётся дальше, прямой вызов `/tool fetch upload=yes` не используется:
+- Команда формируется строкой и передаётся дальше, прямой вызов `/tool fetch upload=yes` в теле скрипта не используется. SFTP-upload одного файла — `$globalCallSftp src= dst=` ([docs/operations/fetch.md](operations/fetch.md)), не `$globalCallFetch`:
 
 ```routeros
-:local fetchCmd "/tool fetch url=sftp://$FTPServer:$FTPPort/$dst src-path=$buFile user=$FTPUser password=$FTPPass upload=yes"
-$globalCallFetch $fetchCmd;
+:local errorDef [$globalCallSftp $buFile $dst]
+:if ([:len $errorDef] > 0) do={ :error $errorDef }
 ```
+
+  Строковый вызов остаётся у `$globalCallFetch` для прочих команд (HTTPS, FTP на localhost, `:import`).
 
 - Удалённая команда для SSH — в фигурных скобках одной строкой: `:local remoteCommand "{ /ip/firewall/address-list remove [...]; /ip/firewall/address-list/add ... }"`.
 - Async через `[:execute script=$Cmd]` / `[:execute file=... script=...]` с опросом `/system script job find where .id=$jobid` и `:delay 1s`.
@@ -434,7 +505,7 @@ $globalScriptBeforeRun $scriptname
 - Все переменные — camelCase, включая конфигурационные константы и локальные функции. PascalCase и ALLCAPS не используются: `FTPServer` → `ftpServer`, `FTPRoot` → `ftpRoot`, `SMTPAddress` → `smtpAddress`, `RamWarnLimit` → `ramWarnLimit`, `ListName` → `listName`, `BackupPassword` → `backupPassword`, `UpdateList` → `updateList`, `GitHubUserName` → `gitHubUserName`, `RAMDiskName` → `ramDiskName`, `KEYSIZE` → `keySize`, `COUNTRY` → `country`, `IDs` → `ids`, `SafeResolve` → `safeResolve`, `WaitForFile` → `waitForFile`, `IPCalc` → `ipCalc`, `Config` → `config`, `Stats` → `stats`.
 - Аббревиатуры внутри camelCase пишутся как слово: `wanIp`, `ftpUrl`, `sshPort`, `dhcpMac`.
 - Флаги-переключатели — только `use<Что>`; текущие значения по умолчанию сохраняются: `FTPEnable` → `useFtp`, `FTPGitEnable` → `useFtpGit`, `SMTPEnable` → `useSmtp`, `SSHFSEnable` → `useSshfs`, `saveSysBackup` → `useSysBackup`, `encryptSysBackup` → `useEncryption`, `verboseRawExport` → `useVerboseRawExport`, `progressiveDelay` → `useProgressiveDelay`, `impersonate` → `useImpersonation`, `UseUpdateList` → `useUpdateList`, `useBandwidthTest` — без изменений.
-- Служебные имена остаются: `sysname`, `scriptname`, `itsOk`, `state`, `inf`, `skip`, `stamp`, `fetchCmd`, `remoteCommand`, `errorDef`. Loop-переменные `x`, `y`, `z`, `i` и префикс `the` допустимы.
+- Служебные имена остаются: `sysname`, `scriptname`, `itsOk`, `state`, `inf`, `skip`, `stamp`, `asyncCmd`, `errorDef`. Loop-переменные `x`, `y`, `z`, `i` и префикс `the` допустимы.
 - Внешние глобалы event-хуков — с префиксом `global`: `GleaseBound` → `globalLeaseBound`, `GleaseServerName` → `globalLeaseServerName`, `GleaseActMAC` → `globalLeaseActMac`, `GleaseActIP` → `globalLeaseActIp`, `Guser` → `globalHotspotUser`, `NetwatchHostName` → `globalNetwatchHostName`, `NetwatchHostState` → `globalNetwatchHostState`. Снимок в locals: `:local netwatchHostName $globalNetwatchHostName`.
 - Секреты и учётные данные — только через `"$[$globalSecret get KEY]"`. Имена ключей — из `docs/security/credentials.md` и `docs/script-audit.md`: `SSH_SERVER`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD` (`doBackup`, `doDumpTheScripts`, `globalCallSSH`; `doSuperviseCHRviaSSH` переходит на `globalCallSSH`), `INFLUXDB_TOKEN`, `INFLUXDB_USER`, `INFLUXDB_PASSWORD` (`doPushStatsToInfluxDB`), `BANDWIDTH_TEST_USER`, `BANDWIDTH_TEST_PASSWORD` (`doCollectSpeedStats`, `doPushStatsToInfluxDB`), `BACKUP_PASSWORD` (`doCloudBackup`), `CERTIFICATE_EXPORT_PASSPHRASE` (cert-скрипты, `globalNewClientCert`), `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (`globalTgMessage`). IP/хосты (CHR, SCEP URL, mynetname) — не секреты; остаются camelCase-константами в заголовке.
 
@@ -456,13 +527,13 @@ $globalScriptBeforeRun $scriptname
 
 **Шаг работы** — две строки `state`/`globalNoteMe`, действие, `"Done"`. Внутри блоков и closures только `:set state "..."` без скобок; `:local state` переобъявляется один раз в заголовке скрипта или в начале функции.
 
-**Обработка ошибок** — единственная форма, переменная всегда `errorDescr`:
+**Обработка ошибок** — единственная форма. Имя переменной ошибки **всегда** `errorDescr` (в том числе во вложенных `:onerror`; не `err`, `errName`, `errorName`, `errUpd`, `errAdd`):
 
 ```routeros
 :onerror errorDescr in={
     :set state "Uploading $buFile to FTP ($ftpRoot$buFile)"
     $globalNoteMe value=$state
-    $globalCallFetch $fetchCmd
+    $globalCallFetch $asyncCmd
     $globalNoteMe value="Done"
 } do={
     :set state "Error When $state: $errorDescr"
@@ -470,6 +541,8 @@ $globalScriptBeforeRun $scriptname
     :set itsOk false
 }
 ```
+
+По RouterOS manual: `:onerror <var> in={...} do={...}` пишет детали ошибки в **локальную** `<var>`; `do={}` видит её только если имя задано до `do` (порядок параметров важен). Вложенные `:onerror errorDescr` — штатный приём проекта (`doBackup`, `doNetwatchDNS`): при soft-catch текст сразу кладётся в `$state` внутри внутреннего `do={}`; при необходимости проброса наружу — `:error $errorDescr` (как в NetwatchDNS с `break-loop`). Отдельные имена (`errUpd`) технически изолируют soft-ошибку от внешнего биндинга, но **не канон**: канон — одно имя `errorDescr` + не читать `$errorDescr` во внешнем `in={}` после soft-catch (источник истины после catch — `$state`).
 
 `:do { } on-error={ }` не используется. Доступно на всех текущих устройствах 7.2x; `LivingRoomWAP` (ROS 6) и снимок `mikrouter` 7.15 вне поддержки.
 
@@ -497,7 +570,9 @@ $globalScriptBeforeRun $scriptname
 
 Маркеры: `"skip-continue"` — следующая итерация; `"break-loop"` — выход из цикла (внешний `:onerror` вокруг `:foreach`). Сравнение — префикс через `~` (`^skip-continue` / `^break-loop`): в scheduler RouterOS может дописать локацию к тексту `:error` в `$errorDescr`. Для последовательных шагов, которые раньше оборачивались в `:if ($itsOk) do={ :do {...} }`, тело скрипта заключается в один `:onerror`, а шаг при провале делает `:error` с текстом — так `itsOk` переключается в одном месте.
 
-**Возвращаемые значения helper'ов** — два типа, без C-style `0/1`: предикаты возвращают `true/false` (`checkDisk`, `waitForFile`, `globalOnPrimaryPartition`); операции возвращают `""` при успехе и текст ошибки иначе (`globalCallSSH`). Вызывающая сторона операции: `:local errorDef [$globalCallSSH $remoteCommand]` → `:if ([:len $errorDef] > 0) do={ ... }`.
+**Возвращаемые значения helper'ов** — два типа, без C-style `0/1`: предикаты возвращают `true/false` (`checkDisk`, `waitForFile`, `globalOnPrimaryPartition`); операции возвращают `""` при успехе и текст ошибки иначе (`globalCallSSH`, `globalKnockKnock`, `globalCallSftp`). Вызывающая сторона операции: `:local errorDef [$globalCallSSH $asyncCmd]` → `:if ([:len $errorDef] > 0) do={ ... }`. У `$globalCallSftp` аргументы позиционные (`$1` src, `$2` dst), префикс `sftp-session-cut` останавливает оставшиеся upload. Контракт — [docs/operations/fetch.md](operations/fetch.md).
+
+**Команда сначала строкой** — локаль всегда `asyncCmd` (не `fetchCmd` / `cmd` / `remoteCommand`), потом `$globalCallFetch` / `$globalCallSSH` / `:execute`.
 
 ### 4.4. Footer
 
@@ -527,7 +602,7 @@ $globalNoteMe value=$inf
 
 ### 4.5. Форматирование
 
-- Точка с запятой в конце строки не ставится. `;` остаётся только как разделитель нескольких команд в одной строке и внутри строковых команд (`remoteCommand`, `fetchCmd`, буферы `doKeepScriptsOwner`).
+- Точка с запятой в конце строки не ставится. `;` остаётся только как разделитель нескольких команд в одной строке и внутри строковых команд (`asyncCmd`, буферы `doKeepScriptsOwner`).
 - Отступ — 4 пробела на уровень везде, включая footer.
 - Комментарии — `# ` с одним пробелом; `##` не используется; `# === SECTION ===` — не используется.
 - Без лишних пробелов внутри скобок: `:if ([:len [/system package find where name="routeros" and disabled=no]] > 0 and $rosVer = 7) do={`.
@@ -540,6 +615,7 @@ $globalNoteMe value=$inf
 - `SafeScriptCall` переезжает в `doEnvironmentSetup` как `globalSafeScriptCall` с двумя аргументами: `$1` — имя скрипта, `$2` — контекст для постфикса в логе (`"NETWATCH"`, `"DHCP"`, `"STARTUP"`); при пустом `$2` постфикс не выводится.
 - `globalScriptBeforeRun` получает второй необязательный аргумент — тот же контекст: `$globalScriptBeforeRun $scriptname "NETWATCH"` → `Starting script: doNetwatchHost (NETWATCH context)`.
 - Локальный `callSSH` в `doSuperviseCHRviaSSH` удаляется в пользу `globalCallSSH`.
+- SFTP knockknock на CHR — только через `$globalKnockKnock $scriptname` (опционально `$2` = IP); дублировать address-list RPC в batch-скриптах нельзя.
 - Блок определения `rosVer`/`sysver` (3 копии) остаётся локальным в каждом скрипте — это не helper, а две строки конфигурации; переименования по 4.2.
 - `#Example call` перед каждым глобальным helper'ом сохраняется.
 
@@ -577,6 +653,113 @@ $globalScriptBeforeRun $scriptname "NETWATCH"
 
 - Единая схема для `doNetwatchHost`, `doNetwatchDNS`, `doDHCPLeaseTrack`; локальные `localNoteMe`/`localScriptBeforeRun` удаляются, контекстный постфикс сохраняется через аргумент.
 - Валидация входных глобалов — `:if (!any $X) do={ ...; :error $state }` (вместо `:error $inf` с необъявленным `inf`).
-- Bootstrap до `doEnvironmentSetup` — одна строка `/system script run`, без локальной копии `SafeScriptCall`.
+- Bootstrap среды: проверка «есть ли уже `$globalSafeScriptCall`»; если нет — **напрямую** `/system script run doEnvironmentSetup` (не `$globalSafeScriptCall "doEnvironmentSetup"`: обёртки ещё нет, она появляется только после Setup).
 - Footer по 4.4 добавляется; в `doNetwatchDNS` — после цикла.
+
+## 5. Вторичная итерация (текущий слепок)
+
+Повторный анализ по постановке и уточнениям из раздела 0 (без чеклиста поправок 17:49). Охват: все `*.rsc.txt` **кроме** `doPerfectRestore` (уникальный recovery, вне стилистической орбиты). Линза — дух и манера автора, а не сверка с разделом 4.
+
+### 5.1. Дух автора
+
+Повторяющиеся привычки «как думает оператор-скриптовик» (из тел файлов):
+
+1. **Narrated pipeline:** `$state` → `$globalNoteMe` → действие. Шаг сначала озвучивается английской фразой, потом выполняется (`doBackup`, `doCoolConsole`, `doFreshTheScripts`, `doPushStatsToInfluxDB`).
+2. **Веха `"Done"`** отдельным тикером после блочной операции (`doLEDon`/`doLEDoff`, `doFreshTheScripts`, `doCloudBackup`, `flush_dns`).
+3. **Footer-ритуал:** `itsOk` и **два независимых** `:if ($itsOk)` / `:if (!$itsOk)` с `✓ SUCCESS` / `✗ FAILED` и `$scriptname on $sysname`; Telegram и `:error` почти только при провале (`doSuperviseCHRviaSSH`, `doBackup`, `doCollectSpeedStats`).
+4. **Config-first:** локальные флаги/`use*` и константы сверху, короткий комментарий «зачем / осторожно» (`doBackup`, `doDumpTheScripts`, `doPushStatsToInfluxDB`).
+5. **Preflight как WARNING:** проверка partition/resolve/сервиса → note/log → жёсткий `:error` (`doBackup`, `doDumpTheScripts`, `doCloudBackup`).
+6. **Два независимых `:if`** вместо else для опций и footer (`doBackup`, почти все канонические batch).
+7. **Команда сначала строкой:** локаль `asyncCmd`, показ оператору, потом `$globalCallFetch` / `$globalCallSSH` / `:execute` (`doBackup`, `doDumpTheScripts`, `doCreateTrafficAccountingQueues`).
+8. **SSH/RPC как ремарки:** `"Calling --- …"`, `"Success RPC call"`, `"Waiting backdoor…"`; knockknock вынесен в `$globalKnockKnock` (`doSuperviseCHRviaSSH`, `doBackup`, `doDumpTheScripts`).
+9. **Цикл `the*`:** `theScript`, `thePeer`, `thePass` — экземпляр под лупой (`doFreshTheScripts`, `doUpdatePoliciesRemotely`, `doKeepScriptsOwner`).
+10. **`:delay` как сюжетный шаг** с state «Waiting…» (`doBackup`, `doCertificatesIssuing`, `doUpdateExternalDNS`).
+11. **`:error` с маркерами** `skip-continue` / `break-loop` как continue/break (`doFreshTheScripts`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doIPSECPunch`).
+12. **Разговорный английский** в сообщениях: `"Got it"`, `"Freshing"`, `"I'm going reboot"`, опечатки в именах файлов (`Transtale`, `TSL`, `Westminister`, `Bumer`).
+13. **`payLoad` / «было ли дело»** — разные SUCCESS-фразы (`doUpdateExternalDNS`, `doKeepScriptsOwner`).
+14. **Helpers с `# Example call`**, часто return map/bool; внутри снова state+NoteMe (`doEnvironmentSetup`, `doCoolConsole`, `doIPSECPunch`).
+15. **Housekeeping:** clear → make → wait FS → use → remove (`doDumpTheScripts`, `doFreshDNSAddressLists`, `doKeepScriptsOwner`).
+
+### 5.2. Схемотехника
+
+**Типичный batch:** `sysname`/`scriptname` → guard → globals + `itsOk`/`state` → config → preflight → тело в `:onerror` с нарративом → footer SUCCESS/FAILED.
+
+**Event:** снимок внешних глобалов → ленивый bootstrap среды → guard с постфиксом `"NETWATCH"`/`"DHCP"` → валидация входов → короткое тело → тот же footer (`doNetwatchHost`, `doNetwatchDNS`, `doDHCPLeaseTrack`).
+
+Конкретный bootstrap (из `doNetwatchHost`; то же в DNS/DHCP): `$globalSafeScriptCall` **не** вызывает Setup — он служит датчиком «среда уже поднята». Пока helper отсутствует, Setup запускается напрямую:
+
+```routeros
+:global globalSafeScriptCall
+:if (!any $globalSafeScriptCall) do={ /system script run doEnvironmentSetup }
+```
+
+После этого Setup определяет `globalSafeScriptCall`, и дальше его можно вызывать для других скриптов (как в `doStartupScript` для `doImperialMarch` / `doCoolConsole`).
+
+**Runtime:** сначала среда, потом манера. `doEnvironmentClearance` — wipe; `doEnvironmentSetup` — каталог глобалов; `doStartupScript` — NTP на сырых `:log`/`:put` → Clearance → Setup → цепочка `$globalSafeScriptCall`.
+
+**Особые каркасы того же мышления:** бесконечный монитор без SUCCESS footer (`doStaleTSLConnectionsTrack`); `itsOk` как вердикт нагрузки и reboot вместо throw (`doCPUHighLoadReboot`); библиотечный batch с helpers/stats (`doIPSECPunch`).
+
+### 5.3. Семейства по духу (текущее дерево)
+
+```mermaid
+flowchart LR
+  Runtime["инфраструктура<br/>Setup Clear Startup"] --> Canon["единый дух<br/>batch"]
+  Runtime --> Event["event-хуки"]
+  Canon --> Rpc["UE Supervise Policies"]
+  Edge["край формы<br/>StaleTLS CPU Punch"]
+  Special["особые вне batch"]
+```
+
+**Единый дух (каноническая манера):**  
+`doBackup`, `doDumpTheScripts`, `doSuperviseCHRviaSSH`, `doPushStatsToInfluxDB`, `doCreateTrafficAccountingQueues`, `doFreshTheScripts`, `doCoolConsole`, `doUpdateExternalDNS`, `doCloudBackup`, `doCheckPingRate`, `doCollectSpeedStats`, `doFlushLogs`, `doHeatFlag`, `doLEDon`, `doLEDoff`, `flush_dns`, `doSomeAlarm`, `doWestminister`, `doBumerSound`, `doImperialMarch`, `doCertificatesIssuing`, `doSCEPClientCertificatesIssuing`, `doUpdatePoliciesRemotely`, `doRandomGen`, `doKeepScriptsOwner`, `doFastTrackActivation`, `doTranstaleMAC2IP`, `doAdblock` (StopAD в оболочке form-B), `doUpdateStaticDNSviaDHCP` (vendor-логика в оболочке form-B), авторская голова `doFreshDNSAddressLists` (до хвоста `$update`).
+
+**Тот же автор, особый каркас:**  
+`doStaleTSLConnectionsTrack` (вечный монитор без SUCCESS footer — допустимое исключение), `doCPUHighLoadReboot` (`itsOk`=вердикт нагрузки, reboot при high-load), `doIPSECPunch` (библиотечный batch); event: `doNetwatchHost`, `doNetwatchDNS`, `doDHCPLeaseTrack`, `doHotspotLoginTrack`.
+
+**Инфраструктура:**  
+`doEnvironmentSetup`, `doEnvironmentClearance`, `doStartupScript` — без batch-footer SUCCESS.
+
+**Особые (не batch-канон):**  
+`doPerfectRestore`; `doEnvironmentClearance` (wipe); хвост `$update` в `doFreshDNSAddressLists`.
+
+### 5.4. Граница духа (после унификации)
+
+| Файл / фрагмент | Статус |
+|-----------------|--------|
+| `$update` в `doFreshDNSAddressLists` | Borrowed chunk — не переписываем |
+| `doPerfectRestore` | Вне орбиты |
+| `doEnvironmentClearance` | Одна строка wipe |
+| `doStaleTSLConnectionsTrack` | Авторский монитор без SUCCESS footer |
+| `doCPUHighLoadReboot` | Author form-B + `:onerror`; reboot только при high-load |
+| `doIPSECPunch` | Form-B; `;` только в map/array literals |
+| Runtime Setup/Startup | Инфраструктура, не batch-footer |
+| Бывшие наброски/vendor (`doAdblock`, `doUpdateStaticDNSviaDHCP`, `doFastTrackActivation`, `doTranstaleMAC2IP`, `doHotspotLoginTrack`) | Приведены к form-B / event-канону |
+
+### 5.5. Историческая тройка: упразднена
+
+`doPeriodicLogDump`, `doPeriodicLogParse`, `doTelegramNotify` удалены из `src/scripts`, из `updateList` в `doFreshTheScripts` и из ожидаемого набора в `tools/check-repository.sh`. Штатные Telegram-уведомления — только `$globalTgMessage`. В Git-истории и старых заметках audit/migration имена могут ещё встречаться как архив.
+
+### 5.6. Что сохранять на следующие 10–15 фич
+
+Даже если приём неэффективен — это узнаваемость автора:
+
+1. Озвучивать шаг в `$state` до действия; закрывать блок `"Done"`.
+2. Config-флаги сверху с кратким «почему/осторожно».
+3. Preflight как WARNING оператору, потом bail.
+4. Внешние команды — в `asyncCmd` на виду до запуска.
+5. SSH/RPC: Calling / Success / Waiting; knockknock — `$globalKnockKnock`, не копипаста.
+6. В циклах — имя `the*`.
+7. Continue/break через маркеры `:error`, не тихий skip без следа.
+8. Footer двумя независимыми `:if` SUCCESS/FAILED; Telegram в основном на fail.
+9. Задержки как названные паузы сюжета.
+10. Event: сначала snapshot globals, потом валидация.
+11. Helpers с `# Example call` и разговорным английским в note.
+12. Опциональную работу — `use*` / `payLoad`, разные SUCCESS-тексты.
+13. Housekeeping: создать → ждать FS → использовать → убрать.
+14. Живой тон сообщений («Got it», «Freshing», «I'm going…»).
+15. Мониторы/reboot — свой каркас (heartbeat / progressive Step), не смешивать со StopAD/Log-Parser.
+
+**Не брать за образец манеры:** сырой `$update` в хвосте `doFreshDNSAddressLists`, `doPerfectRestore`, однострочный `doEnvironmentClearance`. StopAD/DHCP-DNS теперь в author-оболочке — копировать оболочку, не внутренний vendor-диалект.
+
+Раздел 4 по-прежнему задаёт обязательную **форму** (заголовок, имена, `:onerror errorDescr`, без `;`). Раздел 5 задаёт **голос и схемотехнику**, которым следуют новые фичи внутри этой формы.
 

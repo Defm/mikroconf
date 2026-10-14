@@ -323,11 +323,11 @@
 
             # avoid parse errors using Execute when no wireless package installed
             :if ([:len [/system package find where name="wireless" and disabled=no]] > 0) do={
-                :local cmd "/caps-man access-list remove [find mac-address=$newMac];"
-                :local jobid [:execute script=$cmd]
+                :local asyncCmd "/caps-man access-list remove [find mac-address=$newMac];"
+                :local jobid [:execute script=$asyncCmd]
 
-                :set cmd "/caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment=\"$comment\" disabled=no mac-address=$newMac ssid-regexp=\"$newSsid\" place-before=1;"
-                :set jobid [:execute script=$cmd]
+                :set asyncCmd "/caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment=\"$comment\" disabled=no mac-address=$newMac ssid-regexp=\"$newSsid\" place-before=1;"
+                :set jobid [:execute script=$asyncCmd]
             }
 
         } do={
@@ -529,9 +529,9 @@
 
         :if ([:len $1] > 0) do={
 
-            :local fetchCmd "$1"
+            :local asyncCmd "$1"
 
-            :local state "I'm now putting: $fetchCmd"
+            :local state "I'm now putting: $asyncCmd"
             $globalNoteMe value=$state
 
             :local stamp [$globalTimestamp]
@@ -541,7 +541,7 @@
 
             /file remove [find where name="$logName"]
 
-            :local jobid [:execute file=$logName script=$fetchCmd]
+            :local jobid [:execute file=$logName script=$asyncCmd]
 
             :set state "Waiting the end of process for protocol $logName to be ready, max 30 seconds..."
             $globalNoteMe value=$state
@@ -573,6 +573,76 @@
 
             }
         }
+    }
+}
+
+# Example call
+# :local errorDef [$globalCallSftp "RAM/scripts/doBackup.rsc.txt" "REPO/raw/src/scripts/doBackup.rsc.txt"]
+# $1=src $2=dst (positional — named src=/dst= empty inside :global do= on field 7.x)
+# operation - returns "" on success, error text otherwise
+# prefix sftp-session-cut: caller stops the remaining uploads
+:global globalCallSftp
+:if (!any $globalCallSftp) do={
+    :global globalCallSftp do={
+
+        :global globalNoteMe
+        :global globalSecret
+        :global globalTimestamp
+
+        :local src [:tostr $1]
+        :local dst [:tostr $2]
+
+        :if (([:len $src] = 0) or ([:len $dst] = 0)) do={
+            :return "sftp: src and dst are required"
+        }
+
+        :local ftpServer "$[$globalSecret get SSH_SERVER]"
+        :local ftpPort "$[$globalSecret get SSH_PORT]"
+        :local ftpUser "$[$globalSecret get SSH_USER]"
+        :local ftpPass "$[$globalSecret get SSH_PASSWORD]"
+        :local logName ("RAM/" . [$globalTimestamp] . "-" . [:rndstr length=6 from="HtsP2n8qZ"] . ".log.txt")
+        # no \" inside "..." — RouterOS ends the string at the inner quote
+        :local fetchCmd "/tool fetch url=sftp://$ftpServer:$ftpPort/$dst src-path=$src user=$ftpUser password=$ftpPass upload=yes idle-timeout=30s"
+
+        /file remove [find where name=$logName]
+        :local jobId [:execute file=$logName script=$fetchCmd]
+        :local ticks 0
+        :local protocol ""
+
+        :while (([:len [/system script job find where .id=$jobId]] = 1) && ($ticks < 30)) do={
+            :set ticks ($ticks + 1)
+            :delay 1s
+            :if ([:len [/file find where name=$logName]] = 1) do={
+                :set protocol [/file get [find where name=$logName] contents]
+            }
+            $globalNoteMe value=("sftp " . $src . " to " . $dst . " waiting " . $ticks . " s")
+        }
+
+        :if ([:len [/system script job find where .id=$jobId]] = 1) do={
+            /system script job remove $jobId
+            /file remove [find where name=$logName]
+            :return ("sftp-session-cut still running after " . $ticks . " s " . $src . " to " . $dst . " " . $protocol)
+        }
+
+        :if ([:len [/file find where name=$logName]] = 1) do={
+            :set protocol [/file get [find where name=$logName] contents]
+            /file remove [find where name=$logName]
+        }
+
+        # missing remote parent dir on canary: uploading uploaded=total then
+        # failure: closing connection: <sftp status: 20> … (/tool/fetch; line 1)
+        :local dirHint " hint: check remote parent dir exists (fetch does not mkdir); or SSH ban"
+
+        :if (($protocol ~ "status: failed") || ($protocol ~ "sftp status: 20") || ($protocol ~ "timed out") || ($protocol ~ "timeout")) do={
+            :return ("sftp-session-cut " . $src . " to " . $dst . " " . $protocol . $dirHint)
+        }
+
+        :if ($protocol ~ "status: finished") do={
+            $globalNoteMe value=("sftp finished " . $src . " to " . $dst)
+            :return ""
+        }
+
+        :return ("sftp upload failed " . $src . " to " . $dst . " " . $protocol . $dirHint)
     }
 }
 
@@ -651,9 +721,9 @@
         :global globalNoteMe
         :global globalSecret
 
-        :local cmd $1
+        :local asyncCmd $1
 
-        :if ([:len $cmd] = 0) do={
+        :if ([:len $asyncCmd] = 0) do={
             :return "RPC: ssh empty command"
         }
 
@@ -666,10 +736,10 @@
 
         :onerror errorDescr in={
 
-            :set state "Call: /system ssh-exec address=$sshServer user=$sshUser port=$sshPort command=\"$cmd\" as-value"
+            :set state "Call: /system ssh-exec address=$sshServer user=$sshUser port=$sshPort command=\"$asyncCmd\" as-value"
             $globalNoteMe value=$state
 
-            :local result [/system ssh-exec address=$sshServer user=$sshUser password=$sshPass port=$sshPort command=$cmd as-value]
+            :local result [/system ssh-exec address=$sshServer user=$sshUser password=$sshPass port=$sshPort command=$asyncCmd as-value]
             :local exitCode ([$result]->"exit-code")
 
             :if ($exitCode != 0) do={
@@ -685,5 +755,47 @@
         }
 
         :return $state
+    }
+}
+
+# Example call
+# :local errorDef [$globalKnockKnock $scriptname]
+# :local errorDef [$globalKnockKnock $scriptname "1.2.3.4"]
+# opens alist-fw-knockknock on CHR for our public IP (or $2) via SSH, then waits 15s
+# returns "" on success, error text otherwise
+:global globalKnockKnock
+:if (!any $globalKnockKnock) do={
+    :global globalKnockKnock do={
+
+        :global globalNoteMe
+        :global globalCallSSH
+
+        :local comment [:tostr $1]
+        :if ([:len $comment] = 0) do={
+            :return "knockknock: empty comment"
+        }
+
+        :local wanIp [/ip cloud get public-address]
+        :if ([:len $2] > 0) do={ :set wanIp $2 }
+
+        :local asyncCmd "{ /ip/firewall/address-list remove [find list=alist-fw-knockknock address=$wanIp]; /ip/firewall/address-list/add address=$wanIp list=alist-fw-knockknock comment=$comment timeout=5m dynamic=yes }"
+
+        :local state "Making SFTP backdoor for $wanIp via SSH"
+        $globalNoteMe value=$state
+
+        :local errorDef [$globalCallSSH $asyncCmd]
+        :if ([:len $errorDef] > 0) do={
+            :return $errorDef
+        }
+
+        :set state "Success RPC call: $state"
+        $globalNoteMe value=$state
+
+        # wait while backdoor alist-fw-ssh-stage1 flushes our first-call IP, otherwise we get banned
+        :set state "Waiting backdoor for $wanIp for some seconds.."
+        $globalNoteMe value=$state
+        :delay 15s
+
+        :return ""
     }
 }
