@@ -42,9 +42,6 @@ $globalScriptBeforeRun $scriptname
                 # not a TLS target or a local address - next connection
                 :if ($portOnly != "443" or ([:len $ipOnly] = 0) or [/ip address find where address~"$ipOnly"]) do={ :error "skip-continue" }
 
-                :set state "$protoOnly timeout: $ipOnly"
-                $globalNoteMe value=$state
-
                 # Looking for existing entry
                 :if ([:len [/ip firewall address-list find list=$listName address=$ipOnly]] = 0) do={
 
@@ -62,6 +59,9 @@ $globalScriptBeforeRun $scriptname
                             /ip firewall address-list add list=$listName address=$ipOnly dynamic=yes timeout=$listTimeout comment="Added by TLS Block Detection Script"
                         }
                     }
+                } else={
+                    :set state "$protoOnly timeout: $ipOnly"
+                    $globalNoteMe value=$state verbose=true
                 }
 
                 :if ($protoOnly = "tcp") do={
@@ -83,7 +83,7 @@ $globalScriptBeforeRun $scriptname
 
 # long-living monitor: footer is unreachable, heartbeat instead
 :set state "tracking.."
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 :local beats 0
 
 :do {
@@ -100,7 +100,7 @@ $globalNoteMe value=$state
     :set beats ($beats + 1)
     :if ($beats = $heartbeatEvery) do={
         :set state "tracking.."
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
         :set beats 0
     }
 

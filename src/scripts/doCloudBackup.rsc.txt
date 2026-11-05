@@ -28,7 +28,7 @@ $globalScriptBeforeRun $scriptname
     /system backup cloud print as-value
 
     :set state "Creating and uploading cloud backup"
-    $globalNoteMe value=$state
+    $globalNoteMe value=$state verbose=true
 
     :local backup ([/system/backup/cloud/find]->0)
     :if ([:typeof $backup] = "id") do={
@@ -41,7 +41,7 @@ $globalScriptBeforeRun $scriptname
     :local backupName [/system/backup/cloud/get $backup name]
     :set state "Cloud backup file uploaded: $backupName"
     $globalNoteMe value=$state
-    $globalNoteMe value="Done"
+    $globalNoteMe value="Done" verbose=true
 
 } do={
     :set state "Error When $state: $errorDescr"

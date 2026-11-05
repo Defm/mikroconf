@@ -1,9 +1,19 @@
 # Example call
 # $globalNoteMe value="12345"
+# $globalNoteMe value="progress" verbose=true
 # outputs $value using both :put and :log info
+# verbose=true is skipped unless :global globalUseVerboseLog is true (quiet markers stay always-on)
+:global globalUseVerboseLog
+:if (!any $globalUseVerboseLog) do={ :set globalUseVerboseLog false }
+
 :global globalNoteMe
 :if (!any $globalNoteMe) do={
     :global globalNoteMe do={
+
+        :global globalUseVerboseLog
+        :if ($verbose = true) do={
+            :if (!$globalUseVerboseLog) do={ :return "" }
+        }
 
         :local scriptname [:jobname]
         :local state "$scriptname: $value"
@@ -532,7 +542,7 @@
             :local asyncCmd "$1"
 
             :local state "I'm now putting: $asyncCmd"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :local stamp [$globalTimestamp]
 
@@ -544,7 +554,7 @@
             :local jobid [:execute file=$logName script=$asyncCmd]
 
             :set state "Waiting the end of process for protocol $logName to be ready, max 30 seconds..."
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :set globalFetchWaitTicks 0
             :while (([:len [/system script job find where .id=$jobid]] = 1) && ($globalFetchWaitTicks < 30)) do={
@@ -552,24 +562,24 @@
                 :delay 1s
 
                 :set state "waiting fetch result... $globalFetchWaitTicks"
-                $globalNoteMe value=$state
+                $globalNoteMe value=$state verbose=true
             }
 
             :set state "Done. Elapsed Seconds: $globalFetchWaitTicks\r\n"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :if ([:len [/file find where name="$logName"]] = 1) do={
 
                 :local filecontent [/file get [/file find where name="$logName"] contents]
                 :set state "Result of Fetch:\r\n****************************\r\n$filecontent\r\n****************************"
-                $globalNoteMe value=$state
+                $globalNoteMe value=$state verbose=true
 
                 /file remove [find where name="$logName"]
 
             } else={
 
                 :set state "Result of Fetch:\r\n****************************\r\n 30Sec Timeout exceeded - still no log file \r\n****************************"
-                $globalNoteMe value=$state
+                $globalNoteMe value=$state verbose=true
 
             }
         }
@@ -615,7 +625,7 @@
             :if ([:len [/file find where name=$logName]] = 1) do={
                 :set protocol [/file get [find where name=$logName] contents]
             }
-            $globalNoteMe value=("sftp " . $src . " to " . $dst . " waiting " . $ticks . " s")
+            $globalNoteMe value=("sftp " . $src . " to " . $dst . " waiting " . $ticks . " s") verbose=true
         }
 
         :if ([:len [/system script job find where .id=$jobId]] = 1) do={
@@ -638,7 +648,7 @@
         }
 
         :if ($protocol ~ "status: finished") do={
-            $globalNoteMe value=("sftp finished " . $src . " to " . $dst)
+            $globalNoteMe value=("sftp finished " . $src . " to " . $dst) verbose=true
             :return ""
         }
 
@@ -663,7 +673,7 @@
 
         :if (!$partitionsActivated) do={
             :set state "Investigation result - partitions disabled"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
             :set onPrimaryPartition true
             :return $onPrimaryPartition
         }
@@ -677,7 +687,7 @@
         } do={
 
             :set state "Investigation result - device has no /partitions submenu"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
             :set onPrimaryPartition true
             :return $onPrimaryPartition
         }
@@ -702,7 +712,7 @@
         } do={
 
             :set state "Investigation result - $errorDescr"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :return $onPrimaryPartition
         }
@@ -737,7 +747,7 @@
         :onerror errorDescr in={
 
             :set state "Call: /system ssh-exec address=$sshServer user=$sshUser port=$sshPort command=\"$asyncCmd\" as-value"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :local result [/system ssh-exec address=$sshServer user=$sshUser password=$sshPass port=$sshPort command=$asyncCmd as-value]
             :local exitCode ([$result]->"exit-code")
@@ -781,7 +791,7 @@
         :local asyncCmd "{ /ip/firewall/address-list remove [find list=alist-fw-knockknock address=$wanIp]; /ip/firewall/address-list/add address=$wanIp list=alist-fw-knockknock comment=$comment timeout=5m dynamic=yes }"
 
         :local state "Making SFTP backdoor for $wanIp via SSH"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         :local errorDef [$globalCallSSH $asyncCmd]
         :if ([:len $errorDef] > 0) do={
@@ -789,11 +799,11 @@
         }
 
         :set state "Success RPC call: $state"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         # wait while backdoor alist-fw-ssh-stage1 flushes our first-call IP, otherwise we get banned
         :set state "Waiting backdoor for $wanIp for some seconds.."
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
         :delay 15s
 
         :return ""

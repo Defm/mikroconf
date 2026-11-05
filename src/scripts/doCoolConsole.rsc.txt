@@ -136,10 +136,10 @@ $globalScriptBeforeRun $scriptname
     }
 
     :set state "Setting global note"
-    $globalNoteMe value=$state
+    $globalNoteMe value=$state verbose=true
 
     /system note set note="$logcontent"
-    $globalNoteMe value="Done"
+    $globalNoteMe value="Done" verbose=true
 
 } do={
     :set state "Error When $state: $errorDescr"

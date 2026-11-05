@@ -526,14 +526,16 @@ $globalScriptBeforeRun $scriptname
 
 **Шаг работы** — две строки `state`/`globalNoteMe`, действие, `"Done"`. Внутри блоков и closures только `:set state "..."` без скобок; `:local state` переобъявляется один раз в заголовке скрипта или в начале функции.
 
+**Уровни логирования.** Quiet-маркеры прогона всегда: `Starting script: …` из `$globalScriptBeforeRun` и итоговый footer `✓ SUCCESS` / `✗ FAILED`. Progress, `"Done"`, heartbeat и штатный per-item narration — через `$globalNoteMe … verbose=true`; они пишутся только при `:global globalUseVerboseLog true` (default `false` в `doEnvironmentSetup`). `:set state "…"` для контекста `on-error` сохраняется всегда; глушится только вызов `$globalNoteMe`. Ошибки, WARNING/preflight, recovery и реальные state-change — без `verbose=` (always-on).
+
 **Обработка ошибок** — единственная форма. Имя переменной ошибки **всегда** `errorDescr` (в том числе во вложенных `:onerror`; не `err`, `errName`, `errorName`, `errUpd`, `errAdd`):
 
 ```routeros
 :onerror errorDescr in={
     :set state "Uploading $buFile to FTP ($ftpRoot$buFile)"
-    $globalNoteMe value=$state
+    $globalNoteMe value=$state verbose=true
     $globalCallFetch $asyncCmd
-    $globalNoteMe value="Done"
+    $globalNoteMe value="Done" verbose=true
 } do={
     :set state "Error When $state: $errorDescr"
     $globalNoteMe value=$state
@@ -595,9 +597,10 @@ $globalNoteMe value=$inf
 }
 ```
 
+- Footer `$globalNoteMe value=$inf` — always-on quiet-маркер окончания (без `verbose=`), вместе со `Starting script` из guard.
 - Варианты сохраняются структурно: три исхода через `payLoad` (`doUpdateExternalDNS`), `/system reboot` вместо `:error` (`doCPUHighLoadReboot`) — текст ошибки там начинается с `✗ FAILED`, без `Warn When`.
 - Дополнительное `:set inf` перед Telegram (`doPushStatsToInfluxDB`) убирается.
-- Для долгоживущих циклов (`doStaleTSLConnectionsTrack`) footer недостижим; оставить heartbeat.
+- Для долгоживущих циклов (`doStaleTSLConnectionsTrack`) footer недостижим; heartbeat — `$globalNoteMe value="tracking.." verbose=true`.
 
 ### 4.5. Форматирование
 
