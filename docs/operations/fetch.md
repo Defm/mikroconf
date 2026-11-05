@@ -22,16 +22,16 @@
 
 Один файл за вызов. Списка, маски и каталога у `/tool fetch` нет. Запись changelog 7.24 «hint file list» — подсказка имён в консоли. Собрать пачку в один fetch нельзя.
 
-Аргументы позиционные: `$1` = локальный `src`, `$2` = удалённый `dst` (имена `src=`/`dst=` внутри `:global do=` на полевом 7.x приходили пустыми). Сервер, порт, пользователь и пароль метод берёт из `$globalSecret` (`SSH_SERVER`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD`). Пароль в `$globalNoteMe` не пишется.
+Аргументы позиционные: `$1` = локальный `src`, `$2` = удалённый `dst` (имена `src=`/`dst=` внутри `:global do=` на полевом 7.x приходили пустыми). Сервер, порт, пользователь и пароль метод берёт из `$globalSecret` (`SSH_SERVER`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD`). Команда — раздельная форма: `mode=sftp address= port= user= src-path= dst-path= upload=yes`. Перед запуском в лог пишется `Call: /tool fetch …` без `password=`, как у `$globalCallSSH`.
 
-Запуск — фоновый `[:execute file=…]` с `idle-timeout=30s` на самом fetch. Родитель до 30 секунд раз в секунду пишет `waiting Ns` и читает протокол. `:parse` и синхронный fetch здесь не используются: на 7.24 номер `sftp status` виден в консольном протоколе, а не в карте `as-value`.
+Запуск — фоновый `[:execute file=…]` с `idle-timeout=90s` на самом fetch. Родитель до 90 секунд раз в секунду пишет `waiting Ns` и читает протокол. `:parse` и синхронный fetch здесь не используются: на 7.24 номер `sftp status` виден в консольном протоколе, а не в карте `as-value`. Лимит 30s оказался мал для ~1MB `.backup`/`.unsafe.rsc` на WAN (одна сессия на файл).
 
 Контракт как у `$globalCallSSH`: `""` при успехе, иначе текст ошибки.
 
 Два исхода, в которых `$globalCallFetch` молчит, здесь всегда ошибка:
 
 - Job уже исчез, в протоколе `status: failed`, `sftp status: 20`, `timed out` или `timeout`. Возврат начинается с `sftp-session-cut` и содержит протокол. Job уже кончился, снимать нечего.
-- Прошло 30 с, job ещё есть. Сначала `/system script job remove` по id от `:execute`, затем `sftp-session-cut still running after …`. Сессия после потолка не остаётся. Передача, которая на 30-й секунде ещё идёт, обрывается.
+- Прошло 90 с, job ещё есть. Сначала `/system script job remove` по id от `:execute`, затем `sftp-session-cut still running after …`. Сессия после потолка не остаётся. Передача, которая на 90-й секунде ещё идёт, обрывается.
 
 Остальные ветки того же цикла:
 
