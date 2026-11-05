@@ -1,16 +1,3 @@
-.DS_Store
-*.swp
-*.tmp
-*.log
-__pycache__/
-*.py[cod]
-node_modules/
-.venv/
-.cache/
-*.db
-*.db-shm
-*.db-wal
-
 # RouterOS backup/export artifacts
 *.backup
 *.npk
@@ -23,17 +10,13 @@ node_modules/
 *.cer
 id_rsa*
 id_ed25519*
-rawconf_*.rsc
-*.safe.rsc
 /BACKUP-*
 
 
 # Private working areas: keep documentation only
 bin/*
 !bin/README.md
-src/config/*
 !src/config/README.md
-
 
 # Local configuration
 .env
