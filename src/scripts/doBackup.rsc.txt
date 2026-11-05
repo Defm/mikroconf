@@ -12,6 +12,7 @@ $globalScriptBeforeRun $scriptname
 :global globalOnPrimaryPartition
 :local itsOk true
 :local state ""
+:local firstError ""
 
 :local rosVer [:tonum [:pick [/system resource get version] 0 1]]
 :local sysver "NA"
@@ -98,6 +99,7 @@ $globalScriptBeforeRun $scriptname
 } do={
     :set state "Error When $state: $errorDescr"
     $globalNoteMe value=$state
+    :if ([:len $firstError] = 0) do={ :set firstError $state }
     :set itsOk false
 }
 
@@ -131,6 +133,7 @@ $globalScriptBeforeRun $scriptname
                     } do={
                         :set state "Error When $state: $errorDescr"
                         $globalNoteMe value=$state
+                        :if ([:len $firstError] = 0) do={ :set firstError $state }
                         :set itsOk false
                         :if ($errorDescr ~ "^sftp-session-cut") do={
                             :set stopBatch true
@@ -157,6 +160,7 @@ $globalScriptBeforeRun $scriptname
                     } do={
                         :set state "Error When $state: $errorDescr"
                         $globalNoteMe value=$state
+                        :if ([:len $firstError] = 0) do={ :set firstError $state }
                         :set itsOk false
                     }
                 }
@@ -183,6 +187,7 @@ $globalScriptBeforeRun $scriptname
         } do={
             :set state "Error When $state: $errorDescr"
             $globalNoteMe value=$state
+            :if ([:len $firstError] = 0) do={ :set firstError $state }
             :set itsOk false
             :if ($errorDescr ~ "^sftp-session-cut") do={
                 :set stopBatch true
@@ -197,7 +202,7 @@ $globalScriptBeforeRun $scriptname
 }
 
 :if (!$itsOk) do={
-    :set inf "✗ FAILED $scriptname on $sysname: $state"
+    :set inf "✗ FAILED $scriptname on $sysname: $firstError"
 }
 
 $globalNoteMe value=$inf
