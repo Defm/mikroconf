@@ -20,6 +20,7 @@
 - Стиль скриптов — по `docs/style-canon.md` (раздел 4 обязателен для новых фич и рефакторинга).
 - Сохраняйте расширение `.rsc.txt`, имя RouterOS-скрипта и совместимость с установленными версиями.
 - Изменение write-capable логики требует ручного review и плана отката.
+- Рабочая ветка разработки и push — `_autobranch` (не `master`: он protected и только через PR). Локально ведите работу на `_autobranch` и пушьте туда.
 - Release URL: `Defm/mikroconf` / `master/src/scripts`. Host `/REPO/raw` — clone для Docker gitwatch; dump пишет в `REPO/raw/src/scripts/` и коммитит в `_autobranch` (не в `master`). Не возвращайте исторический `mikrobackups` / `master/scripts` без явного решения оператора.
 
 ## Проверка
