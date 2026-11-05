@@ -613,7 +613,9 @@
         :local logName ("RAM/" . [$globalTimestamp] . "-" . [:rndstr length=6 from="HtsP2n8qZ"] . ".log.txt")
         # no \" inside "..." — RouterOS ends the string at the inner quote
         # 90s: ~1MB WAN upload can exceed the old 30s idle/parent wait
-        :local fetchCmd "/tool fetch url=sftp://$ftpServer:$ftpPort/$dst src-path=$src user=$ftpUser password=$ftpPass upload=yes idle-timeout=90s"
+        :local fetchCmd "/tool fetch mode=sftp address=$ftpServer port=$ftpPort user=$ftpUser password=$ftpPass src-path=$src dst-path=$dst upload=yes idle-timeout=90s"
+        :local state "Call: /tool fetch mode=sftp address=$ftpServer port=$ftpPort user=$ftpUser src-path=$src dst-path=$dst upload=yes idle-timeout=90s"
+        $globalNoteMe value=$state verbose=true
 
         /file remove [find where name=$logName]
         :local jobId [:execute file=$logName script=$fetchCmd]
