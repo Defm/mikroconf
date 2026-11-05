@@ -78,3 +78,4 @@
 :set inf "$scriptname on $sysname: system restart detected"
 :if (any $globalNoteMe) do={ $globalNoteMe value=$inf }
 :if (any $globalTgMessage) do={ $globalTgMessage value=$inf }
+

@@ -173,6 +173,7 @@
 
         :global globalNoteMe
         :global globalSecret
+        :global globalTimestamp
 
         :local tToken "$[$globalSecret get TELEGRAM_TOKEN]"
         :local tGroupId "$[$globalSecret get TELEGRAM_CHAT_ID]"
@@ -187,7 +188,38 @@
         $globalNoteMe value=$tgMessage
 
         :onerror errorDescr in={
-            /tool fetch http-method=post mode=https url="$tUrl" http-data="text=$tgMessage" keep-result=no
+            :local logName ("RAM/" . [$globalTimestamp] . "-" . [:rndstr length=6 from="HtsP2n8qZ"] . ".telegram.log.txt")
+            :local fetchCmd "/tool fetch http-method=post mode=https url=\"$tUrl\" http-data=\"text=$tgMessage\" keep-result=no"
+
+            /file remove [find where name=$logName]
+            :local jobId [:execute file=$logName script=$fetchCmd]
+            :local ticks 0
+            :local timedOut false
+
+            :while (([:len [/system script job find where .id=$jobId]] = 1) && ($ticks < 30)) do={
+                :set ticks ($ticks + 1)
+                :delay 1s
+            }
+
+            :if ([:len [/system script job find where .id=$jobId]] = 1) do={
+                /system script job remove $jobId
+                :set timedOut true
+            }
+
+            :local protocol ""
+            :local logFile [/file find where name=$logName]
+            :if ([:len $logFile] = 1) do={
+                :set protocol [/file get $logFile contents]
+                /file remove $logFile
+            }
+
+            :if ($timedOut) do={
+                :error "Telegram fetch timed out after 30s: $protocol"
+            }
+
+            :if (!($protocol ~ "status: finished")) do={
+                :error "Telegram fetch failed: $protocol"
+            }
         } do={
             :set state "Telegram notify error: $errorDescr"
             $globalNoteMe value=$state
@@ -812,3 +844,4 @@
         :return ""
     }
 }
+
