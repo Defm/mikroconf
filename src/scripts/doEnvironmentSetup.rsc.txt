@@ -612,14 +612,15 @@
         :local ftpPass "$[$globalSecret get SSH_PASSWORD]"
         :local logName ("RAM/" . [$globalTimestamp] . "-" . [:rndstr length=6 from="HtsP2n8qZ"] . ".log.txt")
         # no \" inside "..." — RouterOS ends the string at the inner quote
-        :local fetchCmd "/tool fetch url=sftp://$ftpServer:$ftpPort/$dst src-path=$src user=$ftpUser password=$ftpPass upload=yes idle-timeout=30s"
+        # 90s: ~1MB WAN upload can exceed the old 30s idle/parent wait
+        :local fetchCmd "/tool fetch url=sftp://$ftpServer:$ftpPort/$dst src-path=$src user=$ftpUser password=$ftpPass upload=yes idle-timeout=90s"
 
         /file remove [find where name=$logName]
         :local jobId [:execute file=$logName script=$fetchCmd]
         :local ticks 0
         :local protocol ""
 
-        :while (([:len [/system script job find where .id=$jobId]] = 1) && ($ticks < 30)) do={
+        :while (([:len [/system script job find where .id=$jobId]] = 1) && ($ticks < 90)) do={
             :set ticks ($ticks + 1)
             :delay 1s
             :if ([:len [/file find where name=$logName]] = 1) do={
