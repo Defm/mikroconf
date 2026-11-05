@@ -257,12 +257,12 @@ $globalScriptBeforeRun $scriptname
 }
 
 :set state "IPSec/L2TP Connection Monitor Started"
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 
 :local policiesOnline [/ip/ipsec/policy find (!template !disabled)]
 
 :set state ("Found " . [:len $policiesOnline] . " IPSec policies to investigate")
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 
 :local stats {
     "totalPolicies"=[:len $policiesOnline];
@@ -303,7 +303,7 @@ $globalNoteMe value=$state
         :set ($stats->"testedPeers") (($stats->"testedPeers") + 1)
 
         :set state "Examine Peer $peerName ($dstAddr)"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         # 1) Looking for host L2TP session
         :set l2tpInfo [$findL2tpSession $dstAddr]
@@ -355,7 +355,7 @@ $globalNoteMe value=$state
             }
 
             :set state ("Active " . ($l2tpInfo->"type") . " L2TP host-tunnel found for IPSEC: " . ($l2tpInfo->"peer"))
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :local l2tpDstAddr ($l2tpInfo->"remoteIP")
             :local l2tpSrcAddr ($l2tpInfo->"localIP")
@@ -363,7 +363,7 @@ $globalNoteMe value=$state
             :set l2tpIf ($l2tpInfo->"peer")
 
             :set state "Looking for specific (l2tp) routes to $l2tpDstAddr from $l2tpSrcAddr"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             # we need specific route in the main table to that subnet
             :local l2tpRouteCheck [$checkRoute $l2tpDstAddr $l2tpSrcAddr]
@@ -377,7 +377,7 @@ $globalNoteMe value=$state
 
             :set l2tpRouteIf ($l2tpRouteCheck->"interface")
             :set state ("Found specific route (l2tp) to $l2tpDstAddr from $l2tpSrcAddr via " . ($l2tpRouteCheck->"nexthop") . " ($l2tpRouteIf)")
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :set policyDstIp $l2tpDstAddr
             :set policySrcIp $l2tpSrcAddr
@@ -394,12 +394,12 @@ $globalNoteMe value=$state
             }
 
             :set state "No active L2TP host-tunnel found for IPSEC peer - $peerName (pure IPSEC, tunneled=$isTunnel)"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
         }
 
         # 2) Policy route check
         :set state "Looking for specific (policy) routes to $policyDstIp from $policySrcIp"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         # we need specific route in the main table to that subnet
         :local policyRouteCheck [$checkRoute $policyDstIp $policySrcIp]
@@ -413,13 +413,13 @@ $globalNoteMe value=$state
 
         :set policyRouteIf ($policyRouteCheck->"interface")
         :set state ("Found specific route (policy) to $policyDstIp from $policySrcIp via " . ($policyRouteCheck->"nexthop") . " ($policyRouteIf)")
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         # 3) both routes have to be via the same catched L2TP interface/gw
         :if ($mustUseL2tp) do={
 
             :set state "Checking policy-l2tp routes' interfaces match"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
             :if (($policyRouteIf != $l2tpIf) or ($l2tpRouteIf != $l2tpIf)) do={
                 :set state "Found routes mismatch (policy via $policyRouteIf, l2tp via $l2tpRouteIf, expected $l2tpIf)"
@@ -430,22 +430,22 @@ $globalNoteMe value=$state
             }
 
             :set state "Found routes' interfaces are the same on L2TP $l2tpIf and Policy $peerName"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
 
         } else={
             :set state "Skip policy-l2tp routes' interfaces match - no active L2TP host-tunnel available"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
         }
 
         # 4) ping
         :set state "Pinging remote IP $policyDstIp"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         :local pingResult [$testConnectivity $policyDstIp $policySrcIp ($config->"pingCount") $pingTrigger ($config->"pingRetryDelay")]
         :if (($pingResult->"success")) do={
 
             :set state ("PASS: Ping test successful " . ($pingResult->"received") . "/" . ($pingResult->"required") . " (" . ($pingResult->"attempts") . " attempt(s))")
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
             :set ($stats->"passedPeers") (($stats->"passedPeers") + 1)
 
             # :set ($globalPeerRetryCount->$dstAddr) 0
@@ -461,7 +461,7 @@ $globalNoteMe value=$state
         }
 
         :set state "Continue next"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
     } do={
 
@@ -485,14 +485,14 @@ $globalNoteMe value=$state
         }
 
         :set state "Continue next (in case of skip or errors)"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
         :log warning $state
     }
 }
 
 # post-check validation
 :set state "Waiting for system to come up after autorecovery"
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 
 :delay 5s
 :local policiesOnlineAfter [/ip/ipsec/policy find active ph2-state=established]
@@ -500,16 +500,16 @@ $globalNoteMe value=$state
 
 # summary
 :set state ("Total policies: " . ($stats->"totalPolicies"))
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 
 :set state ("Tested: " . ($stats->"testedPeers") . " | Passed: " . ($stats->"passedPeers") . " | Failed: " . ($stats->"failedPeers"))
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 
 :set state ("Recovered: " . ($stats->"recoveredPeers") . " | Skipped: " . ($stats->"skippedPeers"))
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 
 :set state ("Policies after check: Online=" . [:len $policiesOnlineAfter] . " | Offline=" . [:len $policiesOfflineAfter])
-$globalNoteMe value=$state
+$globalNoteMe value=$state verbose=true
 
 :local errorMessage ""
 

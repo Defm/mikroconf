@@ -24,10 +24,10 @@ $globalScriptBeforeRun $scriptname
     :local freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])
 
     :set state "Checking for free CPU/RAM resources over $ticks times to be more than $cpuWarnLimit%/$ramWarnLimit% each time"
-    $globalNoteMe value=$state
+    $globalNoteMe value=$state verbose=true
 
     :set state "Step 0: free CPU/RAM $freeCpu%/$freeRam%, going deeper.."
-    $globalNoteMe value=$state
+    $globalNoteMe value=$state verbose=true
 
     :if ($freeRam < $ramWarnLimit or $freeCpu < $cpuWarnLimit) do={
         # this tick is high-HighLoad
@@ -43,7 +43,7 @@ $globalScriptBeforeRun $scriptname
             :set freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])
 
             :set state "Recalc stats"
-            $globalNoteMe value=$state
+            $globalNoteMe value=$state verbose=true
         }
 
         :if (!$itsOk and ($freeRam < $ramWarnLimit or $freeCpu < $cpuWarnLimit)) do={

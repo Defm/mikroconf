@@ -23,7 +23,7 @@ $globalScriptBeforeRun $scriptname
 
     # parsing the current IPv4 result
     :set state "Requesting cloud-DNS public address"
-    $globalNoteMe value=$state
+    $globalNoteMe value=$state verbose=true
     /ip cloud force-update
     :delay 7s
     :set ipv4 [/ip cloud get public-address]
@@ -31,7 +31,7 @@ $globalScriptBeforeRun $scriptname
     :if ([:typeof [:toip $ipv4]] != "ip") do={
         :error "No cloud-DNS IP received"
     }
-    $globalNoteMe value="Done"
+    $globalNoteMe value="Done" verbose=true
 
     :if (($globalLastIpv4 != $ipv4) or $useForcedRefresh) do={
 
@@ -59,29 +59,29 @@ $globalScriptBeforeRun $scriptname
         :local asyncCmd ":global globalPolicyComment $policyComment"
 
         :set state "Calling --- $asyncCmd"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
         :set errorDef [$globalCallSSH $asyncCmd]
         :if ([:len $errorDef] > 0) do={ :error $errorDef }
         :set state "RPC: set remote preferred policy comment variable: ($policyComment) - Ok"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         :set asyncCmd ":global globalRemoteIp $ipv4/32"
 
         :set state "Calling --- $asyncCmd"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
         :set errorDef [$globalCallSSH $asyncCmd]
         :if ([:len $errorDef] > 0) do={ :error $errorDef }
         :set state "RPC: set remote preferred policy IP variable: ($ipv4) - Ok"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         :set asyncCmd "/system script run doUpdatePoliciesRemotely"
 
         :set state "Calling --- $asyncCmd"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
         :set errorDef [$globalCallSSH $asyncCmd]
         :if ([:len $errorDef] > 0) do={ :error $errorDef }
         :set state "RPC: call remote script: doUpdatePoliciesRemotely - Ok"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
     }
 
 } do={
