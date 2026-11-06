@@ -1,4 +1,4 @@
-# 2026-11-05 19:53:42 by RouterOS 7.25.1
+# 2026-11-06 21:13:05 by RouterOS 7.25.1
 # system id = pEDSXaHXN3J
 #
 # custom default configuration script installed
@@ -199,7 +199,7 @@
 /interface veth add address=172.17.0.2/28 container-mac-address=26:8A:0C:A0:3E:3B dhcp=no gateway=172.17.0.1 gateway6="" mac-address=26:8A:0C:A0:3E:3A name=veth-telemt
 /interface veth add address=172.17.0.3/28 container-mac-address=30:A6:92:7E:80:32 dhcp=no gateway=172.17.0.1 gateway6="" mac-address=30:A6:92:7E:80:31 name=veth-telemt-webui
 /interface wireguard add listen-port=65114 mtu=1420 name=wg-to-capax
-/container add check-certificate=no cmd=/etc/telemt/config.toml comment="MTProto telegram proxy" dns=192.168.97.1 envlists=TELEMT_ENVS healthcheck-cmd=CMD,/app/telemt,healthcheck,/etc/telemt/config.toml,--mode,liveness healthcheck-status="failed with exit code 1, tries 471/3, output: [telemt] healthcheck failed: invalid HTTP response headers\
+/container add check-certificate=no cmd=/etc/telemt/config.toml comment="MTProto telegram proxy" dns=192.168.97.1 envlists=TELEMT_ENVS healthcheck-cmd=CMD,/app/telemt,healthcheck,/etc/telemt/config.toml,--mode,liveness healthcheck-status="failed with exit code 1, tries 3509/3, output: [telemt] healthcheck failed: invalid HTTP response headers\
     \n" hostname=telemt interface=veth-telemt layer-dir=/docker/layers logging=yes memory-high=256.0MiB mountlists=TELEMT_VOLUMES name=telemt remote-image=ghcr.io/telemt/telemt:latest root-dir=/docker/runs/telemt start-on-boot=yes user=0:0 workdir=/tmp
 /container add check-certificate=no comment="MTProto telegram proxy web panel" dns=192.168.97.1 hostname=telemt-webui interface=veth-telemt-webui layer-dir=/docker/layers logging=yes memory-high=256.0MiB mountlists=TELEMT_WEBUI_VOLUMES name=telemt-webui remote-image=ghcr.io/amirotin/telemt_panel:latest root-dir=/docker/runs/telemt-webui start-on-boot=yes
 /container add check-certificate=no comment="Caddy web server and reverse proxy" dns=192.168.97.1 envlists=CADDY_ENVS hostname=caddy interface=veth-caddy layer-dir=/docker/layers logging=yes memory-high=200.0MiB mountlists=CADDY_VOLUMES name=caddy remote-image=caddy:latest root-dir=/docker/runs/caddy start-on-boot=yes user=0:0 workdir=/srv
@@ -599,8 +599,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     185.13.148.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        03:51:59  \
-    \nTime:        2026-11-05 19:50:13  \
+    \nUptime:        1d05:11:58  \
+    \nTime:        2026-11-06 21:10:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -834,6 +834,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doRandomGen owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive source=":local sysname [/system identity get name]\
     \n:local scriptname \"doRandomGen\"\
@@ -922,6 +923,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doCertificatesIssuing owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doCertificatesIssuing\"\r\
@@ -1058,6 +1060,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\r\
     \n    :error \$inf\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doFreshTheScripts owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doFreshTheScripts\"\
@@ -1140,6 +1143,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doEnvironmentSetup owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="# Example call\
     \n# \$globalNoteMe value=\"12345\"\
@@ -1987,6 +1991,7 @@ set [ find default=yes ] advertise-dns=yes
     \n        :return \"\"\
     \n    }\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doNetwatchHost owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="# fill it inside netwatch script\
     \n:global globalNetwatchHostName\
@@ -2053,6 +2058,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doStartupScript owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doStartupScript\"\
@@ -2134,9 +2140,11 @@ set [ find default=yes ] advertise-dns=yes
     \n:set inf \"\$scriptname on \$sysname: system restart detected\"\
     \n:if (any \$globalNoteMe) do={ \$globalNoteMe value=\$inf }\
     \n:if (any \$globalTgMessage) do={ \$globalTgMessage value=\$inf }\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doEnvironmentClearance owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="# clear all global variables (called before doEnvironmentSetup, so no guard here)\r\
     \n/system script environment remove [find]\r\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doFlushLogs owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doFlushLogs\"\r\
@@ -2183,6 +2191,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\r\
     \n    :error \$inf\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doImperialMarch owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doImperialMarch\"\r\
@@ -2276,6 +2285,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\r\
     \n    :error \$inf\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doIPSECPunch owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doIPSECPunch\"\
@@ -2821,6 +2831,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doUpdatePoliciesRemotely owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doUpdatePoliciesRemotely\"\
@@ -2899,6 +2910,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doUpdateExternalDNS owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doUpdateExternalDNS\"\
@@ -3011,6 +3023,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doCoolConsole owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doCoolConsole\"\
@@ -3176,6 +3189,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add dont-require-permissions=yes name=doCloudBackup owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doCloudBackup\"\
@@ -3243,6 +3257,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system logging action set 0 memory-lines=3000
 /system logging action set 1 disk-file-name=journal disk-lines-per-file=500
