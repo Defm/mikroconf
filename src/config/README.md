@@ -6,4 +6,4 @@
 
 Полные restore-экспорты с секретами и двоичные `.backup` живут в `bin/`, не здесь.
 Добавление вручную подготовленных шаблонов — только после review по
-`docs/operations/raw-policy.md`. В Git по умолчанию tracked только этот README.
+`doc/operations/raw-policy.md`. В Git по умолчанию tracked только этот README.

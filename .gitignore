@@ -22,6 +22,12 @@ bin/*
 .env
 .env.*
 !.env.example
+.dev.env
+!.dev.env.example
 inventory.yml
 credentials.*
-!docs/security/credentials.md
+!doc/security/credentials.md
+
+# Local tool caches
+.cache/
+__pycache__/

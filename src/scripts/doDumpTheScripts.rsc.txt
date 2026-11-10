@@ -97,12 +97,12 @@ $globalScriptBeforeRun $scriptname
     }
 }
 
-:local dumpPath "$ramDiskName/$ramSubDir"
+:local dumpPath ($ramDiskName . "/" . $ramSubDir)
 
-$globalNoteMe value="Clearing RAMdisk.."
+$globalNoteMe value="Clearing RAMdisk.." verbose=true
 /file remove [/file find where name~"$dumpPath"]
 
-$globalNoteMe value="Scripts source export.."
+$globalNoteMe value="Scripts source export.." verbose=true
 
 :foreach scriptId in=[/system script find] do={
 
@@ -112,7 +112,7 @@ $globalNoteMe value="Scripts source export.."
         :local scriptName [/system script get $scriptId name]
         :local scriptSize [:len $scriptSource]
 
-        :local scriptPath "$dumpPath$scriptName.rsc.txt"
+        :local scriptPath ($dumpPath . $scriptName . ".rsc.txt")
 
         :set globalScriptId $scriptId
 
@@ -126,11 +126,11 @@ $globalNoteMe value="Scripts source export.."
         /file add name=$scriptPath contents=""
 
         :set state "Exporting '$scriptName' to '$scriptPath'"
-        $globalNoteMe value=$state
+        $globalNoteMe value=$state verbose=true
 
         /execute script=":global globalScriptId; :put [/system script get $globalScriptId source];" file=$scriptPath
 
-        $globalNoteMe value="Done"
+        $globalNoteMe value="Done" verbose=true
 
     } do={
         :set state "Error When $state: $errorDescr"
@@ -141,15 +141,17 @@ $globalNoteMe value="Scripts source export.."
 }
 
 # lots of tiny SFTP uploads look like bruteforce on CHR without knockknock
+:set state "Opening firewall for SFTP (knockknock)"
+$globalNoteMe value=$state verbose=true
 :local errorDef [$globalKnockKnock $scriptname]
 :if ([:len $errorDef] > 0) do={
-    :set state $errorDef
+    :set state "Error When $state: $errorDef"
     $globalNoteMe value=$state
     :if ([:len $firstError] = 0) do={ :set firstError $state }
     :set itsOk false
 }
 
-$globalNoteMe value="Scripts source pushing.."
+$globalNoteMe value="Scripts source pushing.." verbose=true
 
 :if ($itsOk) do={
 
@@ -172,12 +174,12 @@ $globalNoteMe value="Scripts source pushing.."
                     :onerror errorDescr in={
 
                         :set state "Uploading $scriptPath to SFTP - $dst"
-                        $globalNoteMe value=$state
+                        $globalNoteMe value=$state verbose=true
 
                         :local errorDef [$globalCallSftp $scriptPath $dst]
                         :if ([:len $errorDef] > 0) do={ :error $errorDef }
 
-                        $globalNoteMe value="Done"
+                        $globalNoteMe value="Done" verbose=true
 
                     } do={
                         :set state "Error When $state: $errorDescr"
@@ -199,14 +201,14 @@ $globalNoteMe value="Scripts source pushing.."
                     :onerror errorDescr in={
 
                         :set state "Clearing $dst on SSH-disk"
-                        $globalNoteMe value=$state
+                        $globalNoteMe value=$state verbose=true
                         /file remove [/file find where name=$dst type!=directory]
 
                         :set state "Copying $scriptPath to SSH-disk - $dst"
-                        $globalNoteMe value=$state
+                        $globalNoteMe value=$state verbose=true
                         /file copy $scriptPath name=$dst
 
-                        $globalNoteMe value="Done"
+                        $globalNoteMe value="Done" verbose=true
 
                     } do={
                         :set state "Error When $state: $errorDescr"
@@ -222,7 +224,7 @@ $globalNoteMe value="Scripts source pushing.."
 
 :delay 5s
 
-$globalNoteMe value="Housekeeping.."
+$globalNoteMe value="Housekeeping.." verbose=true
 /file remove [/file find where name~"$dumpPath"]
 
 :local inf ""

@@ -1,4 +1,4 @@
-# 2026-11-05 21:48:04 by RouterOS 7.25.1
+# 2026-11-10 15:20:46 by RouterOS 7.25.1
 # software id = 59DY-JI10
 #
 # model = RBcAPGi-5acD2nD
@@ -73,8 +73,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     192.168.90.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        02:53:00  \
-    \nTime:        2026-11-05 21:43:04  \
+    \nUptime:        4d20:23:00  \
+    \nTime:        2026-11-10 15:13:04  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -188,6 +188,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\r\
     \n    :error \$inf\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add comment="Updates address-list that contains my external IP" dont-require-permissions=yes name=doUpdateExternalDNS owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doUpdateExternalDNS\"\
@@ -300,6 +301,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add comment="Runs once on startup and makes console welcome message pretty" dont-require-permissions=yes name=doCoolConsole owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doCoolConsole\"\
@@ -465,6 +467,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add comment="Runs at midnight to have less flashes at living room (swith off all LEDs)" dont-require-permissions=yes name=doLEDoff owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doLEDoff\"\r\
@@ -502,6 +505,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\r\
     \n    :error \$inf\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add comment="Runs at morning to get flashes back (swith on all LEDs)" dont-require-permissions=yes name=doLEDon owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doLEDon\"\r\
@@ -539,9 +543,11 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\r\
     \n    :error \$inf\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add comment="Flushes all global variables on Startup" dont-require-permissions=yes name=doEnvironmentClearance owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="# clear all global variables (called before doEnvironmentSetup, so no guard here)\r\
     \n/system script environment remove [find]\r\
+    \n\r\
     \n"
 /system script add comment="Startup script" dont-require-permissions=yes name=doStartupScript owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doStartupScript\"\
@@ -623,6 +629,7 @@ set [ find default=yes ] advertise-dns=yes
     \n:set inf \"\$scriptname on \$sysname: system restart detected\"\
     \n:if (any \$globalNoteMe) do={ \$globalNoteMe value=\$inf }\
     \n:if (any \$globalTgMessage) do={ \$globalTgMessage value=\$inf }\
+    \n\r\
     \n"
 /system script add comment="Setups global functions, called by the other scripts (runs once on startup)" dont-require-permissions=yes name=doEnvironmentSetup owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="# Example call\
     \n# \$globalNoteMe value=\"12345\"\
@@ -1430,9 +1437,58 @@ set [ find default=yes ] advertise-dns=yes
     \n}\
     \n\
     \n# Example call\
+    \n# \$globalApplyKnock ip=1.2.3.4 comment=\"doBackup\"\
+    \n# opens alist-fw-knockknock and clears stale SSH stages; RPC operation - throws on failure\
+    \n:global globalApplyKnock\
+    \n:if (!any \$globalApplyKnock) do={\
+    \n    :global globalApplyKnock do={\
+    \n\
+    \n        :global globalNoteMe\
+    \n\
+    \n        # snapshot invocation-scoped named parameters; SSH command literals arrive as strings\
+    \n        :local knockIp [:toip \$ip]\
+    \n        :local knockComment [:tostr \$comment]\
+    \n        :local state \"Validating remote knock parameters\"\
+    \n\
+    \n        :onerror errorDescr in={\
+    \n\
+    \n            :if ([:typeof \$knockIp] != \"ip\") do={\
+    \n                :error \"remote knock parameter has invalid IP\"\
+    \n            }\
+    \n\
+    \n            :if ([:len \$knockComment] = 0) do={\
+    \n                :error \"remote knock parameter has empty comment\"\
+    \n            }\
+    \n\
+    \n            :set state \"Opening SFTP backdoor for \$knockIp\"\
+    \n            \$globalNoteMe value=\$state verbose=true\
+    \n\
+    \n            /ip firewall address-list {\
+    \n                remove [find list=alist-fw-knockknock address=\$knockIp]\
+    \n                add address=\$knockIp list=alist-fw-knockknock comment=\$knockComment timeout=5m dynamic=yes\
+    \n\
+    \n                # the SSH request carrying this call may have advanced a stale stage\
+    \n                remove [find list=alist-fw-ssh-stage1 address=\$knockIp]\
+    \n                remove [find list=alist-fw-ssh-stage2 address=\$knockIp]\
+    \n                remove [find list=alist-fw-ssh-stage3 address=\$knockIp]\
+    \n            }\
+    \n\
+    \n            \$globalNoteMe value=\"Done\" verbose=true\
+    \n\
+    \n        } do={\
+    \n            :set state \"remote knock failed when \$state: \$errorDescr\"\
+    \n            \$globalNoteMe value=\$state\
+    \n            :error \$state\
+    \n        }\
+    \n\
+    \n        :return \"\"\
+    \n    }\
+    \n}\
+    \n\
+    \n# Example call\
     \n# :local errorDef [\$globalKnockKnock \$scriptname]\
     \n# :local errorDef [\$globalKnockKnock \$scriptname \"1.2.3.4\"]\
-    \n# opens alist-fw-knockknock on CHR for our public IP (or \$2) via SSH, then waits 15s\
+    \n# calls globalApplyKnock on CHR with invocation-scoped parameters, then waits 15s\
     \n# returns \"\" on success, error text otherwise\
     \n:global globalKnockKnock\
     \n:if (!any \$globalKnockKnock) do={\
@@ -1449,7 +1505,7 @@ set [ find default=yes ] advertise-dns=yes
     \n        :local wanIp [/ip cloud get public-address]\
     \n        :if ([:len \$2] > 0) do={ :set wanIp \$2 }\
     \n\
-    \n        :local asyncCmd \"{ /ip/firewall/address-list remove [find list=alist-fw-knockknock address=\$wanIp]; /ip/firewall/address-list/add address=\$wanIp list=alist-fw-knockknock comment=\$comment timeout=5m dynamic=yes }\"\
+    \n        :local asyncCmd \":global globalApplyKnock; \\\$globalApplyKnock ip=\$wanIp comment=\\\"\$comment\\\"\"\
     \n\
     \n        :local state \"Making SFTP backdoor for \$wanIp via SSH\"\
     \n        \$globalNoteMe value=\$state verbose=true\
@@ -1462,7 +1518,7 @@ set [ find default=yes ] advertise-dns=yes
     \n        :set state \"Success RPC call: \$state\"\
     \n        \$globalNoteMe value=\$state verbose=true\
     \n\
-    \n        # wait while backdoor alist-fw-ssh-stage1 flushes our first-call IP, otherwise we get banned\
+    \n        # remote payload clears stage1/2/3; wait before opening the SFTP batch\
     \n        :set state \"Waiting backdoor for \$wanIp for some seconds..\"\
     \n        \$globalNoteMe value=\$state verbose=true\
     \n        :delay 15s\
@@ -1470,6 +1526,7 @@ set [ find default=yes ] advertise-dns=yes
     \n        :return \"\"\
     \n    }\
     \n}\
+    \n\
     \n"
 /system script add comment="Common backup script to ftp/email using both raw/plain formats. Can also be used to collect Git config history" dont-require-permissions=yes name=doBackup owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doBackup\"\
@@ -1507,6 +1564,8 @@ set [ find default=yes ] advertise-dns=yes
     \n:local useFtpGit true\
     \n:local ftpConfigLatest (\"REPO/raw/src/config/\" . \$sysname . \".safe.rsc\")\
     \n:local configLatestName (\$sysname . \".safe.rsc\")\
+    \n:local ramDiskName \"RAM\"\
+    \n:local ramDiskPrefix (\$ramDiskName . \"/\")\
     \n\
     \n:local sysnote [/system note get note]\
     \n\
@@ -1525,6 +1584,13 @@ set [ find default=yes ] advertise-dns=yes
     \n    :error \$state\
     \n}\
     \n\
+    \n:if ([:len [/disk find where slot=\$ramDiskName and type=\"tmpfs\"]] = 0) do={\
+    \n    :set state \"WARNING: tmpfs '\$ramDiskName' not found - skipping backup!\"\
+    \n    :log error \$state\
+    \n    \$globalNoteMe value=\$state\
+    \n    :error \$state\
+    \n}\
+    \n\
     \n:onerror errorDescr in={\
     \n    :local smtpserv [:resolve \"\$ftpServer\"]\
     \n} do={\
@@ -1536,38 +1602,42 @@ set [ find default=yes ] advertise-dns=yes
     \n\
     \n:local fname \"BACKUP-\$sysname-\$stamp\"\
     \n\
+    \n\$globalNoteMe value=\"Clearing previous backups..\" verbose=true\
+    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
+    \n/file remove [/file find where name~\$configLatestName]\
+    \n\
     \n:onerror errorDescr in={\
     \n\
     \n    :if (\$useSysBackup) do={\
     \n        :set state \"Saving system backup \$fname.backup\"\
-    \n        \$globalNoteMe value=\$state\
-    \n        :if (\$useEncryption) do={ /system backup save name=(\$fname . \".backup\") }\
-    \n        :if (!\$useEncryption) do={ /system backup save dont-encrypt=yes name=(\$fname . \".backup\") }\
+    \n        \$globalNoteMe value=\$state verbose=true\
+    \n        :if (\$useEncryption) do={\
+    \n            # Configure at runtime: \$globalSecret set BACKUP_PASSWORD password=\"YOUR_SECRET\"\
+    \n            :local backupPassword \"\$[\$globalSecret get BACKUP_PASSWORD]\"\
+    \n            /system backup save name=(\$ramDiskName . \"/\" . \$fname . \".backup\") password=\$backupPassword\
+    \n        }\
+    \n        :if (!\$useEncryption) do={ /system backup save dont-encrypt=yes name=(\$ramDiskName . \"/\" . \$fname . \".backup\") }\
     \n        :delay 2s\
-    \n        \$globalNoteMe value=\"System Backup Finished\"\
+    \n        \$globalNoteMe value=\"System Backup Finished\" verbose=true\
     \n    }\
     \n\
     \n    :if (\$useRawExport) do={\
     \n        :set state \"Exporting restore text \$fname.unsafe.rsc\"\
-    \n        \$globalNoteMe value=\$state\
-    \n        /export show-sensitive terse file=(\$fname . \".unsafe.rsc\")\
+    \n        \$globalNoteMe value=\$state verbose=true\
+    \n        /export show-sensitive terse file=(\$ramDiskName . \"/\" . \$fname . \".unsafe.rsc\")\
     \n        :delay 2s\
-    \n        \$globalNoteMe value=\"Done\"\
+    \n        \$globalNoteMe value=\"Done\" verbose=true\
     \n    }\
     \n\
     \n    :if (\$useFtpGit) do={\
     \n        :set state \"Exporting config source \$configLatestName\"\
-    \n        \$globalNoteMe value=\$state\
-    \n        /export terse file=\$configLatestName\
+    \n        \$globalNoteMe value=\$state verbose=true\
+    \n        /export terse file=(\$ramDiskName . \"/\" . \$configLatestName)\
     \n        :delay 2s\
-    \n        \$globalNoteMe value=\"Done\"\
+    \n        \$globalNoteMe value=\"Done\" verbose=true\
     \n    }\
     \n\
     \n    :delay 5s\
-    \n\
-    \n    # SFTP uploads look like bruteforce on CHR without knockknock\
-    \n    :local errorDef [\$globalKnockKnock \$scriptname]\
-    \n    :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
     \n\
     \n} do={\
     \n    :set state \"Error When \$state: \$errorDescr\"\
@@ -1578,38 +1648,46 @@ set [ find default=yes ] advertise-dns=yes
     \n\
     \n:if (\$itsOk) do={\
     \n\
-    \n    :local stopBatch false\
+    \n    # \"break-loop\" leaves remaining uploads after sftp-session-cut\
+    \n    :onerror errorDescr in={\
     \n\
-    \n    :foreach backupFile in=[/file find] do={\
+    \n        :if (\$useFtp) do={\
+    \n            # SFTP uploads look like bruteforce on CHR without knockknock\
+    \n            :set state \"Opening firewall for SFTP (knockknock)\"\
+    \n            \$globalNoteMe value=\$state verbose=true\
+    \n            :local errorDef [\$globalKnockKnock \$scriptname]\
+    \n            :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
+    \n        }\
     \n\
-    \n        :if (!\$stopBatch) do={\
+    \n        :foreach backupFile in=[/file find] do={\
     \n\
     \n            :local buFile [/file get \$backupFile name]\
     \n\
     \n            :if ([:typeof [:find \$buFile \$fname]] != \"nil\") do={\
     \n\
     \n                :local itsUnsafe (\$buFile ~ \".unsafe.rsc\")\
-    \n                :local uploaded (!\$useFtp)\
     \n\
     \n                :if (\$useFtp) do={\
     \n\
     \n                    :onerror errorDescr in={\
     \n                        :local dst \"\$ftpBinRoot\$buFile\"\
+    \n                        :if ([:typeof [:find \$buFile \$ramDiskPrefix]] = \"num\") do={\
+    \n                            :set dst (\"\$ftpBinRoot\" . [:pick \$buFile [:len \$ramDiskPrefix] [:len \$buFile]])\
+    \n                        }\
     \n                        :set state \"Uploading \$buFile to SFTP (\$dst)\"\
-    \n                        \$globalNoteMe value=\$state\
+    \n                        \$globalNoteMe value=\$state verbose=true\
     \n\
     \n                        :local errorDef [\$globalCallSftp \$buFile \$dst]\
     \n                        :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
     \n\
-    \n                        :set uploaded true\
-    \n                        \$globalNoteMe value=\"Done\"\
+    \n                        \$globalNoteMe value=\"Done\" verbose=true\
     \n                    } do={\
     \n                        :set state \"Error When \$state: \$errorDescr\"\
     \n                        \$globalNoteMe value=\$state\
     \n                        :if ([:len \$firstError] = 0) do={ :set firstError \$state }\
     \n                        :set itsOk false\
     \n                        :if (\$errorDescr ~ \"^sftp-session-cut\") do={\
-    \n                            :set stopBatch true\
+    \n                            :error \"break-loop\"\
     \n                        }\
     \n                    }\
     \n                }\
@@ -1617,7 +1695,7 @@ set [ find default=yes ] advertise-dns=yes
     \n                :if (\$useSmtp and !\$itsUnsafe) do={\
     \n                    :onerror errorDescr in={\
     \n                        :set state \"Uploading \$buFile to SMTP\"\
-    \n                        \$globalNoteMe value=\$state\
+    \n                        \$globalNoteMe value=\$state verbose=true\
     \n\
     \n                        # email works in background, delay needed\
     \n                        /tool e-mail send to=\$smtpAddress body=\$smtpBody subject=\$smtpSubject file=\$buFile tls=starttls\
@@ -1629,7 +1707,7 @@ set [ find default=yes ] advertise-dns=yes
     \n                            :error \"e-mail last-status is not succeeded\"\
     \n                        }\
     \n\
-    \n                        \$globalNoteMe value=\"Done\"\
+    \n                        \$globalNoteMe value=\"Done\" verbose=true\
     \n                    } do={\
     \n                        :set state \"Error When \$state: \$errorDescr\"\
     \n                        \$globalNoteMe value=\$state\
@@ -1637,37 +1715,44 @@ set [ find default=yes ] advertise-dns=yes
     \n                        :set itsOk false\
     \n                    }\
     \n                }\
+    \n            }\
+    \n        }\
     \n\
-    \n                :if (\$uploaded) do={\
-    \n                    :delay 2s\
-    \n                    /file remove \$backupFile\
+    \n        :if (\$useFtp and \$useFtpGit) do={\
+    \n            :onerror errorDescr in={\
+    \n                :local configSrc (\$ramDiskName . \"/\" . \$configLatestName)\
+    \n                :if ([:len [/file find name=\$configSrc]] = 0) do={\
+    \n                    :error \"config source \$configLatestName not found\"\
+    \n                }\
+    \n                :set state \"Uploading \$configLatestName to SFTP (\$ftpConfigLatest)\"\
+    \n                \$globalNoteMe value=\$state verbose=true\
+    \n                :local errorDef [\$globalCallSftp \$configSrc \$ftpConfigLatest]\
+    \n                :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
+    \n                \$globalNoteMe value=\"Done\" verbose=true\
+    \n            } do={\
+    \n                :set state \"Error When \$state: \$errorDescr\"\
+    \n                \$globalNoteMe value=\$state\
+    \n                :if ([:len \$firstError] = 0) do={ :set firstError \$state }\
+    \n                :set itsOk false\
+    \n                :if (\$errorDescr ~ \"^sftp-session-cut\") do={\
+    \n                    :error \"break-loop\"\
     \n                }\
     \n            }\
     \n        }\
-    \n    }\
     \n\
-    \n    :if (\$useFtp and \$useFtpGit and !\$stopBatch) do={\
-    \n        :onerror errorDescr in={\
-    \n            :if ([:len [/file find name=\$configLatestName]] = 0) do={\
-    \n                :error \"config source \$configLatestName not found\"\
-    \n            }\
-    \n            :set state \"Uploading \$configLatestName to SFTP (\$ftpConfigLatest)\"\
-    \n            \$globalNoteMe value=\$state\
-    \n            :local errorDef [\$globalCallSftp \$configLatestName \$ftpConfigLatest]\
-    \n            :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
-    \n            \$globalNoteMe value=\"Done\"\
-    \n            /file remove [find name=\$configLatestName]\
-    \n        } do={\
+    \n    } do={\
+    \n        :if (!(\$errorDescr ~ \"^break-loop\")) do={\
     \n            :set state \"Error When \$state: \$errorDescr\"\
     \n            \$globalNoteMe value=\$state\
     \n            :if ([:len \$firstError] = 0) do={ :set firstError \$state }\
     \n            :set itsOk false\
-    \n            :if (\$errorDescr ~ \"^sftp-session-cut\") do={\
-    \n                :set stopBatch true\
-    \n            }\
     \n        }\
     \n    }\
     \n}\
+    \n\
+    \n\$globalNoteMe value=\"Housekeeping..\" verbose=true\
+    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
+    \n/file remove [/file find where name~\$configLatestName]\
     \n\
     \n:local inf \"\"\
     \n:if (\$itsOk) do={\
@@ -1684,6 +1769,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\
     \n"
 /system script add comment="Periodically renews password for some user accounts and sends a email" dont-require-permissions=yes name=doRandomGen owner=automation policy=ftp,reboot,read,write,policy,test,password,sensitive source=":local sysname [/system identity get name]\
     \n:local scriptname \"doRandomGen\"\
@@ -1772,6 +1858,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add comment="Updates chosen scripts from Git/master (sheduler entry with the same name have to exist)" dont-require-permissions=yes name=doFreshTheScripts owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doFreshTheScripts\"\
@@ -1854,6 +1941,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system script add comment="This will check for free CPU/RAM resources over \$ticks times to be more than \$CpuWarnLimit%/\$RamWarnLimit% each time. Will reboot the router when overload" dont-require-permissions=yes name=doCPUHighLoadReboot owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doCPUHighLoadReboot\"\r\
@@ -1955,6 +2043,7 @@ set [ find default=yes ] advertise-dns=yes
     \n        :error \$inf\r\
     \n    }\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add comment="A very special script for CFG restore from *.rsc files (not from backup). This one should be placed at flash/perfectrestore.rsc, your config should be at flash/backup.rsc. Run 'Reset confuguration' with 'no default config', choose 'flash/perfectrestore.rsc' as 'run after reset. Pretty logs will be at flash/import.log and flash/perfectrestore.log" dont-require-permissions=yes name=doPerfectRestore owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="\r\
     \n\r\
@@ -2076,6 +2165,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\r\
     \n    :error \$inf\r\
     \n}\r\
+    \n\r\
     \n"
 /system script add comment="Fast cloud backup" dont-require-permissions=yes name=doCloudBackup owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doCloudBackup\"\
@@ -2143,6 +2233,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\r\
     \n"
 /system logging action set 0 memory-lines=3000
 /system logging action set 1 disk-file-name=journal

@@ -36,6 +36,8 @@ $globalScriptBeforeRun $scriptname
 :local configLatestName ($sysname . ".safe.rsc")
 :local ramDiskName "RAM"
 :local ramDiskPrefix ($ramDiskName . "/")
+:local ramBackupPattern ("^" . $ramDiskPrefix . "BACKUP-" . $sysname . "-")
+:local ramConfigLatest ($ramDiskPrefix . $configLatestName)
 
 :local sysnote [/system note get note]
 
@@ -73,8 +75,8 @@ $globalScriptBeforeRun $scriptname
 :local fname "BACKUP-$sysname-$stamp"
 
 $globalNoteMe value="Clearing previous backups.." verbose=true
-/file remove [/file find where name~("BACKUP-" . $sysname . "-")]
-/file remove [/file find where name~$configLatestName]
+/file remove [/file find where name~$ramBackupPattern]
+/file remove [/file find where name=$ramConfigLatest]
 
 :onerror errorDescr in={
 
@@ -190,13 +192,12 @@ $globalNoteMe value="Clearing previous backups.." verbose=true
 
         :if ($useFtp and $useFtpGit) do={
             :onerror errorDescr in={
-                :local configSrc ($ramDiskName . "/" . $configLatestName)
-                :if ([:len [/file find name=$configSrc]] = 0) do={
+                :if ([:len [/file find name=$ramConfigLatest]] = 0) do={
                     :error "config source $configLatestName not found"
                 }
                 :set state "Uploading $configLatestName to SFTP ($ftpConfigLatest)"
                 $globalNoteMe value=$state verbose=true
-                :local errorDef [$globalCallSftp $configSrc $ftpConfigLatest]
+                :local errorDef [$globalCallSftp $ramConfigLatest $ftpConfigLatest]
                 :if ([:len $errorDef] > 0) do={ :error $errorDef }
                 $globalNoteMe value="Done" verbose=true
             } do={
@@ -221,8 +222,8 @@ $globalNoteMe value="Clearing previous backups.." verbose=true
 }
 
 $globalNoteMe value="Housekeeping.." verbose=true
-/file remove [/file find where name~("BACKUP-" . $sysname . "-")]
-/file remove [/file find where name~$configLatestName]
+/file remove [/file find where name~$ramBackupPattern]
+/file remove [/file find where name=$ramConfigLatest]
 
 :local inf ""
 :if ($itsOk) do={
