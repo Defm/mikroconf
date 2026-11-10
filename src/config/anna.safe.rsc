@@ -1,4 +1,4 @@
-# 2026-11-05 21:45:26 by RouterOS 7.25.1
+# 2026-11-10 12:19:36 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -95,7 +95,7 @@
 /ip dns forwarders add doh-servers=https://cloudflare-dns.com/dns-query name=DOH-CloudFlare
 /ip dns forwarders add doh-servers=https://dns.quad9.net/dns-query name=DOH-Quad9
 /ip dns forwarders add dns-servers=8.8.8.8 name=DNS-Google8 verify-doh-cert=no
-/ip dns forwarders add doh-servers=https://router.comss.one/dns-query name=DOH-Comss
+/ip dns forwarders add doh-servers=https://dns.comss.one/dns-query name=DOH-Comss
 /ip dns forwarders add dns-servers=172.16.0.16 name=Blackhole
 /ip dns static add name=special-remote-CHR-ipsec-policy-comment text=ANNA-OUTER-IP-REMOTE-CONTROLLABLE type=TXT
 /ip dns static add cname=anna.home name=anna type=CNAME
@@ -407,8 +407,6 @@
 /ip dns static add address-list=alist-mangle-byedpi-TORR comment=alist-mangle-byedpi-TORR-20260128-214538 forward-to=DOH-Google match-subdomain=yes name=torrent.by type=FWD
 /ip dns static add address=192.168.90.85 comment=<AUTO:DHCP:main-dhcp-server> name=MbpAlxm.home ttl=5m type=A
 /ip dns static add address-list=alist-mangle-vpn comment="Chrome web ext" forward-to=DOH_Google match-subdomain=yes name=softblade.de type=FWD
-/ip dns static add address-list=alist-mangle-vpn comment=static disabled=yes forward-to=DOH_Google match-subdomain=yes name=aqara.com type=FWD
-/ip dns static add address-list=alist-mangle-vpn comment=static disabled=yes forward-to=DOH_Google match-subdomain=yes name=aqarahome.com type=FWD
 /ip dns static add address=192.168.90.200 comment=<AUTO:DHCP:main-dhcp-server> name=AlxATV.home ttl=5m type=A
 /ip dns static add address=192.168.90.130 comment=<AUTO:DHCP:main-dhcp-server> name=iPad.home ttl=5m type=A
 /ip dns static add address=192.168.90.150 comment=<AUTO:DHCP:main-dhcp-server> name=iPhoneAlxr.home ttl=5m type=A
@@ -519,10 +517,10 @@
 /ip hotspot service-port set ftp disabled=yes
 /ip ipsec profile set [ find default=yes ] dh-group=modp1024 dpd-interval=2m dpd-maximum-failures=5
 /ip ipsec profile add dh-group=modp1024 dpd-interval=2m dpd-maximum-failures=5 enc-algorithm=aes-256 hash-algorithm=sha256 name=ROUTEROS
-/ip ipsec peer add address=185.13.148.14/32 comment="IPSEC IKEv2 VPN PHASE1 (MIS, outer-tunnel encryption, RSA)" exchange-mode=ike2 local-address=10.20.225.166 name=CHR-external profile=ROUTEROS
-/ip ipsec peer add address=10.0.0.1/32 comment="IPSEC IKEv2 VPN PHASE1 (MIS, traffic-only encryption)" local-address=10.0.0.3 name=CHR-internal profile=ROUTEROS
-/ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc,aes-192-cbc,aes-128-cbc,3des lifetime=1h
-/ip ipsec proposal add auth-algorithms=sha256 enc-algorithms=aes-256-cbc name="IPSEC IKEv2 VPN PHASE2 MIKROTIK"
+/ip ipsec peer add address=185.13.148.14/32 comment="IPSEC IKEv2 VPN PHASE1 (MIS, outer-tunnel encryption, RSA)" disabled=yes exchange-mode=ike2 local-address=10.20.225.166 name=CHR-external profile=ROUTEROS
+/ip ipsec peer add address=10.0.0.1/32 comment="IPSEC IKEv2 VPN PHASE1 (MIS, traffic-only encryption)" disabled=yes local-address=10.0.0.3 name=CHR-internal profile=ROUTEROS
+/ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 disabled=yes enc-algorithms=aes-256-cbc,aes-192-cbc,aes-128-cbc,3des lifetime=1h
+/ip ipsec proposal add auth-algorithms=sha256 disabled=yes enc-algorithms=aes-256-cbc name="IPSEC IKEv2 VPN PHASE2 MIKROTIK"
 /ip kid-control add fri=0s-1d mon=0s-1d name=totals sat=0s-1d sun=0s-1d thu=0s-1d tue=0s-1d wed=0s-1d
 /ip kid-control device add mac-address=10:DD:B1:9E:19:5E name=miniAlx user=totals
 /ip kid-control device add mac-address=6C:1F:F7:60:69:71 name=MbpAlxm user=totals
@@ -610,11 +608,11 @@
 /snmp community add addresses=::/0 disabled=yes name=public
 /system clock set time-zone-name=Europe/Moscow
 /system identity set name=anna
-/system note set note="Ipsec:         issues found \
+/system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        03:09:27  \
-    \nTime:        2026-11-05 21:40:12  \
+    \nUptime:        4d17:39:27  \
+    \nTime:        2026-11-10 12:10:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -3874,6 +3872,8 @@
     \n:local useFtpGit true\
     \n:local ftpConfigLatest (\"REPO/raw/src/config/\" . \$sysname . \".safe.rsc\")\
     \n:local configLatestName (\$sysname . \".safe.rsc\")\
+    \n:local ramDiskName \"RAM\"\
+    \n:local ramDiskPrefix (\$ramDiskName . \"/\")\
     \n\
     \n:local sysnote [/system note get note]\
     \n\
@@ -3892,6 +3892,13 @@
     \n    :error \$state\
     \n}\
     \n\
+    \n:if ([:len [/disk find where slot=\$ramDiskName and type=\"tmpfs\"]] = 0) do={\
+    \n    :set state \"WARNING: tmpfs '\$ramDiskName' not found - skipping backup!\"\
+    \n    :log error \$state\
+    \n    \$globalNoteMe value=\$state\
+    \n    :error \$state\
+    \n}\
+    \n\
     \n:onerror errorDescr in={\
     \n    :local smtpserv [:resolve \"\$ftpServer\"]\
     \n} do={\
@@ -3903,38 +3910,42 @@
     \n\
     \n:local fname \"BACKUP-\$sysname-\$stamp\"\
     \n\
+    \n\$globalNoteMe value=\"Clearing previous backups..\" verbose=true\
+    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
+    \n/file remove [/file find where name~\$configLatestName]\
+    \n\
     \n:onerror errorDescr in={\
     \n\
     \n    :if (\$useSysBackup) do={\
     \n        :set state \"Saving system backup \$fname.backup\"\
-    \n        \$globalNoteMe value=\$state\
-    \n        :if (\$useEncryption) do={ /system backup save name=(\$fname . \".backup\") }\
-    \n        :if (!\$useEncryption) do={ /system backup save dont-encrypt=yes name=(\$fname . \".backup\") }\
+    \n        \$globalNoteMe value=\$state verbose=true\
+    \n        :if (\$useEncryption) do={\
+    \n            # Configure at runtime: \$globalSecret set BACKUP_PASSWORD password=\"YOUR_SECRET\"\
+    \n            :local backupPassword \"\$[\$globalSecret get BACKUP_PASSWORD]\"\
+    \n            /system backup save name=(\$ramDiskName . \"/\" . \$fname . \".backup\") password=\$backupPassword\
+    \n        }\
+    \n        :if (!\$useEncryption) do={ /system backup save dont-encrypt=yes name=(\$ramDiskName . \"/\" . \$fname . \".backup\") }\
     \n        :delay 2s\
-    \n        \$globalNoteMe value=\"System Backup Finished\"\
+    \n        \$globalNoteMe value=\"System Backup Finished\" verbose=true\
     \n    }\
     \n\
     \n    :if (\$useRawExport) do={\
     \n        :set state \"Exporting restore text \$fname.unsafe.rsc\"\
-    \n        \$globalNoteMe value=\$state\
-    \n        /export show-sensitive terse file=(\$fname . \".unsafe.rsc\")\
+    \n        \$globalNoteMe value=\$state verbose=true\
+    \n        /export show-sensitive terse file=(\$ramDiskName . \"/\" . \$fname . \".unsafe.rsc\")\
     \n        :delay 2s\
-    \n        \$globalNoteMe value=\"Done\"\
+    \n        \$globalNoteMe value=\"Done\" verbose=true\
     \n    }\
     \n\
     \n    :if (\$useFtpGit) do={\
     \n        :set state \"Exporting config source \$configLatestName\"\
-    \n        \$globalNoteMe value=\$state\
-    \n        /export terse file=\$configLatestName\
+    \n        \$globalNoteMe value=\$state verbose=true\
+    \n        /export terse file=(\$ramDiskName . \"/\" . \$configLatestName)\
     \n        :delay 2s\
-    \n        \$globalNoteMe value=\"Done\"\
+    \n        \$globalNoteMe value=\"Done\" verbose=true\
     \n    }\
     \n\
     \n    :delay 5s\
-    \n\
-    \n    # SFTP uploads look like bruteforce on CHR without knockknock\
-    \n    :local errorDef [\$globalKnockKnock \$scriptname]\
-    \n    :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
     \n\
     \n} do={\
     \n    :set state \"Error When \$state: \$errorDescr\"\
@@ -3945,38 +3956,46 @@
     \n\
     \n:if (\$itsOk) do={\
     \n\
-    \n    :local stopBatch false\
+    \n    # \"break-loop\" leaves remaining uploads after sftp-session-cut\
+    \n    :onerror errorDescr in={\
     \n\
-    \n    :foreach backupFile in=[/file find] do={\
+    \n        :if (\$useFtp) do={\
+    \n            # SFTP uploads look like bruteforce on CHR without knockknock\
+    \n            :set state \"Opening firewall for SFTP (knockknock)\"\
+    \n            \$globalNoteMe value=\$state verbose=true\
+    \n            :local errorDef [\$globalKnockKnock \$scriptname]\
+    \n            :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
+    \n        }\
     \n\
-    \n        :if (!\$stopBatch) do={\
+    \n        :foreach backupFile in=[/file find] do={\
     \n\
     \n            :local buFile [/file get \$backupFile name]\
     \n\
     \n            :if ([:typeof [:find \$buFile \$fname]] != \"nil\") do={\
     \n\
     \n                :local itsUnsafe (\$buFile ~ \".unsafe.rsc\")\
-    \n                :local uploaded (!\$useFtp)\
     \n\
     \n                :if (\$useFtp) do={\
     \n\
     \n                    :onerror errorDescr in={\
     \n                        :local dst \"\$ftpBinRoot\$buFile\"\
+    \n                        :if ([:typeof [:find \$buFile \$ramDiskPrefix]] = \"num\") do={\
+    \n                            :set dst (\"\$ftpBinRoot\" . [:pick \$buFile [:len \$ramDiskPrefix] [:len \$buFile]])\
+    \n                        }\
     \n                        :set state \"Uploading \$buFile to SFTP (\$dst)\"\
-    \n                        \$globalNoteMe value=\$state\
+    \n                        \$globalNoteMe value=\$state verbose=true\
     \n\
     \n                        :local errorDef [\$globalCallSftp \$buFile \$dst]\
     \n                        :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
     \n\
-    \n                        :set uploaded true\
-    \n                        \$globalNoteMe value=\"Done\"\
+    \n                        \$globalNoteMe value=\"Done\" verbose=true\
     \n                    } do={\
     \n                        :set state \"Error When \$state: \$errorDescr\"\
     \n                        \$globalNoteMe value=\$state\
     \n                        :if ([:len \$firstError] = 0) do={ :set firstError \$state }\
     \n                        :set itsOk false\
     \n                        :if (\$errorDescr ~ \"^sftp-session-cut\") do={\
-    \n                            :set stopBatch true\
+    \n                            :error \"break-loop\"\
     \n                        }\
     \n                    }\
     \n                }\
@@ -3984,7 +4003,7 @@
     \n                :if (\$useSmtp and !\$itsUnsafe) do={\
     \n                    :onerror errorDescr in={\
     \n                        :set state \"Uploading \$buFile to SMTP\"\
-    \n                        \$globalNoteMe value=\$state\
+    \n                        \$globalNoteMe value=\$state verbose=true\
     \n\
     \n                        # email works in background, delay needed\
     \n                        /tool e-mail send to=\$smtpAddress body=\$smtpBody subject=\$smtpSubject file=\$buFile tls=starttls\
@@ -3996,7 +4015,7 @@
     \n                            :error \"e-mail last-status is not succeeded\"\
     \n                        }\
     \n\
-    \n                        \$globalNoteMe value=\"Done\"\
+    \n                        \$globalNoteMe value=\"Done\" verbose=true\
     \n                    } do={\
     \n                        :set state \"Error When \$state: \$errorDescr\"\
     \n                        \$globalNoteMe value=\$state\
@@ -4004,37 +4023,44 @@
     \n                        :set itsOk false\
     \n                    }\
     \n                }\
+    \n            }\
+    \n        }\
     \n\
-    \n                :if (\$uploaded) do={\
-    \n                    :delay 2s\
-    \n                    /file remove \$backupFile\
+    \n        :if (\$useFtp and \$useFtpGit) do={\
+    \n            :onerror errorDescr in={\
+    \n                :local configSrc (\$ramDiskName . \"/\" . \$configLatestName)\
+    \n                :if ([:len [/file find name=\$configSrc]] = 0) do={\
+    \n                    :error \"config source \$configLatestName not found\"\
+    \n                }\
+    \n                :set state \"Uploading \$configLatestName to SFTP (\$ftpConfigLatest)\"\
+    \n                \$globalNoteMe value=\$state verbose=true\
+    \n                :local errorDef [\$globalCallSftp \$configSrc \$ftpConfigLatest]\
+    \n                :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
+    \n                \$globalNoteMe value=\"Done\" verbose=true\
+    \n            } do={\
+    \n                :set state \"Error When \$state: \$errorDescr\"\
+    \n                \$globalNoteMe value=\$state\
+    \n                :if ([:len \$firstError] = 0) do={ :set firstError \$state }\
+    \n                :set itsOk false\
+    \n                :if (\$errorDescr ~ \"^sftp-session-cut\") do={\
+    \n                    :error \"break-loop\"\
     \n                }\
     \n            }\
     \n        }\
-    \n    }\
     \n\
-    \n    :if (\$useFtp and \$useFtpGit and !\$stopBatch) do={\
-    \n        :onerror errorDescr in={\
-    \n            :if ([:len [/file find name=\$configLatestName]] = 0) do={\
-    \n                :error \"config source \$configLatestName not found\"\
-    \n            }\
-    \n            :set state \"Uploading \$configLatestName to SFTP (\$ftpConfigLatest)\"\
-    \n            \$globalNoteMe value=\$state\
-    \n            :local errorDef [\$globalCallSftp \$configLatestName \$ftpConfigLatest]\
-    \n            :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
-    \n            \$globalNoteMe value=\"Done\"\
-    \n            /file remove [find name=\$configLatestName]\
-    \n        } do={\
+    \n    } do={\
+    \n        :if (!(\$errorDescr ~ \"^break-loop\")) do={\
     \n            :set state \"Error When \$state: \$errorDescr\"\
     \n            \$globalNoteMe value=\$state\
     \n            :if ([:len \$firstError] = 0) do={ :set firstError \$state }\
     \n            :set itsOk false\
-    \n            :if (\$errorDescr ~ \"^sftp-session-cut\") do={\
-    \n                :set stopBatch true\
-    \n            }\
     \n        }\
     \n    }\
     \n}\
+    \n\
+    \n\$globalNoteMe value=\"Housekeeping..\" verbose=true\
+    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
+    \n/file remove [/file find where name~\$configLatestName]\
     \n\
     \n:local inf \"\"\
     \n:if (\$itsOk) do={\
@@ -4051,6 +4077,7 @@
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
+    \n\
     \n"
 /system script add comment="Periodically renews password for some user accounts and sends a email" dont-require-permissions=yes name=doRandomGen owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doRandomGen\"\
@@ -5862,6 +5889,36 @@
     \n    :error \$inf\
     \n}\
     \n"
+/system script add dont-require-permissions=yes name=script1 owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local testUrl\
+    \n:local fwdName\
+    \n:local dohList\
+    \n\
+    \n# \D0\BE\D1\81\D0\BD\D0\BE\D0\B2\D0\BD\D0\BE\D0\B9 DoH\
+    \n:set testUrl [/ip dns get use-doh-server]\
+    \n:if ([:len \$testUrl] > 0) do={\
+    \n    :onerror errMsg in={\
+    \n        /tool fetch url=\$testUrl output=none check-certificate=no\
+    \n        :put (\"MAIN  OK   \" . \$testUrl)\
+    \n    } do={\
+    \n        :put (\"MAIN  FAIL \" . \$testUrl . \" -> \" . \$errMsg)\
+    \n    }\
+    \n}\
+    \n\
+    \n# forwarders\
+    \n:foreach f in=[/ip dns forwarders find] do={\
+    \n    :set fwdName [/ip dns forwarders get \$f name]\
+    \n    :set dohList [/ip dns forwarders get \$f doh-servers]\
+    \n    :foreach u in=\$dohList do={\
+    \n        :set testUrl \$u\
+    \n        :onerror errMsg in={\
+    \n            /tool fetch url=\$testUrl output=none check-certificate=no\
+    \n            :put (\$fwdName . \" OK   \" . \$testUrl)\
+    \n        } do={\
+    \n            :put (\$fwdName . \" FAIL \" . \$testUrl . \" -> \" . \$errMsg)\
+    \n        }\
+    \n    }\
+    \n}\
+    \n"
 /system logging action set 0 memory-lines=3000
 /system logging action set 1 disk-file-name=journal
 /system logging action set 3 add-topics-string=yes remote=victoria.home remote-log-format=syslog
@@ -6481,8 +6538,8 @@
 /ip firewall nat add action=masquerade chain=srcnat comment="VPN masq (pure L2TP, w/o IPSEC)" out-interface-list=list-l2tp-tunnels
 /ip firewall nat add action=masquerade chain=srcnat comment="all WAN allowed" dst-address-list=!alist-fw-vpn-subnets out-interface="wan A"
 /ip ipsec policy set 0 disabled=yes proposal="IPSEC IKEv2 VPN PHASE2 MIKROTIK"
-/ip ipsec policy add comment="Common IPSEC TRANSPORT (outer-tunnel encryption)" dst-address=185.13.148.14/32 dst-port=1701 peer=CHR-external proposal="IPSEC IKEv2 VPN PHASE2 MIKROTIK" protocol=udp src-address=10.20.225.166/32 src-port=1701
-/ip ipsec policy add comment="Common IPSEC TUNNEL (traffic-only encryption)" dst-address=192.168.97.0/29 peer=CHR-internal proposal="IPSEC IKEv2 VPN PHASE2 MIKROTIK" src-address=192.168.90.0/24 tunnel=yes
+/ip ipsec policy add comment="Common IPSEC TRANSPORT (outer-tunnel encryption)" disabled=yes dst-port=1701 peer=CHR-external proposal="IPSEC IKEv2 VPN PHASE2 MIKROTIK" protocol=udp src-port=1701
+/ip ipsec policy add comment="Common IPSEC TUNNEL (traffic-only encryption)" disabled=yes dst-address=192.168.97.0/29 peer=CHR-internal proposal="IPSEC IKEv2 VPN PHASE2 MIKROTIK" src-address=192.168.90.0/24 tunnel=yes
 /ip ipsec policy group add name=inside-ipsec-encryption
 /ip ipsec policy group add name=outside-ipsec-encryption
 /ip route add check-gateway=ping comment="GLOBAL AKADO" disabled=yes distance=50 dst-address=0.0.0.0/0 gateway=10.20.225.1 routing-table=main scope=30 target-scope=10
@@ -6571,8 +6628,6 @@
 /queue simple add comment=dtq,B0:34:95:50:A1:6A, name="AudioATV(wireless)(blocked)@guest-dhcp-server (B0:34:95:50:A1:6A)" queue=default/default target=192.168.98.210/32 total-queue=default
 /queue simple add comment=dtq,22:79:70:3F:13:5F,anna-veth-app-victoria-metrics name="victoria-metrics(docker)@docker-dhcp-server (22:79:70:3F:13:5F)" queue=default/default target=192.168.80.162/32 total-queue=default
 /queue simple add comment=dtq,6C:1F:F7:60:69:71,NWS-046 name="TABLE(wire)(GUEST)@guest-dhcp-server (6C:1F:F7:60:69:71)" queue=default/default target=192.168.98.240/32 total-queue=default
-/queue simple add comment=dtq,6E:2D:78:86:6C:F9,POCO-C75 name="POCO-C75@guest-dhcp-server (6E:2D:78:86:6C:F9)" queue=default/default target=192.168.98.237/32 total-queue=default
-/queue simple add comment=dtq,4C:5F:70:97:DD:99,NWS-046 name="NWS-046@guest-dhcp-server (4C:5F:70:97:DD:99)" queue=default/default target=192.168.98.239/32 total-queue=default
 /queue tree add comment="FILE download control" name="Total Bandwidth" parent=global queue=default
 /queue tree add name=RAR packet-mark=rar-mark parent="Total Bandwidth" queue=default
 /queue tree add name=EXE packet-mark=exe-mark parent="Total Bandwidth" queue=default
@@ -6631,8 +6686,8 @@
 /interface l2tp-client add allow=mschap2 connect-to=185.13.148.14 disabled=no max-mru=1360 max-mtu=1360 name=chr-tunnel profile=l2tp-no-encrypt-site2site user=vpn-remote-anna
 /interface list member add comment="neighbors lookup" interface=chr-tunnel list=list-neighbors-lookup
 /interface list member add comment=OSPF interface=chr-tunnel list=list-ospf-bearing
-/ip ipsec identity add auth-method=digital-signature certificate=C.anna.ipsec@CHR comment=to-CHR-outer-tunnel-encryption-RSA peer=CHR-external policy-template-group=outside-ipsec-encryption
-/ip ipsec identity add comment=to-CHR-traffic-only-encryption-PSK peer=CHR-internal policy-template-group=inside-ipsec-encryption remote-id=ignore
+/ip ipsec identity add auth-method=digital-signature certificate=C.anna.ipsec@CHR comment=to-CHR-outer-tunnel-encryption-RSA disabled=yes peer=CHR-external policy-template-group=outside-ipsec-encryption
+/ip ipsec identity add comment=to-CHR-traffic-only-encryption-PSK disabled=yes peer=CHR-internal policy-template-group=inside-ipsec-encryption remote-id=ignore
 /ip route add comment=GLOBAL-VPN disabled=no distance=1 dst-address=0.0.0.0/0 gateway=chr-tunnel pref-src=10.0.0.3 routing-table=rmark-vpn-redirect scope=20 target-scope=20
 /ip route add blackhole comment=OSPF-LOCAL-AREA-blackhole disabled=no distance=200 dst-address=192.168.97.0/29 gateway=chr-tunnel routing-table=main scope=30 target-scope=10
 /routing ospf interface-template add area=backbone-main disabled=no interfaces=chr-tunnel type=ptp
