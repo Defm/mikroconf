@@ -7,7 +7,7 @@
 3. Обновите связанные runbooks и инвентарь.
 4. Запустите `./tools/check-repository.sh`.
 5. Проверьте diff на секреты и неожиданные бинарные файлы.
-6. Перед выпуском следуйте `docs/operations/script-release.md`.
+6. Перед выпуском следуйте `doc/operations/script-release.md`.
 
 ## Требования к изменениям
 

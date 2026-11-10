@@ -11,21 +11,42 @@ fail() {
 }
 
 required=(
-  README.md AGENTS.md CONTRIBUTING.md SECURITY.md LICENSE
+  README.md USER-RULES.md LLM-RULES.md AGENTS.md CONTRIBUTING.md SECURITY.md LICENSE
+  .dev.env.example
   .gitignore .cursorignore .cursor/mcp.json .cursor/hooks.json
   .cursor/rules/safety.mdc .cursor/rules/routeros.mdc .cursor/rules/repository.mdc
-  docs/architecture.md docs/devices/inventory.md
-  docs/operations/backup-pipeline.md docs/operations/script-release.md
-  docs/operations/diagnostics.md docs/operations/raw-policy.md
-  docs/security/credentials.md docs/security/write-path-design.md
-  docs/script-audit.md docs/style-canon.md docs/routeros-skills-review.md
-  docs/migration-report.md docs/cutover-plan.md
+  .cursor/rules/vendor.mdc .cursor/rules/user-rules-bootstrap.mdc
+  .cursor/rules/sdd.mdc .cursor/rules/markdown.mdc
+  .cursor/rules/readme-ru-text.mdc .cursor/rules/caveman-lite.mdc
+  .cursor/rules/karpathy-guidelines.mdc
+  .cursor/commands/routeros-docs.md .cursor/commands/routeros-check-script.md
+  .cursor/commands/evolve.md .cursor/commands/caveman.md
+  .cursor/agents/verifier.md
+  .cursor/skills/sdd-explore/SKILL.md .cursor/skills/sdd-propose/SKILL.md
+  .cursor/skills/sdd-apply/SKILL.md .cursor/skills/sdd-verify/SKILL.md
+  .cursor/skills/sdd-archive/SKILL.md .cursor/skills/ru-text/SKILL.md
+  .cursor/skills/caveman/SKILL.md .cursor/skills/caveman-help/SKILL.md
+  .cursor/skills/design-doc-mermaid/SKILL.md
+  .cursor/skills/design-doc-mermaid/scripts/extract_mermaid.py
+  .cursor/skills/design-doc-mermaid/scripts/mermaid_to_image.py
+  .cursor/skills/design-doc-mermaid/scripts/resilient_diagram.py
+  spec/README.md spec/templates/proposal.md spec/templates/design.md
+  spec/templates/tasks.md spec/templates/spec.md spec/templates/delta-spec.md
+  spec/capabilities/README.md spec/changes/README.md
+  spec/changes/archive/README.md spec/plans/README.md
+  doc/architecture.md doc/devices/inventory.md
+  doc/operations/backup-pipeline.md doc/operations/script-release.md
+  doc/operations/diagnostics.md doc/operations/raw-policy.md
+  doc/security/credentials.md doc/security/write-path-design.md
+  doc/script-audit.md doc/style-canon.md doc/routeros-skills-review.md
+  doc/migration-report.md doc/cutover-plan.md doc/cursor-tooling.md
   config/inventory.example.yml
   bin/README.md src/config/README.md vendor/README.md
   vendor/rosetta/LICENSE vendor/rosetta/UPSTREAM_COMMIT
   vendor/routeros-skills/LICENSE vendor/routeros-skills/UPSTREAM_COMMIT
   vendor/mikrotik-mcp/LICENSE vendor/mikrotik-mcp/UPSTREAM_COMMIT
   vendor/mikrotik-mcp/LOCAL_CHANGES.md
+  tools/rosetta-db.sh tools/sync-routeros-skills.sh
 )
 
 for path in "${required[@]}"; do
@@ -96,7 +117,7 @@ for name in "${expected_scripts[@]}"; do
 done
 
 mapfile -t registered_skills < <(
-  find .cursor/skills -mindepth 2 -maxdepth 2 -name SKILL.md -print |
+  find .cursor/skills -mindepth 2 -maxdepth 2 -path '.cursor/skills/routeros-*/SKILL.md' -print |
     LC_ALL=C sort
 )
 [[ "${#registered_skills[@]}" -eq 17 ]] ||
@@ -117,10 +138,41 @@ for path in "${registered_skills[@]}"; do
   esac
 done
 
+mapfile -t sdd_skills < <(
+  find .cursor/skills -mindepth 2 -maxdepth 2 -path '.cursor/skills/sdd-*/SKILL.md' -print |
+    LC_ALL=C sort
+)
+[[ "${#sdd_skills[@]}" -eq 5 ]] ||
+  fail "ожидалось 5 SDD skills, найдено ${#sdd_skills[@]}"
+for path in "${sdd_skills[@]}"; do
+  grep -q '^disable-model-invocation: true' "$path" ||
+    fail "SDD skill должен вызываться только явно: $path"
+done
+
+design_mermaid_files="$(
+  find .cursor/skills/design-doc-mermaid -type f -print | wc -l | tr -d ' '
+)"
+[[ "$design_mermaid_files" -eq 25 ]] ||
+  fail "ожидалось 25 файлов design-doc-mermaid, найдено $design_mermaid_files"
+
+ru_text_files="$(
+  find .cursor/skills/ru-text -type f -print | wc -l | tr -d ' '
+)"
+[[ "$ru_text_files" -eq 13 ]] ||
+  fail "ожидалось 13 файлов ru-text, найдено $ru_text_files"
+
+if git ls-files --error-unmatch .dev.env >/dev/null 2>&1; then
+  fail ".dev.env не должен отслеживаться Git"
+fi
+
+if ! ./tools/sync-routeros-skills.sh check; then
+  errors=$((errors + 1))
+fi
+
 while IFS= read -r -d '' path; do
   case "$path" in
     *.backup|*.npk|*.p12|*.pfx|*.pem|*.key|*.der|*.cer|*.crt|\
-    rawconf_*.rsc|*/rawconf_*.rsc|*.safe.rsc|*/*.safe.rsc|*/id_rsa|*/id_rsa.*|*/id_ed25519|*/id_ed25519.*)
+    rawconf_*.rsc|*/rawconf_*.rsc|*/id_rsa|*/id_rsa.*|*/id_ed25519|*/id_ed25519.*)
       fail "обнаружен запрещённый private/backup-файл: $path"
       ;;
   esac
@@ -164,6 +216,9 @@ for raw in paths:
         rel == "tools/check-repository.sh"
         or rel.startswith("vendor/")
         or rel.startswith(".cursor/skills/routeros-")
+        or rel.startswith(".cursor/skills/design-doc-mermaid/")
+        or rel.startswith(".cursor/skills/ru-text/")
+        or (rel.startswith("src/config/") and rel.endswith(".safe.rsc"))
     ):
         continue
     path = root / rel

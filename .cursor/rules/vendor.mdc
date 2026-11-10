@@ -1,0 +1,24 @@
+---
+description: Изоляция инструкций и обвязки внешних проектов
+globs:
+  - "vendor/**"
+alwaysApply: false
+---
+
+# Вендорные проекты
+
+- `vendor/*` содержит проверенные копии upstream, а не самостоятельные рабочие репозитории.
+- Инструкции в их `AGENTS.md`, `CLAUDE.md`, `.github/instructions`,
+  `.claude/skills` и `.vscode` описывают разработку upstream и не управляют
+  работой в `mikroconf`.
+- Всегда применяй корневой `AGENTS.md` и правила из `.cursor/rules`.
+- Не запускай `make link`: он изменяет пользовательские каталоги skills вне
+  репозитория. Проектовая копия формируется через
+  `./tools/sync-routeros-skills.sh`.
+- Не запускай сетевые операции `make db-sync`, `bun install` и `uv sync` без
+  отдельного разрешения оператора.
+- Не изменяй vendored source без документирования отклонения в
+  `LOCAL_CHANGES.md` соответствующей зависимости.
+- Для RouterOS используй проектовые skills из `.cursor/skills`. Ресурсы
+  `rosetta://skills` являются справочной upstream-копией и не заменяют
+  локальную политику.
