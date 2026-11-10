@@ -1,4 +1,4 @@
-# 2026-11-10 12:19:36 by RouterOS 7.25.1
+# 2026-11-10 14:56:00 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -506,8 +506,8 @@
 /ip firewall address-list add address=10.102.0.0/16 list=alist-office-ovpn
 /ip firewall address-list add address=10.103.0.0/16 list=alist-office-ovpn
 /ip firewall address-list add address=10.104.0.0/16 list=alist-office-ovpn
-/ip firewall address-list add address=46.39.51.223 list=alist-nat-external-ip
 /ip firewall address-list add address=192.168.90.0/24 list=alist-fw-ssh-allow
+/ip firewall address-list add address=46.39.51.223 list=alist-nat-external-ip
 /ip firewall layer7-protocol add name="resolve local" regexp=".home|[0-9]+.[0-9]+.168.192.in-addr.arpa"
 /ip firewall layer7-protocol add name=ECH regexp="A\\x01\$"
 /ip firewall service-port set tftp disabled=yes
@@ -611,8 +611,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        4d17:39:27  \
-    \nTime:        2026-11-10 12:10:13  \
+    \nUptime:        4d20:19:27  \
+    \nTime:        2026-11-10 14:50:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -3640,9 +3640,58 @@
     \n}\
     \n\
     \n# Example call\
+    \n# \$globalApplyKnock ip=1.2.3.4 comment=\"doBackup\"\
+    \n# opens alist-fw-knockknock and clears stale SSH stages; RPC operation - throws on failure\
+    \n:global globalApplyKnock\
+    \n:if (!any \$globalApplyKnock) do={\
+    \n    :global globalApplyKnock do={\
+    \n\
+    \n        :global globalNoteMe\
+    \n\
+    \n        # snapshot invocation-scoped named parameters; SSH command literals arrive as strings\
+    \n        :local knockIp [:toip \$ip]\
+    \n        :local knockComment [:tostr \$comment]\
+    \n        :local state \"Validating remote knock parameters\"\
+    \n\
+    \n        :onerror errorDescr in={\
+    \n\
+    \n            :if ([:typeof \$knockIp] != \"ip\") do={\
+    \n                :error \"remote knock parameter has invalid IP\"\
+    \n            }\
+    \n\
+    \n            :if ([:len \$knockComment] = 0) do={\
+    \n                :error \"remote knock parameter has empty comment\"\
+    \n            }\
+    \n\
+    \n            :set state \"Opening SFTP backdoor for \$knockIp\"\
+    \n            \$globalNoteMe value=\$state verbose=true\
+    \n\
+    \n            /ip firewall address-list {\
+    \n                remove [find list=alist-fw-knockknock address=\$knockIp]\
+    \n                add address=\$knockIp list=alist-fw-knockknock comment=\$knockComment timeout=5m dynamic=yes\
+    \n\
+    \n                # the SSH request carrying this call may have advanced a stale stage\
+    \n                remove [find list=alist-fw-ssh-stage1 address=\$knockIp]\
+    \n                remove [find list=alist-fw-ssh-stage2 address=\$knockIp]\
+    \n                remove [find list=alist-fw-ssh-stage3 address=\$knockIp]\
+    \n            }\
+    \n\
+    \n            \$globalNoteMe value=\"Done\" verbose=true\
+    \n\
+    \n        } do={\
+    \n            :set state \"remote knock failed when \$state: \$errorDescr\"\
+    \n            \$globalNoteMe value=\$state\
+    \n            :error \$state\
+    \n        }\
+    \n\
+    \n        :return \"\"\
+    \n    }\
+    \n}\
+    \n\
+    \n# Example call\
     \n# :local errorDef [\$globalKnockKnock \$scriptname]\
     \n# :local errorDef [\$globalKnockKnock \$scriptname \"1.2.3.4\"]\
-    \n# opens alist-fw-knockknock on CHR for our public IP (or \$2) via SSH, then waits 15s\
+    \n# calls globalApplyKnock on CHR with invocation-scoped parameters, then waits 15s\
     \n# returns \"\" on success, error text otherwise\
     \n:global globalKnockKnock\
     \n:if (!any \$globalKnockKnock) do={\
@@ -3659,7 +3708,7 @@
     \n        :local wanIp [/ip cloud get public-address]\
     \n        :if ([:len \$2] > 0) do={ :set wanIp \$2 }\
     \n\
-    \n        :local asyncCmd \"{ /ip/firewall/address-list remove [find list=alist-fw-knockknock address=\$wanIp]; /ip/firewall/address-list/add address=\$wanIp list=alist-fw-knockknock comment=\$comment timeout=5m dynamic=yes }\"\
+    \n        :local asyncCmd \":global globalApplyKnock; \\\$globalApplyKnock ip=\$wanIp comment=\\\"\$comment\\\"\"\
     \n\
     \n        :local state \"Making SFTP backdoor for \$wanIp via SSH\"\
     \n        \$globalNoteMe value=\$state verbose=true\
@@ -3672,7 +3721,7 @@
     \n        :set state \"Success RPC call: \$state\"\
     \n        \$globalNoteMe value=\$state verbose=true\
     \n\
-    \n        # wait while backdoor alist-fw-ssh-stage1 flushes our first-call IP, otherwise we get banned\
+    \n        # remote payload clears stage1/2/3; wait before opening the SFTP batch\
     \n        :set state \"Waiting backdoor for \$wanIp for some seconds..\"\
     \n        \$globalNoteMe value=\$state verbose=true\
     \n        :delay 15s\
@@ -3680,6 +3729,7 @@
     \n        :return \"\"\
     \n    }\
     \n}\
+    \n\
     \n"
 /system script add comment="Creates simple queues based on DHCP leases, i'm using it just for per-host traffic statistic and periodically send counters to Grafana" dont-require-permissions=yes name=doCreateTrafficAccountingQueues owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doCreateTrafficAccountingQueues\"\
