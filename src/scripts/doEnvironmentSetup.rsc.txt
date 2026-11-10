@@ -812,8 +812,8 @@
 
         :global globalNoteMe
 
-        # snapshot invocation-scoped named parameters for parallel callers
-        :local knockIp $ip
+        # snapshot invocation-scoped named parameters; SSH command literals arrive as strings
+        :local knockIp [:toip $ip]
         :local knockComment [:tostr $comment]
         :local state "Validating remote knock parameters"
 
