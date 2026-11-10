@@ -617,7 +617,7 @@ $globalNoteMe value=$inf
 - `SafeScriptCall` переезжает в `doEnvironmentSetup` как `globalSafeScriptCall` с двумя аргументами: `$1` — имя скрипта, `$2` — контекст для постфикса в логе (`"NETWATCH"`, `"DHCP"`, `"STARTUP"`); при пустом `$2` постфикс не выводится.
 - `globalScriptBeforeRun` получает второй необязательный аргумент — тот же контекст: `$globalScriptBeforeRun $scriptname "NETWATCH"` → `Starting script: doNetwatchHost (NETWATCH context)`.
 - CHR RPC — через `$globalCallSSH` / `$globalKnockKnock` внутри `doUpdateExternalDNS` (отдельный `doSuperviseCHRviaSSH` снят).
-- SFTP/SSH knockknock на CHR — только через `$globalKnockKnock $scriptname` (опционально `$2` = IP); дублировать address-list RPC в batch-скриптах нельзя. Потребители: `doBackup`, `doDumpTheScripts`, `doUpdateExternalDNS`.
+- SFTP/SSH knockknock на CHR — только через `$globalKnockKnock $scriptname` (опционально `$2` = IP); helper одной SSH-командой вызывает удалённую `$globalApplyKnock ip= comment=`, а invocation-scoped параметры сразу снимаются в locals функции. `globalApplyKnock` — RPC-исключение из string-error контракта: возвращает `""` при успехе и делает `:error` при сбое, чтобы SSH получил ненулевой exit code. Дублировать address-list/stage-логику в batch-скриптах нельзя. Потребители: `doBackup`, `doDumpTheScripts`, `doUpdateExternalDNS`.
 - Блок определения `rosVer`/`sysver` (3 копии) остаётся локальным в каждом скрипте — это не helper, а две строки конфигурации; переименования по 4.2.
 - `#Example call` перед каждым глобальным helper'ом сохраняется.
 

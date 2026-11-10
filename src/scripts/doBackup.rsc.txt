@@ -34,6 +34,8 @@ $globalScriptBeforeRun $scriptname
 :local useFtpGit true
 :local ftpConfigLatest ("REPO/raw/src/config/" . $sysname . ".safe.rsc")
 :local configLatestName ($sysname . ".safe.rsc")
+:local ramDiskName "RAM"
+:local ramDiskPrefix ($ramDiskName . "/")
 
 :local sysnote [/system note get note]
 
@@ -52,6 +54,13 @@ $globalScriptBeforeRun $scriptname
     :error $state
 }
 
+:if ([:len [/disk find where slot=$ramDiskName and type="tmpfs"]] = 0) do={
+    :set state "WARNING: tmpfs '$ramDiskName' not found - skipping backup!"
+    :log error $state
+    $globalNoteMe value=$state
+    :error $state
+}
+
 :onerror errorDescr in={
     :local smtpserv [:resolve "$ftpServer"]
 } do={
@@ -63,38 +72,42 @@ $globalScriptBeforeRun $scriptname
 
 :local fname "BACKUP-$sysname-$stamp"
 
+$globalNoteMe value="Clearing previous backups.." verbose=true
+/file remove [/file find where name~("BACKUP-" . $sysname . "-")]
+/file remove [/file find where name~$configLatestName]
+
 :onerror errorDescr in={
 
     :if ($useSysBackup) do={
         :set state "Saving system backup $fname.backup"
-        $globalNoteMe value=$state
-        :if ($useEncryption) do={ /system backup save name=($fname . ".backup") }
-        :if (!$useEncryption) do={ /system backup save dont-encrypt=yes name=($fname . ".backup") }
+        $globalNoteMe value=$state verbose=true
+        :if ($useEncryption) do={
+            # Configure at runtime: $globalSecret set BACKUP_PASSWORD password="YOUR_SECRET"
+            :local backupPassword "$[$globalSecret get BACKUP_PASSWORD]"
+            /system backup save name=($ramDiskName . "/" . $fname . ".backup") password=$backupPassword
+        }
+        :if (!$useEncryption) do={ /system backup save dont-encrypt=yes name=($ramDiskName . "/" . $fname . ".backup") }
         :delay 2s
-        $globalNoteMe value="System Backup Finished"
+        $globalNoteMe value="System Backup Finished" verbose=true
     }
 
     :if ($useRawExport) do={
         :set state "Exporting restore text $fname.unsafe.rsc"
-        $globalNoteMe value=$state
-        /export show-sensitive terse file=($fname . ".unsafe.rsc")
+        $globalNoteMe value=$state verbose=true
+        /export show-sensitive terse file=($ramDiskName . "/" . $fname . ".unsafe.rsc")
         :delay 2s
-        $globalNoteMe value="Done"
+        $globalNoteMe value="Done" verbose=true
     }
 
     :if ($useFtpGit) do={
         :set state "Exporting config source $configLatestName"
-        $globalNoteMe value=$state
-        /export terse file=$configLatestName
+        $globalNoteMe value=$state verbose=true
+        /export terse file=($ramDiskName . "/" . $configLatestName)
         :delay 2s
-        $globalNoteMe value="Done"
+        $globalNoteMe value="Done" verbose=true
     }
 
     :delay 5s
-
-    # SFTP uploads look like bruteforce on CHR without knockknock
-    :local errorDef [$globalKnockKnock $scriptname]
-    :if ([:len $errorDef] > 0) do={ :error $errorDef }
 
 } do={
     :set state "Error When $state: $errorDescr"
@@ -105,38 +118,46 @@ $globalScriptBeforeRun $scriptname
 
 :if ($itsOk) do={
 
-    :local stopBatch false
+    # "break-loop" leaves remaining uploads after sftp-session-cut
+    :onerror errorDescr in={
 
-    :foreach backupFile in=[/file find] do={
+        :if ($useFtp) do={
+            # SFTP uploads look like bruteforce on CHR without knockknock
+            :set state "Opening firewall for SFTP (knockknock)"
+            $globalNoteMe value=$state verbose=true
+            :local errorDef [$globalKnockKnock $scriptname]
+            :if ([:len $errorDef] > 0) do={ :error $errorDef }
+        }
 
-        :if (!$stopBatch) do={
+        :foreach backupFile in=[/file find] do={
 
             :local buFile [/file get $backupFile name]
 
             :if ([:typeof [:find $buFile $fname]] != "nil") do={
 
                 :local itsUnsafe ($buFile ~ ".unsafe.rsc")
-                :local uploaded (!$useFtp)
 
                 :if ($useFtp) do={
 
                     :onerror errorDescr in={
                         :local dst "$ftpBinRoot$buFile"
+                        :if ([:typeof [:find $buFile $ramDiskPrefix]] = "num") do={
+                            :set dst ("$ftpBinRoot" . [:pick $buFile [:len $ramDiskPrefix] [:len $buFile]])
+                        }
                         :set state "Uploading $buFile to SFTP ($dst)"
-                        $globalNoteMe value=$state
+                        $globalNoteMe value=$state verbose=true
 
                         :local errorDef [$globalCallSftp $buFile $dst]
                         :if ([:len $errorDef] > 0) do={ :error $errorDef }
 
-                        :set uploaded true
-                        $globalNoteMe value="Done"
+                        $globalNoteMe value="Done" verbose=true
                     } do={
                         :set state "Error When $state: $errorDescr"
                         $globalNoteMe value=$state
                         :if ([:len $firstError] = 0) do={ :set firstError $state }
                         :set itsOk false
                         :if ($errorDescr ~ "^sftp-session-cut") do={
-                            :set stopBatch true
+                            :error "break-loop"
                         }
                     }
                 }
@@ -144,7 +165,7 @@ $globalScriptBeforeRun $scriptname
                 :if ($useSmtp and !$itsUnsafe) do={
                     :onerror errorDescr in={
                         :set state "Uploading $buFile to SMTP"
-                        $globalNoteMe value=$state
+                        $globalNoteMe value=$state verbose=true
 
                         # email works in background, delay needed
                         /tool e-mail send to=$smtpAddress body=$smtpBody subject=$smtpSubject file=$buFile tls=starttls
@@ -156,7 +177,7 @@ $globalScriptBeforeRun $scriptname
                             :error "e-mail last-status is not succeeded"
                         }
 
-                        $globalNoteMe value="Done"
+                        $globalNoteMe value="Done" verbose=true
                     } do={
                         :set state "Error When $state: $errorDescr"
                         $globalNoteMe value=$state
@@ -164,37 +185,44 @@ $globalScriptBeforeRun $scriptname
                         :set itsOk false
                     }
                 }
+            }
+        }
 
-                :if ($uploaded) do={
-                    :delay 2s
-                    /file remove $backupFile
+        :if ($useFtp and $useFtpGit) do={
+            :onerror errorDescr in={
+                :local configSrc ($ramDiskName . "/" . $configLatestName)
+                :if ([:len [/file find name=$configSrc]] = 0) do={
+                    :error "config source $configLatestName not found"
+                }
+                :set state "Uploading $configLatestName to SFTP ($ftpConfigLatest)"
+                $globalNoteMe value=$state verbose=true
+                :local errorDef [$globalCallSftp $configSrc $ftpConfigLatest]
+                :if ([:len $errorDef] > 0) do={ :error $errorDef }
+                $globalNoteMe value="Done" verbose=true
+            } do={
+                :set state "Error When $state: $errorDescr"
+                $globalNoteMe value=$state
+                :if ([:len $firstError] = 0) do={ :set firstError $state }
+                :set itsOk false
+                :if ($errorDescr ~ "^sftp-session-cut") do={
+                    :error "break-loop"
                 }
             }
         }
-    }
 
-    :if ($useFtp and $useFtpGit and !$stopBatch) do={
-        :onerror errorDescr in={
-            :if ([:len [/file find name=$configLatestName]] = 0) do={
-                :error "config source $configLatestName not found"
-            }
-            :set state "Uploading $configLatestName to SFTP ($ftpConfigLatest)"
-            $globalNoteMe value=$state
-            :local errorDef [$globalCallSftp $configLatestName $ftpConfigLatest]
-            :if ([:len $errorDef] > 0) do={ :error $errorDef }
-            $globalNoteMe value="Done"
-            /file remove [find name=$configLatestName]
-        } do={
+    } do={
+        :if (!($errorDescr ~ "^break-loop")) do={
             :set state "Error When $state: $errorDescr"
             $globalNoteMe value=$state
             :if ([:len $firstError] = 0) do={ :set firstError $state }
             :set itsOk false
-            :if ($errorDescr ~ "^sftp-session-cut") do={
-                :set stopBatch true
-            }
         }
     }
 }
+
+$globalNoteMe value="Housekeeping.." verbose=true
+/file remove [/file find where name~("BACKUP-" . $sysname . "-")]
+/file remove [/file find where name~$configLatestName]
 
 :local inf ""
 :if ($itsOk) do={
