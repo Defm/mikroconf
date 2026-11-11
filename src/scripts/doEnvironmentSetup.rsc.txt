@@ -805,7 +805,7 @@
 
 # Example call
 # $globalApplyKnock ip=1.2.3.4 comment="doBackup"
-# opens alist-fw-knockknock and clears stale SSH stages; RPC operation - throws on failure
+# opens alist-fw-ssh-allow and clears stale SSH stages; RPC operation - throws on failure
 :global globalApplyKnock
 :if (!any $globalApplyKnock) do={
     :global globalApplyKnock do={
@@ -831,8 +831,8 @@
             $globalNoteMe value=$state verbose=true
 
             /ip firewall address-list {
-                remove [find list=alist-fw-knockknock address=$knockIp]
-                add address=$knockIp list=alist-fw-knockknock comment=$knockComment timeout=5m dynamic=yes
+                remove [find list=alist-fw-ssh-allow address=$knockIp]
+                add address=$knockIp list=alist-fw-ssh-allow comment=$knockComment timeout=5m dynamic=yes
 
                 # the SSH request carrying this call may have advanced a stale stage
                 remove [find list=alist-fw-ssh-stage1 address=$knockIp]

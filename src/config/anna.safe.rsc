@@ -1,4 +1,4 @@
-# 2026-11-10 15:11:05 by RouterOS 7.25.1
+# 2026-11-11 10:56:25 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -547,6 +547,7 @@
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://netro.anna.home ip-address=192.168.80.166 port=7575 sni=netro.anna.home
 /ip service set telnet disabled=yes
 /ip service set reverse-proxy available-from=192.168.90.0/24 certificate=C.anna.proxy@CHR tls-version=only-1.2
+/ip service set ssh port=2223
 /ip service set www-ssl available-from=192.168.90.0/24 port=4443
 /ip service set api disabled=yes
 /ip service set api-ssl disabled=yes
@@ -611,8 +612,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        4d20:39:27  \
-    \nTime:        2026-11-10 15:10:13  \
+    \nUptime:        5d16:19:27  \
+    \nTime:        2026-11-11 10:50:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -3947,6 +3948,8 @@
     \n:local configLatestName (\$sysname . \".safe.rsc\")\
     \n:local ramDiskName \"RAM\"\
     \n:local ramDiskPrefix (\$ramDiskName . \"/\")\
+    \n:local ramBackupPattern (\"^\" . \$ramDiskPrefix . \"BACKUP-\" . \$sysname . \"-\")\
+    \n:local ramConfigLatest (\$ramDiskPrefix . \$configLatestName)\
     \n\
     \n:local sysnote [/system note get note]\
     \n\
@@ -3984,8 +3987,8 @@
     \n:local fname \"BACKUP-\$sysname-\$stamp\"\
     \n\
     \n\$globalNoteMe value=\"Clearing previous backups..\" verbose=true\
-    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
-    \n/file remove [/file find where name~\$configLatestName]\
+    \n/file remove [/file find where name~\$ramBackupPattern]\
+    \n/file remove [/file find where name=\$ramConfigLatest]\
     \n\
     \n:onerror errorDescr in={\
     \n\
@@ -4101,13 +4104,12 @@
     \n\
     \n        :if (\$useFtp and \$useFtpGit) do={\
     \n            :onerror errorDescr in={\
-    \n                :local configSrc (\$ramDiskName . \"/\" . \$configLatestName)\
-    \n                :if ([:len [/file find name=\$configSrc]] = 0) do={\
+    \n                :if ([:len [/file find name=\$ramConfigLatest]] = 0) do={\
     \n                    :error \"config source \$configLatestName not found\"\
     \n                }\
     \n                :set state \"Uploading \$configLatestName to SFTP (\$ftpConfigLatest)\"\
     \n                \$globalNoteMe value=\$state verbose=true\
-    \n                :local errorDef [\$globalCallSftp \$configSrc \$ftpConfigLatest]\
+    \n                :local errorDef [\$globalCallSftp \$ramConfigLatest \$ftpConfigLatest]\
     \n                :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
     \n                \$globalNoteMe value=\"Done\" verbose=true\
     \n            } do={\
@@ -4132,8 +4134,8 @@
     \n}\
     \n\
     \n\$globalNoteMe value=\"Housekeeping..\" verbose=true\
-    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
-    \n/file remove [/file find where name~\$configLatestName]\
+    \n/file remove [/file find where name~\$ramBackupPattern]\
+    \n/file remove [/file find where name=\$ramConfigLatest]\
     \n\
     \n:local inf \"\"\
     \n:if (\$itsOk) do={\
@@ -4340,12 +4342,12 @@
     \n    }\
     \n}\
     \n\
-    \n:local dumpPath \"\$ramDiskName/\$ramSubDir\"\
+    \n:local dumpPath (\$ramDiskName . \"/\" . \$ramSubDir)\
     \n\
-    \n\$globalNoteMe value=\"Clearing RAMdisk..\"\
+    \n\$globalNoteMe value=\"Clearing RAMdisk..\" verbose=true\
     \n/file remove [/file find where name~\"\$dumpPath\"]\
     \n\
-    \n\$globalNoteMe value=\"Scripts source export..\"\
+    \n\$globalNoteMe value=\"Scripts source export..\" verbose=true\
     \n\
     \n:foreach scriptId in=[/system script find] do={\
     \n\
@@ -4355,7 +4357,7 @@
     \n        :local scriptName [/system script get \$scriptId name]\
     \n        :local scriptSize [:len \$scriptSource]\
     \n\
-    \n        :local scriptPath \"\$dumpPath\$scriptName.rsc.txt\"\
+    \n        :local scriptPath (\$dumpPath . \$scriptName . \".rsc.txt\")\
     \n\
     \n        :set globalScriptId \$scriptId\
     \n\
@@ -4369,11 +4371,11 @@
     \n        /file add name=\$scriptPath contents=\"\"\
     \n\
     \n        :set state \"Exporting '\$scriptName' to '\$scriptPath'\"\
-    \n        \$globalNoteMe value=\$state\
+    \n        \$globalNoteMe value=\$state verbose=true\
     \n\
     \n        /execute script=\":global globalScriptId; :put [/system script get \$globalScriptId source];\" file=\$scriptPath\
     \n\
-    \n        \$globalNoteMe value=\"Done\"\
+    \n        \$globalNoteMe value=\"Done\" verbose=true\
     \n\
     \n    } do={\
     \n        :set state \"Error When \$state: \$errorDescr\"\
@@ -4384,15 +4386,17 @@
     \n}\
     \n\
     \n# lots of tiny SFTP uploads look like bruteforce on CHR without knockknock\
+    \n:set state \"Opening firewall for SFTP (knockknock)\"\
+    \n\$globalNoteMe value=\$state verbose=true\
     \n:local errorDef [\$globalKnockKnock \$scriptname]\
     \n:if ([:len \$errorDef] > 0) do={\
-    \n    :set state \$errorDef\
+    \n    :set state \"Error When \$state: \$errorDef\"\
     \n    \$globalNoteMe value=\$state\
     \n    :if ([:len \$firstError] = 0) do={ :set firstError \$state }\
     \n    :set itsOk false\
     \n}\
     \n\
-    \n\$globalNoteMe value=\"Scripts source pushing..\"\
+    \n\$globalNoteMe value=\"Scripts source pushing..\" verbose=true\
     \n\
     \n:if (\$itsOk) do={\
     \n\
@@ -4415,12 +4419,12 @@
     \n                    :onerror errorDescr in={\
     \n\
     \n                        :set state \"Uploading \$scriptPath to SFTP - \$dst\"\
-    \n                        \$globalNoteMe value=\$state\
+    \n                        \$globalNoteMe value=\$state verbose=true\
     \n\
     \n                        :local errorDef [\$globalCallSftp \$scriptPath \$dst]\
     \n                        :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
     \n\
-    \n                        \$globalNoteMe value=\"Done\"\
+    \n                        \$globalNoteMe value=\"Done\" verbose=true\
     \n\
     \n                    } do={\
     \n                        :set state \"Error When \$state: \$errorDescr\"\
@@ -4442,14 +4446,14 @@
     \n                    :onerror errorDescr in={\
     \n\
     \n                        :set state \"Clearing \$dst on SSH-disk\"\
-    \n                        \$globalNoteMe value=\$state\
+    \n                        \$globalNoteMe value=\$state verbose=true\
     \n                        /file remove [/file find where name=\$dst type!=directory]\
     \n\
     \n                        :set state \"Copying \$scriptPath to SSH-disk - \$dst\"\
-    \n                        \$globalNoteMe value=\$state\
+    \n                        \$globalNoteMe value=\$state verbose=true\
     \n                        /file copy \$scriptPath name=\$dst\
     \n\
-    \n                        \$globalNoteMe value=\"Done\"\
+    \n                        \$globalNoteMe value=\"Done\" verbose=true\
     \n\
     \n                    } do={\
     \n                        :set state \"Error When \$state: \$errorDescr\"\
@@ -4465,7 +4469,7 @@
     \n\
     \n:delay 5s\
     \n\
-    \n\$globalNoteMe value=\"Housekeeping..\"\
+    \n\$globalNoteMe value=\"Housekeeping..\" verbose=true\
     \n/file remove [/file find where name~\"\$dumpPath\"]\
     \n\
     \n:local inf \"\"\
@@ -4483,7 +4487,7 @@
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
-    \n\r\
+    \n\
     \n"
 /system script add comment="Updates chosen scripts from Git/master (sheduler entry with the same name have to exist)" dont-require-permissions=yes name=doFreshTheScripts owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doFreshTheScripts\"\
@@ -4566,7 +4570,7 @@
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
-    \n\r\
+    \n\
     \n"
 /system script add comment="Uses INFLUX DB http/rest api to push some stats to" dont-require-permissions=yes name=doPushStatsToInfluxDB owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doPushStatsToInfluxDB\"\
@@ -6391,7 +6395,7 @@
 /ip firewall filter add action=accept chain=chain-router-services-lan comment=WEB port=80 protocol=tcp
 /ip firewall filter add action=return chain=chain-router-services-lan comment="Return from chain-router-services-lan Chain"
 /ip firewall filter add action=jump chain=input comment="Allow router services on the wan" in-interface="wan A" jump-target=chain-router-services-wan
-/ip firewall filter add action=drop chain=chain-router-services-wan comment="SSH (22/TCP)" dst-port=22 protocol=tcp
+/ip firewall filter add action=drop chain=chain-router-services-wan comment="SSH (22/TCP)" dst-port=22,2223 protocol=tcp
 /ip firewall filter add action=drop chain=chain-router-services-wan comment="Winbox (8291/TCP)" dst-port=8291 protocol=tcp
 /ip firewall filter add action=return chain=chain-router-services-wan comment="Return from chain-router-services-wan Chain"
 /ip firewall filter add action=jump chain=input comment="Check for ping flooding" jump-target=chain-detect-icmp-flood protocol=icmp
@@ -6421,10 +6425,10 @@
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" jump-target=chain-ssh-staged-control
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-ban address-list-timeout=1w3d chain=chain-ssh-staged-control comment="Transfer repeated attempts from SSH Stage 3 to Black-List" connection-state=new dst-port=22 protocol=tcp src-address-list=alist-fw-ssh-stage3
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage3 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 3" connection-state=new dst-port=22 protocol=tcp src-address-list=alist-fw-ssh-stage2
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage2 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 2" connection-state=new dst-port=22 protocol=tcp src-address-list=alist-fw-ssh-stage1
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new dst-port=22 protocol=tcp src-address-list=!alist-fw-ssh-allow
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-ban address-list-timeout=1w3d chain=chain-ssh-staged-control comment="Transfer repeated attempts from SSH Stage 3 to Black-List" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage3
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage3 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 3" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage2
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage2 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 2" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage1
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=!alist-fw-ssh-allow
 /ip firewall filter add action=return chain=chain-ssh-staged-control comment="Return From RFC SSH Chain"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY3 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="Jump to RFC Telnet Chain" jump-target=chain-telnet-staged-control
@@ -6492,8 +6496,8 @@
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer" port=20 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPcontrol (command)" port=21 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer  " port=20 protocol=udp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)" port=22 protocol=tcp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)   " port=22 protocol=udp
+/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)" port=22,2223 protocol=tcp
+/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)   " port=22,2223 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="Priv-mail: any privatemailsystem." port=24 protocol=tcp

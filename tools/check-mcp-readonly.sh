@@ -11,11 +11,11 @@ fail() {
 }
 
 hardened="${ROOT}/vendor/mikrotik-mcp/.venv/bin/mcp-server-mikrotik-hardened"
-inventory="${HOME}/.config/mikrobackups/inventory.yml"
+inventory="${ROOT}/config/inventory.yml"
 known_hosts="${HOME}/.ssh/mikrobackups/known_hosts"
 
 [[ -x "$hardened" ]] || fail "нет исполняемого hardened-entrypoint: vendor/mikrotik-mcp/.venv/bin/mcp-server-mikrotik-hardened (запустите: cd vendor/mikrotik-mcp && uv sync)"
-[[ -f "$inventory" ]] || fail "нет inventory: ~/.config/mikrobackups/inventory.yml"
+[[ -f "$inventory" ]] || fail "нет inventory: config/inventory.yml"
 [[ -f "$known_hosts" ]] || fail "нет known_hosts: ~/.ssh/mikrobackups/known_hosts"
 
 if [[ -f "$inventory" && -x "${ROOT}/vendor/mikrotik-mcp/.venv/bin/python" ]]; then

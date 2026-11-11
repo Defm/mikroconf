@@ -1,4 +1,4 @@
-# 2026-11-10 15:20:46 by RouterOS 7.25.1
+# 2026-11-11 10:55:12 by RouterOS 7.25.1
 # software id = 59DY-JI10
 #
 # model = RBcAPGi-5acD2nD
@@ -29,6 +29,7 @@
 /ip tftp add real-filename=NAS/ req-filename=.*
 /ip service set ftp disabled=yes
 /ip service set telnet disabled=yes
+/ip service set ssh port=2223
 /ip service set api-ssl disabled=yes
 /ppp profile add bridge-learning=no change-tcp-mss=no local-address=0.0.0.0 name=null only-one=yes remote-address=0.0.0.0 session-timeout=1s use-compression=no use-encryption=no use-mpls=no use-upnp=no
 /interface bridge add admin-mac=18:FD:74:94:FD:70 auto-mac=no igmp-snooping=yes name=main-infrastructure-br port-cost-mode=short
@@ -73,8 +74,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     192.168.90.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        4d20:23:00  \
-    \nTime:        2026-11-10 15:13:04  \
+    \nUptime:        5d16:03:00  \
+    \nTime:        2026-11-11 10:53:04  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -1566,6 +1567,8 @@ set [ find default=yes ] advertise-dns=yes
     \n:local configLatestName (\$sysname . \".safe.rsc\")\
     \n:local ramDiskName \"RAM\"\
     \n:local ramDiskPrefix (\$ramDiskName . \"/\")\
+    \n:local ramBackupPattern (\"^\" . \$ramDiskPrefix . \"BACKUP-\" . \$sysname . \"-\")\
+    \n:local ramConfigLatest (\$ramDiskPrefix . \$configLatestName)\
     \n\
     \n:local sysnote [/system note get note]\
     \n\
@@ -1603,8 +1606,8 @@ set [ find default=yes ] advertise-dns=yes
     \n:local fname \"BACKUP-\$sysname-\$stamp\"\
     \n\
     \n\$globalNoteMe value=\"Clearing previous backups..\" verbose=true\
-    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
-    \n/file remove [/file find where name~\$configLatestName]\
+    \n/file remove [/file find where name~\$ramBackupPattern]\
+    \n/file remove [/file find where name=\$ramConfigLatest]\
     \n\
     \n:onerror errorDescr in={\
     \n\
@@ -1720,13 +1723,12 @@ set [ find default=yes ] advertise-dns=yes
     \n\
     \n        :if (\$useFtp and \$useFtpGit) do={\
     \n            :onerror errorDescr in={\
-    \n                :local configSrc (\$ramDiskName . \"/\" . \$configLatestName)\
-    \n                :if ([:len [/file find name=\$configSrc]] = 0) do={\
+    \n                :if ([:len [/file find name=\$ramConfigLatest]] = 0) do={\
     \n                    :error \"config source \$configLatestName not found\"\
     \n                }\
     \n                :set state \"Uploading \$configLatestName to SFTP (\$ftpConfigLatest)\"\
     \n                \$globalNoteMe value=\$state verbose=true\
-    \n                :local errorDef [\$globalCallSftp \$configSrc \$ftpConfigLatest]\
+    \n                :local errorDef [\$globalCallSftp \$ramConfigLatest \$ftpConfigLatest]\
     \n                :if ([:len \$errorDef] > 0) do={ :error \$errorDef }\
     \n                \$globalNoteMe value=\"Done\" verbose=true\
     \n            } do={\
@@ -1751,8 +1753,8 @@ set [ find default=yes ] advertise-dns=yes
     \n}\
     \n\
     \n\$globalNoteMe value=\"Housekeeping..\" verbose=true\
-    \n/file remove [/file find where name~(\"BACKUP-\" . \$sysname . \"-\")]\
-    \n/file remove [/file find where name~\$configLatestName]\
+    \n/file remove [/file find where name~\$ramBackupPattern]\
+    \n/file remove [/file find where name=\$ramConfigLatest]\
     \n\
     \n:local inf \"\"\
     \n:if (\$itsOk) do={\
@@ -1941,7 +1943,7 @@ set [ find default=yes ] advertise-dns=yes
     \n    \$globalTgMessage value=\$inf\
     \n    :error \$inf\
     \n}\
-    \n\r\
+    \n\
     \n"
 /system script add comment="This will check for free CPU/RAM resources over \$ticks times to be more than \$CpuWarnLimit%/\$RamWarnLimit% each time. Will reboot the router when overload" dont-require-permissions=yes name=doCPUHighLoadReboot owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doCPUHighLoadReboot\"\r\

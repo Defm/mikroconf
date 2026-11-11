@@ -399,7 +399,7 @@ $globalNoteMe value=$inf
 - Удалённая команда для SSH — в фигурных скобках одной строкой: `:local remoteCommand "{ /ip/firewall/address-list remove [...]; /ip/firewall/address-list/add ... }"`.
 - Async через `[:execute script=$Cmd]` / `[:execute file=... script=...]` с опросом `/system script job find where .id=$jobid` и `:delay 1s`.
 - RPC между роутерами — установка глобалов на удалённой стороне строкой `":global globalRemoteIp $wanIp/32"`, затем `/system script run doUpdatePoliciesRemotely`.
-- Ритуал «knock» перед массовым SFTP: `alist-fw-knockknock` + `:delay 15s` с комментарием про бан.
+- Ритуал «knock» перед массовым SFTP: `alist-fw-ssh-allow` + `:delay 15s` с комментарием про бан.
 
 ### 2.10. Задержки
 
