@@ -1,4 +1,4 @@
-# 2026-11-11 10:55:12 by RouterOS 7.25.1
+# 2026-11-11 15:04:15 by RouterOS 7.25.1
 # software id = 59DY-JI10
 #
 # model = RBcAPGi-5acD2nD
@@ -74,8 +74,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     192.168.90.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        5d16:03:00  \
-    \nTime:        2026-11-11 10:53:04  \
+    \nUptime:        5d20:13:00  \
+    \nTime:        2026-11-11 15:03:04  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -1439,7 +1439,7 @@ set [ find default=yes ] advertise-dns=yes
     \n\
     \n# Example call\
     \n# \$globalApplyKnock ip=1.2.3.4 comment=\"doBackup\"\
-    \n# opens alist-fw-knockknock and clears stale SSH stages; RPC operation - throws on failure\
+    \n# opens alist-fw-ssh-allow and clears stale SSH stages; RPC operation - throws on failure\
     \n:global globalApplyKnock\
     \n:if (!any \$globalApplyKnock) do={\
     \n    :global globalApplyKnock do={\
@@ -1465,8 +1465,8 @@ set [ find default=yes ] advertise-dns=yes
     \n            \$globalNoteMe value=\$state verbose=true\
     \n\
     \n            /ip firewall address-list {\
-    \n                remove [find list=alist-fw-knockknock address=\$knockIp]\
-    \n                add address=\$knockIp list=alist-fw-knockknock comment=\$knockComment timeout=5m dynamic=yes\
+    \n                remove [find list=alist-fw-ssh-allow address=\$knockIp]\
+    \n                add address=\$knockIp list=alist-fw-ssh-allow comment=\$knockComment timeout=5m dynamic=yes\
     \n\
     \n                # the SSH request carrying this call may have advanced a stale stage\
     \n                remove [find list=alist-fw-ssh-stage1 address=\$knockIp]\
