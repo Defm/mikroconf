@@ -33,8 +33,10 @@ cd ../..
 
 MikroTik MCP читает inventory из `config/inventory.yml` (файл в workspace,
 не в Git; шаблон — `config/inventory.example.yml`), а доверенные SSH host
-keys — из `~/.ssh/mikrobackups/known_hosts`. Не коммитьте живой inventory
-и не копируйте его содержимое в чат или документацию. В inventory указаны
+keys — из `~/.ssh/mikrobackups/known_hosts`. Прямой SSH, SFTP и SCP к
+устройствам берут те же поля из того же файла; служебные скрипты в `tools/`
+не являются адресной книгой. Не коммитьте живой inventory и не копируйте
+его содержимое в чат или документацию. В inventory указаны
 пользователь `automation` и ключ `~/.ssh/mikrobackups/automation`. Каталог
 MCP остаётся read-only, но SSH-аккаунт на устройстве привилегированный:
 write-команды по-прежнему режет hook и hardened allowlist, least-privilege
