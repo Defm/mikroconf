@@ -1,4 +1,4 @@
-# 2026-11-11 10:56:25 by RouterOS 7.25.1
+# 2026-11-11 14:48:56 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -538,7 +538,7 @@
 /ip smb users set [ find default=yes ] read-only=no
 /ip smb shares set [ find default=yes ] directory=/usb-sftp/public disabled=no
 /ip socksify add disabled=no name=byedpi socks5-server=192.168.80.2
-/ip ssh set ciphers=aes-gcm,aes-ctr,aes-cbc,3des-cbc,null forwarding-enabled=remote host-key-type=rsa known-hosts-validation=no
+/ip ssh set ciphers=aes-gcm,aes-ctr,aes-cbc,3des-cbc,null forwarding-enabled=remote host-key-type=rsa known-hosts-validation=no password-authentication=yes
 /ip tftp add real-filename=NAS/ req-filename=.*
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://victoria.anna.home ip-address=192.168.80.160 port=9428 sni=victoria.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://wiren.anna.home ip-address=192.168.90.3 port=80 sni=wiren.anna.home
@@ -612,8 +612,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        5d16:19:27  \
-    \nTime:        2026-11-11 10:50:13  \
+    \nUptime:        5d20:09:27  \
+    \nTime:        2026-11-11 14:40:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -3664,7 +3664,7 @@
     \n\
     \n# Example call\
     \n# \$globalApplyKnock ip=1.2.3.4 comment=\"doBackup\"\
-    \n# opens alist-fw-knockknock and clears stale SSH stages; RPC operation - throws on failure\
+    \n# opens alist-fw-ssh-allow and clears stale SSH stages; RPC operation - throws on failure\
     \n:global globalApplyKnock\
     \n:if (!any \$globalApplyKnock) do={\
     \n    :global globalApplyKnock do={\
@@ -3690,8 +3690,8 @@
     \n            \$globalNoteMe value=\$state verbose=true\
     \n\
     \n            /ip firewall address-list {\
-    \n                remove [find list=alist-fw-knockknock address=\$knockIp]\
-    \n                add address=\$knockIp list=alist-fw-knockknock comment=\$knockComment timeout=5m dynamic=yes\
+    \n                remove [find list=alist-fw-ssh-allow address=\$knockIp]\
+    \n                add address=\$knockIp list=alist-fw-ssh-allow comment=\$knockComment timeout=5m dynamic=yes\
     \n\
     \n                # the SSH request carrying this call may have advanced a stale stage\
     \n                remove [find list=alist-fw-ssh-stage1 address=\$knockIp]\
@@ -6395,7 +6395,6 @@
 /ip firewall filter add action=accept chain=chain-router-services-lan comment=WEB port=80 protocol=tcp
 /ip firewall filter add action=return chain=chain-router-services-lan comment="Return from chain-router-services-lan Chain"
 /ip firewall filter add action=jump chain=input comment="Allow router services on the wan" in-interface="wan A" jump-target=chain-router-services-wan
-/ip firewall filter add action=drop chain=chain-router-services-wan comment="SSH (22/TCP)" dst-port=22,2223 protocol=tcp
 /ip firewall filter add action=drop chain=chain-router-services-wan comment="Winbox (8291/TCP)" dst-port=8291 protocol=tcp
 /ip firewall filter add action=return chain=chain-router-services-wan comment="Return from chain-router-services-wan Chain"
 /ip firewall filter add action=jump chain=input comment="Check for ping flooding" jump-target=chain-detect-icmp-flood protocol=icmp
@@ -6411,8 +6410,6 @@
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY1 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Manually Added)" src-address-list=alist-fw-manual-block
 /ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (Manually Added)" src-address-list=alist-fw-manual-block
-/ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (SSH)" src-address-list=alist-fw-ssh-ban
-/ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (SSH)" src-address-list=alist-fw-ssh-ban
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Telnet)" src-address-list=alist-fw-telnet-ban
 /ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (Telnet)" src-address-list=alist-fw-telnet-ban
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Winbox)" src-address-list=alist-fw-winbox-ban
@@ -6424,12 +6421,14 @@
 /ip firewall filter add action=drop chain=input comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 src-address-list=alist-fw-empty-dummy
-/ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" jump-target=chain-ssh-staged-control
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-ban address-list-timeout=1w3d chain=chain-ssh-staged-control comment="Transfer repeated attempts from SSH Stage 3 to Black-List" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage3
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage3 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 3" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage2
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage2 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 2" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage1
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=!alist-fw-ssh-allow
-/ip firewall filter add action=return chain=chain-ssh-staged-control comment="Return From RFC SSH Chain"
+/ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" dst-port=22,2223 jump-target=chain-ssh-staged-control protocol=tcp
+/ip firewall filter add action=accept chain=chain-ssh-staged-control comment="Accept SSH allow-list" src-address-list=alist-fw-ssh-allow
+/ip firewall filter add action=drop chain=chain-ssh-staged-control comment="Drop SSH ban-list" src-address-list=alist-fw-ssh-ban
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-ban address-list-timeout=1w3d chain=chain-ssh-staged-control comment="Transfer repeated attempts from SSH Stage 3 to Black-List" connection-state=new protocol=tcp src-address-list=alist-fw-ssh-stage3
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage3 address-list-timeout=3m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 3" connection-state=new protocol=tcp src-address-list=alist-fw-ssh-stage2
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage2 address-list-timeout=40s chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 2" connection-state=new protocol=tcp src-address-list=alist-fw-ssh-stage1
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=5s chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new protocol=tcp src-address-list=!alist-fw-ssh-allow
+/ip firewall filter add action=accept chain=chain-ssh-staged-control comment="Accept remaining SSH"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY3 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="Jump to RFC Telnet Chain" jump-target=chain-telnet-staged-control
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-telnet-ban address-list-timeout=1w3d chain=chain-telnet-staged-control comment="Transfer repeated attempts from Telnet Stage 3 to Black-List" connection-state=new dst-port=23 protocol=tcp src-address-list=alist-fw-telnet-stage3
@@ -6496,8 +6495,6 @@
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer" port=20 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPcontrol (command)" port=21 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer  " port=20 protocol=udp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)" port=22,2223 protocol=tcp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)   " port=22,2223 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="Priv-mail: any privatemailsystem." port=24 protocol=tcp
