@@ -1,4 +1,4 @@
-# 2026-11-10 18:34:30 by RouterOS 7.25.1
+# 2026-11-11 10:56:25 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -547,6 +547,7 @@
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://netro.anna.home ip-address=192.168.80.166 port=7575 sni=netro.anna.home
 /ip service set telnet disabled=yes
 /ip service set reverse-proxy available-from=192.168.90.0/24 certificate=C.anna.proxy@CHR tls-version=only-1.2
+/ip service set ssh port=2223
 /ip service set www-ssl available-from=192.168.90.0/24 port=4443
 /ip service set api disabled=yes
 /ip service set api-ssl disabled=yes
@@ -611,8 +612,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        4d23:59:27  \
-    \nTime:        2026-11-10 18:30:13  \
+    \nUptime:        5d16:19:27  \
+    \nTime:        2026-11-11 10:50:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6394,7 +6395,7 @@
 /ip firewall filter add action=accept chain=chain-router-services-lan comment=WEB port=80 protocol=tcp
 /ip firewall filter add action=return chain=chain-router-services-lan comment="Return from chain-router-services-lan Chain"
 /ip firewall filter add action=jump chain=input comment="Allow router services on the wan" in-interface="wan A" jump-target=chain-router-services-wan
-/ip firewall filter add action=drop chain=chain-router-services-wan comment="SSH (22/TCP)" dst-port=22 protocol=tcp
+/ip firewall filter add action=drop chain=chain-router-services-wan comment="SSH (22/TCP)" dst-port=22,2223 protocol=tcp
 /ip firewall filter add action=drop chain=chain-router-services-wan comment="Winbox (8291/TCP)" dst-port=8291 protocol=tcp
 /ip firewall filter add action=return chain=chain-router-services-wan comment="Return from chain-router-services-wan Chain"
 /ip firewall filter add action=jump chain=input comment="Check for ping flooding" jump-target=chain-detect-icmp-flood protocol=icmp
@@ -6424,10 +6425,10 @@
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" jump-target=chain-ssh-staged-control
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-ban address-list-timeout=1w3d chain=chain-ssh-staged-control comment="Transfer repeated attempts from SSH Stage 3 to Black-List" connection-state=new dst-port=22 protocol=tcp src-address-list=alist-fw-ssh-stage3
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage3 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 3" connection-state=new dst-port=22 protocol=tcp src-address-list=alist-fw-ssh-stage2
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage2 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 2" connection-state=new dst-port=22 protocol=tcp src-address-list=alist-fw-ssh-stage1
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new dst-port=22 protocol=tcp src-address-list=!alist-fw-ssh-allow
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-ban address-list-timeout=1w3d chain=chain-ssh-staged-control comment="Transfer repeated attempts from SSH Stage 3 to Black-List" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage3
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage3 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 3" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage2
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage2 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 2" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=alist-fw-ssh-stage1
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=1m chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new dst-port=22,2223 protocol=tcp src-address-list=!alist-fw-ssh-allow
 /ip firewall filter add action=return chain=chain-ssh-staged-control comment="Return From RFC SSH Chain"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY3 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="Jump to RFC Telnet Chain" jump-target=chain-telnet-staged-control
@@ -6495,8 +6496,8 @@
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer" port=20 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPcontrol (command)" port=21 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer  " port=20 protocol=udp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)" port=22 protocol=tcp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)   " port=22 protocol=udp
+/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)" port=22,2223 protocol=tcp
+/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)   " port=22,2223 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="Priv-mail: any privatemailsystem." port=24 protocol=tcp
