@@ -1,4 +1,4 @@
-# 2026-11-11 08:58:10 by RouterOS 7.25.1
+# 2026-11-11 12:59:56 by RouterOS 7.25.1
 # system id = pEDSXaHXN3J
 #
 # custom default configuration script installed
@@ -199,7 +199,7 @@
 /interface veth add address=172.17.0.2/28 container-mac-address=26:8A:0C:A0:3E:3B dhcp=no gateway=172.17.0.1 gateway6="" mac-address=26:8A:0C:A0:3E:3A name=veth-telemt
 /interface veth add address=172.17.0.3/28 container-mac-address=30:A6:92:7E:80:32 dhcp=no gateway=172.17.0.1 gateway6="" mac-address=30:A6:92:7E:80:31 name=veth-telemt-webui
 /interface wireguard add listen-port=65114 mtu=1420 name=wg-to-capax
-/container add check-certificate=no cmd=/etc/telemt/config.toml comment="MTProto telegram proxy" dns=192.168.97.1 envlists=TELEMT_ENVS healthcheck-cmd=CMD,/app/telemt,healthcheck,/etc/telemt/config.toml,--mode,liveness healthcheck-status="failed with exit code 1, tries 5454/3, output: [telemt] healthcheck failed: invalid HTTP response headers\
+/container add check-certificate=no cmd=/etc/telemt/config.toml comment="MTProto telegram proxy" dns=192.168.97.1 envlists=TELEMT_ENVS healthcheck-cmd=CMD,/app/telemt,healthcheck,/etc/telemt/config.toml,--mode,liveness healthcheck-status="failed with exit code 1, tries 5937/3, output: [telemt] healthcheck failed: invalid HTTP response headers\
     \n" hostname=telemt interface=veth-telemt layer-dir=/docker/layers logging=yes memory-high=256.0MiB mountlists=TELEMT_VOLUMES name=telemt remote-image=ghcr.io/telemt/telemt:latest root-dir=/docker/runs/telemt start-on-boot=yes user=0:0 workdir=/tmp
 /container add check-certificate=no comment="MTProto telegram proxy web panel" dns=192.168.97.1 hostname=telemt-webui interface=veth-telemt-webui layer-dir=/docker/layers logging=yes memory-high=256.0MiB mountlists=TELEMT_WEBUI_VOLUMES name=telemt-webui remote-image=ghcr.io/amirotin/telemt_panel:latest root-dir=/docker/runs/telemt-webui start-on-boot=yes
 /container add check-certificate=no comment="Caddy web server and reverse proxy" dns=192.168.97.1 envlists=CADDY_ENVS hostname=caddy interface=veth-caddy layer-dir=/docker/layers logging=yes memory-high=200.0MiB mountlists=CADDY_VOLUMES name=caddy remote-image=caddy:latest root-dir=/docker/runs/caddy start-on-boot=yes user=0:0 workdir=/srv
@@ -301,7 +301,7 @@ set [ find default=yes ] advertise-dns=yes
 /ip firewall filter add action=accept chain=output comment="Telemt proxy Accept" port=443 protocol=tcp
 /ip firewall filter add action=accept chain=output log=yes log-prefix=SYSLOG port=514 protocol=udp
 /ip firewall filter add action=log chain=input protocol=ipsec-esp
-/ip firewall filter add action=log chain=forward dst-port=22,5022 log=yes log-prefix=--SSH-5022 protocol=tcp src-port=""
+/ip firewall filter add action=log chain=forward dst-port=22 log=yes log-prefix=--SSH-5022 protocol=tcp src-port=""
 /ip firewall filter add action=accept chain=input comment="Allow NTP server" connection-state="" log=yes log-prefix=~~NTP port=123 protocol=udp
 /ip firewall filter add action=accept chain=output comment="Allow NTP server" connection-state="" log=yes log-prefix=~~NTP port=123 protocol=udp
 /ip firewall filter add action=accept chain=input comment=WINBOX port=8291 protocol=tcp
@@ -343,6 +343,7 @@ set [ find default=yes ] advertise-dns=yes
 /ip firewall filter add action=add-dst-to-address-list address-list=alist-fw-ftp-block address-list-timeout=3h chain=output comment="drop ftp brute forcers" content="530 Login incorrect" protocol=tcp
 /ip firewall filter add action=jump chain=input comment="Jump to DNS Amplification" jump-target=chain-dns-amp-attack
 /ip firewall filter add action=accept chain=chain-dns-amp-attack comment="Make exceptions for DNS" port=53 protocol=udp src-address-list=alist-fw-dns-allow
+/ip firewall filter add action=drop chain=chain-dns-amp-attack comment="Drop incoming TCP DNS from WAN" dst-port=53 in-interface-list=list-FW-prevent-dns-requests-WAN protocol=tcp
 /ip firewall filter add action=drop chain=chain-dns-amp-attack comment="Drop incoming for DNS" in-interface-list=list-FW-prevent-dns-requests-WAN port=53 protocol=udp
 /ip firewall filter add action=accept chain=chain-dns-amp-attack comment="Make exceptions for DNS" dst-address-list=alist-fw-dns-allow log-prefix=~~~DNS port=53 protocol=udp
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-dns-amp-block address-list-timeout=10h chain=chain-dns-amp-attack comment="Add DNS Amplification to Blacklist" port=53 protocol=udp src-address-list=!alist-fw-dns-allow
@@ -369,8 +370,6 @@ set [ find default=yes ] advertise-dns=yes
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY1 log-prefix=~~~DUMMY1 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Manually Added)" src-address-list=alist-fw-manual-block
 /ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (Manually Added)" src-address-list=alist-fw-manual-block
-/ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (SSH)" src-address-list=alist-fw-ssh-ban
-/ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (SSH)" src-address-list=alist-fw-ssh-ban
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Telnet)" src-address-list=alist-fw-telnet-ban
 /ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (Telnet)" src-address-list=alist-fw-telnet-ban
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Winbox)" src-address-list=alist-fw-winbox-ban
@@ -382,12 +381,14 @@ set [ find default=yes ] advertise-dns=yes
 /ip firewall filter add action=drop chain=input comment="Drop all Bogons" log=yes log-prefix="#DROP BOGONS (INPUT)" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" log=yes log-prefix="#DROP BOGONS (FWD)" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 log-prefix=~~~DUMMY2 src-address-list=alist-fw-empty-dummy
-/ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" dst-port=22,5022,2223 jump-target=chain-ssh-staged-control protocol=tcp
+/ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" dst-port=22,2223 jump-target=chain-ssh-staged-control protocol=tcp
+/ip firewall filter add action=accept chain=chain-ssh-staged-control comment="Accept SSH allow-list" src-address-list=alist-fw-ssh-allow
+/ip firewall filter add action=drop chain=chain-ssh-staged-control comment="Drop SSH ban-list" src-address-list=alist-fw-ssh-ban
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-ban address-list-timeout=1w3d chain=chain-ssh-staged-control comment="Transfer repeated attempts from SSH Stage 3 to Black-List" connection-state=new protocol=tcp src-address-list=alist-fw-ssh-stage3
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage3 address-list-timeout=3m chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 3" connection-state=new protocol=tcp src-address-list=alist-fw-ssh-stage2
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage2 address-list-timeout=40s chain=chain-ssh-staged-control comment="Add succesive attempts to SSH Stage 2" connection-state=new protocol=tcp src-address-list=alist-fw-ssh-stage1
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=5s chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new protocol=tcp src-address-list=!alist-fw-knockknock
-/ip firewall filter add action=return chain=chain-ssh-staged-control comment="Return From RFC SSH Chain"
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=5s chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new protocol=tcp src-address-list=!alist-fw-ssh-allow
+/ip firewall filter add action=accept chain=chain-ssh-staged-control comment="Accept remaining SSH"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY3 log-prefix=~~~DUMMY3 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="Jump to RFC Telnet Chain" jump-target=chain-telnet-staged-control
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-telnet-ban address-list-timeout=1w3d chain=chain-telnet-staged-control comment="Transfer repeated attempts from Telnet Stage 3 to Black-List" connection-state=new dst-port=23 protocol=tcp src-address-list=alist-fw-telnet-stage3
@@ -454,8 +455,6 @@ set [ find default=yes ] advertise-dns=yes
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer" log-prefix=~~~FTP port=20 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPcontrol (command)" log-prefix=~~~FTP port=21 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="FTPdata transfer  " log-prefix=~~~FTP port=20 protocol=udp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)" port=22,2223 protocol=tcp
-/ip firewall filter add action=accept chain=chain-self-common-ports comment="Secure Shell(SSH)   " port=22,2223 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=tcp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment=Telnet port=23 protocol=udp
 /ip firewall filter add action=accept chain=chain-self-common-ports comment="Priv-mail: any privatemailsystem." port=24 protocol=tcp
@@ -600,8 +599,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     185.13.148.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        1d21:19:36  \
-    \nTime:        2026-11-11 08:50:12  \
+    \nUptime:        2d01:19:36  \
+    \nTime:        2026-11-11 12:50:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -1982,7 +1981,7 @@ set [ find default=yes ] advertise-dns=yes
     \n\
     \n# Example call\
     \n# \$globalApplyKnock ip=1.2.3.4 comment=\"doBackup\"\
-    \n# opens alist-fw-knockknock and clears stale SSH stages; RPC operation - throws on failure\
+    \n# opens alist-fw-ssh-allow and clears stale SSH stages; RPC operation - throws on failure\
     \n:global globalApplyKnock\
     \n:if (!any \$globalApplyKnock) do={\
     \n    :global globalApplyKnock do={\
@@ -2008,8 +2007,8 @@ set [ find default=yes ] advertise-dns=yes
     \n            \$globalNoteMe value=\$state verbose=true\
     \n\
     \n            /ip firewall address-list {\
-    \n                remove [find list=alist-fw-knockknock address=\$knockIp]\
-    \n                add address=\$knockIp list=alist-fw-knockknock comment=\$knockComment timeout=5m dynamic=yes\
+    \n                remove [find list=alist-fw-ssh-allow address=\$knockIp]\
+    \n                add address=\$knockIp list=alist-fw-ssh-allow comment=\$knockComment timeout=5m dynamic=yes\
     \n\
     \n                # the SSH request carrying this call may have advanced a stale stage\
     \n                remove [find list=alist-fw-ssh-stage1 address=\$knockIp]\
