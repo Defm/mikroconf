@@ -1,4 +1,4 @@
-# 2026-11-10 18:59:08 by RouterOS 7.25.1
+# 2026-11-11 10:55:12 by RouterOS 7.25.1
 # software id = 59DY-JI10
 #
 # model = RBcAPGi-5acD2nD
@@ -29,6 +29,7 @@
 /ip tftp add real-filename=NAS/ req-filename=.*
 /ip service set ftp disabled=yes
 /ip service set telnet disabled=yes
+/ip service set ssh port=2223
 /ip service set api-ssl disabled=yes
 /ppp profile add bridge-learning=no change-tcp-mss=no local-address=0.0.0.0 name=null only-one=yes remote-address=0.0.0.0 session-timeout=1s use-compression=no use-encryption=no use-mpls=no use-upnp=no
 /interface bridge add admin-mac=18:FD:74:94:FD:70 auto-mac=no igmp-snooping=yes name=main-infrastructure-br port-cost-mode=short
@@ -73,8 +74,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     192.168.90.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        5d00:03:00  \
-    \nTime:        2026-11-10 18:53:04  \
+    \nUptime:        5d16:03:00  \
+    \nTime:        2026-11-11 10:53:04  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
