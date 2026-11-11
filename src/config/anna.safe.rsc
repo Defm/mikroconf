@@ -1,4 +1,4 @@
-# 2026-11-11 14:48:56 by RouterOS 7.25.1
+# 2026-11-11 21:13:08 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -612,8 +612,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        5d20:09:27  \
-    \nTime:        2026-11-11 14:40:13  \
+    \nUptime:        6d02:39:27  \
+    \nTime:        2026-11-11 21:10:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6037,6 +6037,7 @@
 /system logging action add disk-file-count=1 disk-file-name=REBOOTLog disk-lines-per-file=100 name=REBOOTDiskLog target=disk
 /system logging action add name=DockerOnscreenLog target=memory
 /system logging action add name=NetinstallOnscreenLog target=memory
+/system logging action add name=VictoriaRemoteSyslog remote=victoria.home remote-log-format=syslog remote-port=5140 target=remote
 /system logging add action=IpsecOnScreenLog topics=ipsec,!debug
 /system logging add action=ErrorDiskLog topics=critical
 /system logging add action=ErrorDiskLog topics=error
@@ -6074,6 +6075,8 @@
 /system logging add action=VictoriaRemoteLog topics=l2tp,!packet,!debug,!raw,!info
 /system logging add action=NetinstallOnscreenLog topics=netinstall
 /system logging add action=VictoriaRemoteLog topics=caps
+/system logging add action=VictoriaRemoteSyslog prefix=victoria-logs regex=victoria-logs topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=netronome regex=netronome topics=container
 /tool bandwidth-server set enabled=no
 /tool e-mail set from=defm.kopcap@gmail.com port=587 server=smtp.gmail.com tls=yes user=defm.kopcap@gmail.com
 /tool graphing set page-refresh=50
@@ -6141,7 +6144,8 @@
 /caps-man manager interface add comment="Deny WAN CapsMan" disabled=no forbid=yes interface="wan A"
 /caps-man manager interface add comment="Do CapsMan on private" disabled=no interface=main-infrastructure-br
 /caps-man manager interface add comment="Do CapsMan on guest" disabled=no interface=guest-infrastructure-br
-/container add check-certificate=no cmd="-syslog.listenAddr.udp=:514 -syslog.useRemoteIP.udp=true -defaultMsgValue=\"CEF stub\" -syslog.extraFields.udp='{\"env\": \"home\"}' -syslog.ignoreFields.udp='[\"cef.device_event_class_id\"]' -syslog.streamFields.udp='[\"hostname\",\"env\"]'" comment="Victoria logging UI and storage" dns=192.168.80.1 hosts=victoria-logs:192.168.80.160 interface=veth-victoria-logs layer-dir=/usb-docker/layers logging=yes mountlists=VICTORIA_MOUNTS name=victoria-logs remote-image=docker.io/victoriametrics/victoria-logs:latest root-dir=/usb-docker/rootfs/victoria-s start-on-boot=yes stop-time=30s workdir=/
+/container add check-certificate=no cmd="-syslog.timezone=\"Europe/Moscow\" -syslog.listenAddr.udp=:514 -syslog.useRemoteIP.udp=true -defaultMsgValue=\"CEF stub\" -syslog.extraFields.udp='{\"env\": \"routeros\", \"kind\": \"cef\"}' -syslog.ignoreFields.udp='[\"cef.device_event_class_id\"]' -syslog.streamFields.udp='[\"hostname\",\"env\", \"kind\", \"app_name\"]'\
+    \n-syslog.listenAddr.udp=:5140 -syslog.extraFields.udp='{\"env\":\"docker\", \"kind\": \"syslog\"}' -syslog.streamFields.udp='[\"hostname\",\"env\", \"kind\", \"app_name\"]'" comment="Victoria logging UI and storage" dns=192.168.80.1 hosts=victoria-logs:192.168.80.160 interface=veth-victoria-logs layer-dir=/usb-docker/layers logging=yes mountlists=VICTORIA_MOUNTS name=victoria-logs remote-image=docker.io/victoriametrics/victoria-logs:latest root-dir=/usb-docker/rootfs/victoria-s start-on-boot=yes stop-time=30s workdir=/
 /container add check-certificate=no comment="Netronome SpeedTest monitor with history" dns=192.168.80.1 envlists=NETRONOM_ENVS hostname=netronome interface=veth-netronome layer-dir=/usb-docker/layers logging=yes mountlists=NETRONOME_MOUNTS name=netronome remote-image=ghcr.io/autobrr/netronome:latest root-dir=/usb-docker/rootfs/netronome-s start-on-boot=yes
 /container add check-certificate=no cmd="-debug -K u -a 5 --auto=none -Kt,h -d1 -s0+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -An -Ku -a1 -An" comment="YouTube freedom" dns=192.168.80.1 envlists=BYEDPI_QUIC_REJECT interface=byedpi-tunnel layer-dir=/usb-docker/layers logging=yes name=byedpi remote-image=registry-1.docker.io/wiktorbgu/byedpi-hev-socks5-tunnel:redirect root-dir=/usb-docker/rootfs/byedpi-s start-on-boot=yes workdir=/
 /disk add comment=Ramdisk slot=RAM tmpfs-max-size=40000000 type=tmpfs
@@ -6346,7 +6350,7 @@
 /ip dhcp-server matcher add address-pool=pool-vendor code=60 matching-type=exact name=vendor-mikrotik-caps server=main-dhcp-server value=mikrotik-cap
 /ip dns set address-list-extra-time=30s allow-remote-requests=yes cache-max-ttl=1d cache-size=40000KiB doh-max-concurrent-queries=100 doh-max-server-connections=20 max-concurrent-queries=200 max-concurrent-tcp-sessions=30 mdns-repeat-ifaces=main-infrastructure-br query-server-timeout=3s servers=217.10.36.5 use-doh-server=https://8.8.8.8/dns-query verify-doh-cert=yes
 /ip firewall filter add action=drop chain=input comment=ECH_block dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(input)" protocol=udp
-/ip firewall filter add action=accept chain=input comment=SYSL dst-port=514 layer7-protocol=ECH log=yes log-prefix="#CATCH SYSL(input)" protocol=udp
+/ip firewall filter add action=accept chain=input comment=SYSL dst-port=514,5140 layer7-protocol=ECH log=yes log-prefix="#CATCH SYSL(input)" protocol=udp
 /ip firewall filter add action=drop chain=forward comment=ECH_block dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(forward)" protocol=udp
 /ip firewall filter add action=drop chain=output comment=ECH_block dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(output)" protocol=udp
 /ip firewall filter add action=drop chain=input comment="Drop Invalid Connections (HIGH PRIORIRY RULE)" connection-state=invalid in-interface-list=list-drop-invalid-connections log=yes log-prefix="#DROP INVLD(input)"
@@ -6616,7 +6620,7 @@
 /ip firewall nat add action=jump chain=dstnat comment=port-rdr-docker-chain dst-address-list=alist-nat-192.168.90.1 jump-target=port-rdr-docker-chain
 /ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-web dst-port=9428 protocol=tcp to-addresses=192.168.80.160 to-ports=9428
 /ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victoriametrics-web dst-port=8428 protocol=tcp to-addresses=192.168.80.162 to-ports=8428
-/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-syslog dst-port=514 protocol=udp to-addresses=192.168.80.160 to-ports=514
+/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-syslog dst-port=514,5140 protocol=udp to-addresses=192.168.80.160
 /ip firewall nat add action=return chain=port-rdr-docker-chain comment=port-rdr-docker-chain
 /ip firewall nat add action=accept chain=srcnat comment="accept tunnel traffic" dst-address-list=alist-fw-vpn-subnets src-address-list=alist-nat-local-subnets
 /ip firewall nat add action=masquerade chain=srcnat comment="LAN 192.168.90.0/24 -> OVPN 10.100.0.0/24" dst-address-list=alist-office-ovpn out-interface=main-infrastructure-br src-address=192.168.90.0/24
