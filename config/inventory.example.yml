@@ -2,35 +2,29 @@
   host: anna.example.invalid
   port: 22
   username: automation
-  key_filename: ~/.ssh/mikrobackups/automation
-  known_hosts_path: ~/.ssh/mikrobackups/known_hosts
+  key_filename: ~/.ssh/automation
+  known_hosts_path: ~/.ssh/known_hosts
 - title: capxl
-  host: capxl.example.invalid
+  host: capxl
   port: 22
   username: automation
-  key_filename: ~/.ssh/mikrobackups/automation
-  known_hosts_path: ~/.ssh/mikrobackups/known_hosts
+  key_filename: ~/.ssh/automation
+  known_hosts_path: ~/.ssh/known_hosts
 - title: capax
-  host: capax.example.invalid
+  host: capax.local
   port: 22
   username: automation
-  key_filename: ~/.ssh/mikrobackups/automation
-  known_hosts_path: ~/.ssh/mikrobackups/known_hosts
+  key_filename: ~/.ssh/automation
+  known_hosts_path: ~/.ssh/known_hosts
 - title: atl
-  host: atl.example.invalid
+  host: 107.108.109.110
   port: 22
   username: automation
-  key_filename: ~/.ssh/mikrobackups/automation
-  known_hosts_path: ~/.ssh/mikrobackups/known_hosts
-- title: CHR
-  host: chr.example.invalid
+  key_filename: ~/.ssh/automation
+  known_hosts_path: ~/.ssh/known_hosts
+- title: chr
+  host: chr.site.com
   port: 22
   username: automation
-  key_filename: ~/.ssh/mikrobackups/automation
-  known_hosts_path: ~/.ssh/mikrobackups/known_hosts
-- title: mikrouter
-  host: mikrouter.example.invalid
-  port: 22
-  username: automation
-  key_filename: ~/.ssh/mikrobackups/automation
-  known_hosts_path: ~/.ssh/mikrobackups/known_hosts
+  key_filename: ~/.ssh/automation
+  known_hosts_path: ~/.ssh/known_hosts

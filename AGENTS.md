@@ -19,8 +19,9 @@
   артефакты», «Формат RouterOS-скриптов», `.cursor/rules/routeros.mdc`
   и раздел 4 `doc/style-canon.md`;
 - перед обращением к MCP, устройству, удалённому хосту или сети —
-  «Внешние операции mikroconf», при нескольких устройствах также «Работа
-  с несколькими устройствами», затем `.cursor/rules/safety.mdc`;
+  «Внешние операции mikroconf», «Диагностика на устройствах mikroconf»,
+  при нескольких устройствах также «Работа с несколькими устройствами»,
+  затем `.cursor/rules/safety.mdc`;
 - при изменении vendor или проектовых RouterOS skills —
   `.cursor/rules/vendor.mdc` и `doc/cursor-tooling.md`;
 - при изменении соглашений — «Внесение правил в USER-RULES.md», «Границы

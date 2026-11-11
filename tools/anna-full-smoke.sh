@@ -12,6 +12,7 @@ SSH_BASE=(ssh -n -i "$HOME/.ssh/mikrobackups/automation"
   -o BatchMode=yes
   -o ServerAliveInterval=5
   -o ServerAliveCountMax=3
+  -p 2223
   automation@192.168.90.1)
 
 LOCAL_DIR="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/scripts"

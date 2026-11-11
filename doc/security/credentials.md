@@ -17,15 +17,17 @@
 Локальные файлы:
 
 ```text
-~/.config/mikrobackups/inventory.yml
+config/inventory.yml
 ~/.ssh/mikrobackups/cursor-diag
 ~/.ssh/mikrobackups/cursor-diag.pub
 ~/.ssh/mikrobackups/known_hosts
 ```
 
-Права каталогов — `0700`, private key и inventory — `0600`. Inventory
-содержит только aliases устройств, адреса, пользователя `cursor-diag`, путь к
-private key и путь к выделенному `known_hosts`; passwords в нём не нужны.
+Шаблон без адресов — `config/inventory.example.yml`. Живой `config/inventory.yml`
+не версионируется (`inventory.yml` в `.gitignore`). Права каталогов ключей —
+`0700`, private key и inventory — `0600`. Inventory содержит только aliases
+устройств, адреса, пользователя, путь к private key и путь к выделенному
+`known_hosts`; passwords в нём не нужны.
 
 На RouterOS используется отдельная группа с минимальными policy `ssh,read`.
 Не используйте административного пользователя как постоянный credential MCP.

@@ -31,13 +31,14 @@ cd ../..
 `ROSETTA_OFFLINE=1`. Полное соответствие upstream-обвязки и механизмов Cursor
 описано в [руководстве по вендорным инструментам](../cursor-tooling.md).
 
-MikroTik MCP читает inventory из
-`~/.config/mikrobackups/inventory.yml`, а доверенные SSH host keys — из
-`~/.ssh/mikrobackups/known_hosts`. Не копируйте эти файлы в workspace.
-В inventory указаны пользователь `automation` и ключ
-`~/.ssh/mikrobackups/automation`. Каталог MCP остаётся read-only, но SSH-аккаунт
-на устройстве привилегированный: write-команды по-прежнему режет hook и
-hardened allowlist, least-privilege пользователя `cursor-diag` это не заменяет.
+MikroTik MCP читает inventory из `config/inventory.yml` (файл в workspace,
+не в Git; шаблон — `config/inventory.example.yml`), а доверенные SSH host
+keys — из `~/.ssh/mikrobackups/known_hosts`. Не коммитьте живой inventory
+и не копируйте его содержимое в чат или документацию. В inventory указаны
+пользователь `automation` и ключ `~/.ssh/mikrobackups/automation`. Каталог
+MCP остаётся read-only, но SSH-аккаунт на устройстве привилегированный:
+write-команды по-прежнему режет hook и hardened allowlist, least-privilege
+пользователя `cursor-diag` это не заменяет.
 
 Локальная готовность (без SSH):
 
