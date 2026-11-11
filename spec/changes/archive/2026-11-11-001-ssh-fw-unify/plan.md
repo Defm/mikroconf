@@ -10,13 +10,13 @@ todos:
     status: completed
   - id: script-knock
     content: "globalApplyKnock: alist-fw-ssh-allow; комментарии и doc с именем листа"
-    status: pending
+    status: completed
   - id: fw-unify-both
     content: "Одинаковый firewall SSH на anna и chr: jump, цепочка; снять SSH из chain-self-common-ports (tcp и udp)"
     status: pending
   - id: release-env
     content: Коммит скрипта, merge master, Fresh+env chr → anna → capxl
-    status: pending
+    status: completed
   - id: verify-backup
     content: Knock/backup с anna; SSH+Winbox; doBackup снимки
     status: pending
@@ -58,10 +58,10 @@ Jump: `chain=input protocol=tcp dst-port=22,2223` → `chain-ssh-staged-control`
 
 1. `accept src-address-list=alist-fw-ssh-allow`
 2. `drop src-address-list=alist-fw-ssh-ban`
-3. stage3→ban 1w3d, stage2→3 3m, stage1→2 40s, stage0→1 5s, `src-address-list=!alist-fw-ssh-allow`, **без dst-port**
+3. stage3→ban 1w3d, stage2→3 3m, stage1→2 40s, stage0→1 5s, `src-address-list=!alist-fw-ssh-allow`, **без dst-port**, `connection-state=new` только на этих четырёх `add-src-to-address-list`
 4. `accept` (остальной SSH, который дошёл сюда: неизбранный и ещё не в бане)
 
-Нет `return` в common-ports. Нет dst-port на stage.
+Нет `return` в common-ports. Нет dst-port на stage. Jump, accept allow-list, drop бана и финальный accept без `connection-state`.
 
 ```mermaid
 flowchart TD
@@ -69,7 +69,7 @@ flowchart TD
   jump["jump to chain-ssh-staged-control"]
   acc["accept if alist-fw-ssh-allow"]
   ban["drop if alist-fw-ssh-ban"]
-  st["stages 5s / 40s / 3m / 1w3d"]
+  st["stages 5s / 40s / 3m / 1w3d, connection-state=new"]
   accRest["accept"]
   pkt --> jump --> acc
   acc -->|yes| ok[SSH allowed skip stages]

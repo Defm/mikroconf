@@ -22,8 +22,20 @@ WAN IP, которого ещё нет в листе.
 
 1. `accept src-address-list=alist-fw-ssh-allow`
 2. `drop src-address-list=alist-fw-ssh-ban`
-3. стадии 5 с / 40 с / 3 мин / 1w3d, `!alist-fw-ssh-allow`, без `dst-port`
+3. стадии 5 с / 40 с / 3 мин / 1w3d, `!alist-fw-ssh-allow`, без `dst-port`,
+   `connection-state=new` только на этих четырёх `add-src-to-address-list`
 4. `accept` (неизбранный, ещё не в бане)
+
+Стадии считают новый коннект. Матчер `connection-state=new` стоит только
+у четырёх правил `add-src-to-address-list`. Jump, accept allow-list, drop
+бана и финальный accept его не ставят. Один TCP-коннект поднимает адрес
+на одну стадию. Пакеты уже открытой сессии стадии не двигают и доходят до
+финального accept.
+
+Jump остаётся без этого матчера: accept `established,related` в `input`
+стоит ниже jump, а цепочку `input` замыкает `Drop all other WAN Traffic`.
+Живую сессию держит финальный accept внутри цепочки. Drop бана тоже без
+матчера, чтобы оборвать уже открытую сессию забаненного адреса.
 
 Финальный accept внутри цепочки, не `return` в common-ports. Иначе после
 снятия SSH из common-ports неизбранный (и knock) упрётся в
@@ -35,7 +47,7 @@ flowchart TD
   jump["jump to chain-ssh-staged-control"]
   acc["accept if alist-fw-ssh-allow"]
   ban["drop if alist-fw-ssh-ban"]
-  st["stages 5s / 40s / 3m / 1w3d"]
+  st["stages 5s / 40s / 3m / 1w3d, connection-state=new"]
   accRest["accept"]
   pkt --> jump --> acc
   acc -->|yes| ok[SSH allowed skip stages]
@@ -56,6 +68,10 @@ Winbox-правила не меняем. Jump SSH не включает `8291`.
 Скрипт: `$globalApplyKnock` пишет `alist-fw-ssh-allow`. Выкат писателя
 сначала на chr. На время Fresh — dual-list, затем один лист.
 
+На `chr` в `chain-dns-amp-attack` оператор внёс drop TCP DNS с WAN вне
+процедуры выката SSH. Правило значимо и принято в это изменение, не
+откатывается.
+
 `/ip ssh set password-authentication=yes` только на `anna` (не filter).
 У пользователя с ключом пароль этому пользователю может по-прежнему не
 приниматься.
@@ -71,6 +87,8 @@ Winbox-правила не меняем. Jump SSH не включает `8291`.
   запретил.
 - `dst-port` на стадиях «на всякий случай» — оператор оставил порт только
   на jump.
+- `connection-state=new` на jump — established SSH не входит в цепочку
+  и упирается в `Drop all other WAN Traffic`.
 - Сузить input ssh-ban портом, оставив правило в `input` — бан остаётся вне
   custom chain; Winbox живёт случайным порядком accept.
 - Оставить SSH в common-ports — второй accept снаружи цепочки.

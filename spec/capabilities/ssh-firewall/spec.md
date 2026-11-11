@@ -1,6 +1,8 @@
-# ssh-firewall: дельта
+# ssh-firewall
 
-## ADDED Requirements
+Единые SSH-filter input на `anna` и `chr`: цепочка `chain-ssh-staged-control`, лист `alist-fw-ssh-allow` и пароль SSH на `anna`.
+
+## Requirements
 
 ### Requirement: Единая SSH-цепочка на anna и chr
 
@@ -19,6 +21,12 @@ SSH-filter input для службы роутера живут только в
 - THEN первое правило цепочки его `accept`
 - AND стадии не применяются
 
+#### Scenario: Статика на chr
+
+- WHEN на chr есть постоянное SSH-исключение
+- THEN запись в `alist-fw-ssh-allow`
+- AND той же записи нет в `alist-fw-knockknock`
+
 #### Scenario: Бан внутри цепочки
 
 - WHEN источник в `alist-fw-ssh-ban` и пакет уже в SSH-цепочке
@@ -27,10 +35,19 @@ SSH-filter input для службы роутера живут только в
 
 #### Scenario: Неизбранный до бана
 
-- WHEN источник не в allow-list и не в ssh-ban
+- WHEN источник не в allow-list и не в ssh-ban
 - THEN пакет проходит стадии 5 с / 40 с / 3 мин / бан 1w3d без `dst-port` на
   стадиях
+- AND у каждой стадии `connection-state=new`
 - AND последнее правило цепочки его `accept`
+
+#### Scenario: Стадии считают только новый коннект
+
+- WHEN пакет SSH уже в цепочке и это не новый коннект
+- THEN четыре правила `add-src-to-address-list` его не считают
+- AND `connection-state=new` есть только у этих четырёх правил
+- AND jump, accept allow-list, drop бана и финальный accept этот матчер
+  не ставят
 
 #### Scenario: Нет SSH-filter снаружи цепочки
 
@@ -58,11 +75,3 @@ ssh-stage1/2/3. Лист `alist-fw-ssh-ban` не трогает.
 
 - WHEN читают `/ip ssh` на anna
 - THEN `password-authentication=yes`
-
-## MODIFIED Requirements
-
-Нет. Capability новая.
-
-## REMOVED Requirements
-
-Нет.
