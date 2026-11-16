@@ -1,4 +1,4 @@
-# 2026-11-11 21:13:08 by RouterOS 7.25.1
+# 2026-11-16 21:13:10 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -425,7 +425,7 @@
 /ip dns static add address-list=alist-mangle-byedpi-YTB comment=alist-mangle-byedpi-YTB-20260702-034500 forward-to=DOH-Google match-subdomain=yes name=r2---sn--n5pbvoj5caxu8-nboz.google type=FWD
 /ip dns static add address-list=alist-mangle-byedpi-YTB comment=alist-mangle-byedpi-YTB-20260702-034500 forward-to=DOH-Google match-subdomain=yes name=r3---sn--h557snl6.googlevideo type=FWD
 /ip dns static add address-list=alist-mangle-byedpi-YTB comment=alist-mangle-byedpi-YTB-20260912-034500 forward-to=DOH-Google match-subdomain=yes name=revanced.app type=FWD
-/ip dns static add address=46.39.51.223 name=ftpserver.org type=A
+/ip dns static add address=46.39.51.219 name=ftpserver.org type=A
 /ip firewall address-list add address=192.168.90.0/24 list=alist-fw-local-subnets
 /ip firewall address-list add address=192.168.90.0/24 list=alist-nat-local-subnets
 /ip firewall address-list add address=100.64.0.0/10 comment="RFC 6598 (Shared Address Space)" list=alist-fw-rfc-special
@@ -507,7 +507,7 @@
 /ip firewall address-list add address=10.103.0.0/16 list=alist-office-ovpn
 /ip firewall address-list add address=10.104.0.0/16 list=alist-office-ovpn
 /ip firewall address-list add address=192.168.90.0/24 list=alist-fw-ssh-allow
-/ip firewall address-list add address=46.39.51.223 list=alist-nat-external-ip
+/ip firewall address-list add address=46.39.51.219 list=alist-nat-external-ip
 /ip firewall layer7-protocol add name="resolve local" regexp=".home|[0-9]+.[0-9]+.168.192.in-addr.arpa"
 /ip firewall layer7-protocol add name=ECH regexp="A\\x01\$"
 /ip firewall service-port set tftp disabled=yes
@@ -612,12 +612,12 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        6d02:39:27  \
-    \nTime:        2026-11-11 21:10:13  \
+    \nUptime:        1w4d02:39:27  \
+    \nTime:        2026-11-16 21:10:11  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
-    \nAnna:        46.39.51.223  \
+    \nAnna:        46.39.51.219  \
     \nClock:        synchronized  \
     \n * wireless  \
     \n * netinstall  \
@@ -6010,6 +6010,36 @@
     \n    }\
     \n}\
     \n"
+/system script add dont-require-permissions=yes name=doDoHCheckup owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local testUrl\
+    \n:local fwdName\
+    \n:local dohList\
+    \n\
+    \n# \D0\BE\D1\81\D0\BD\D0\BE\D0\B2\D0\BD\D0\BE\D0\B9 DoH\
+    \n:set testUrl [/ip dns get use-doh-server]\
+    \n:if ([:len \$testUrl] > 0) do={\
+    \n    :onerror errMsg in={\
+    \n        /tool fetch url=\$testUrl output=none check-certificate=no\
+    \n        :put (\"MAIN  OK   \" . \$testUrl)\
+    \n    } do={\
+    \n        :put (\"MAIN  FAIL \" . \$testUrl . \" -> \" . \$errMsg)\
+    \n    }\
+    \n}\
+    \n\
+    \n# forwarders\
+    \n:foreach f in=[/ip dns forwarders find] do={\
+    \n    :set fwdName [/ip dns forwarders get \$f name]\
+    \n    :set dohList [/ip dns forwarders get \$f doh-servers]\
+    \n    :foreach u in=\$dohList do={\
+    \n        :set testUrl \$u\
+    \n        :onerror errMsg in={\
+    \n            /tool fetch url=\$testUrl output=none check-certificate=no\
+    \n            :put (\$fwdName . \" OK   \" . \$testUrl)\
+    \n        } do={\
+    \n            :put (\$fwdName . \" FAIL \" . \$testUrl . \" -> \" . \$errMsg)\
+    \n        }\
+    \n    }\
+    \n}\
+    \n"
 /system logging action set 0 memory-lines=3000
 /system logging action set 1 disk-file-name=journal
 /system logging action set 3 add-topics-string=yes remote=victoria.home remote-log-format=syslog
@@ -6075,8 +6105,8 @@
 /system logging add action=VictoriaRemoteLog topics=l2tp,!packet,!debug,!raw,!info
 /system logging add action=NetinstallOnscreenLog topics=netinstall
 /system logging add action=VictoriaRemoteLog topics=caps
-/system logging add action=VictoriaRemoteSyslog prefix=victoria-logs regex=victoria-logs topics=container
-/system logging add action=VictoriaRemoteSyslog prefix=netronome regex=netronome topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=victoria regex="^.*victoria-logs.*\$" topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=netronome regex="^.*netronome.*\$" topics=container
 /tool bandwidth-server set enabled=no
 /tool e-mail set from=defm.kopcap@gmail.com port=587 server=smtp.gmail.com tls=yes user=defm.kopcap@gmail.com
 /tool graphing set page-refresh=50
@@ -6144,8 +6174,8 @@
 /caps-man manager interface add comment="Deny WAN CapsMan" disabled=no forbid=yes interface="wan A"
 /caps-man manager interface add comment="Do CapsMan on private" disabled=no interface=main-infrastructure-br
 /caps-man manager interface add comment="Do CapsMan on guest" disabled=no interface=guest-infrastructure-br
-/container add check-certificate=no cmd="-syslog.timezone=\"Europe/Moscow\" -syslog.listenAddr.udp=:514 -syslog.useRemoteIP.udp=true -defaultMsgValue=\"CEF stub\" -syslog.extraFields.udp='{\"env\": \"routeros\", \"kind\": \"cef\"}' -syslog.ignoreFields.udp='[\"cef.device_event_class_id\"]' -syslog.streamFields.udp='[\"hostname\",\"env\", \"kind\", \"app_name\"]'\
-    \n-syslog.listenAddr.udp=:5140 -syslog.extraFields.udp='{\"env\":\"docker\", \"kind\": \"syslog\"}' -syslog.streamFields.udp='[\"hostname\",\"env\", \"kind\", \"app_name\"]'" comment="Victoria logging UI and storage" dns=192.168.80.1 hosts=victoria-logs:192.168.80.160 interface=veth-victoria-logs layer-dir=/usb-docker/layers logging=yes mountlists=VICTORIA_MOUNTS name=victoria-logs remote-image=docker.io/victoriametrics/victoria-logs:latest root-dir=/usb-docker/rootfs/victoria-s start-on-boot=yes stop-time=30s workdir=/
+/container add check-certificate=no cmd="-syslog.timezone=\"Europe/Moscow\" -syslog.listenAddr.udp=:514 -syslog.useRemoteIP.udp=true -defaultMsgValue=\"CEF stub\" -syslog.extraFields.udp='{\"env\": \"routeros\", \"app_name\":\"routeros\"}' -syslog.ignoreFields.udp='[\"cef.device_event_class_id\", \"cef.device_product\", \"cef.device_version\", \"cef.device_vendor\", \"cef.version\", \"cef.extension.dvchost\", \"cef.extension.dvc\", \"cef.severity\"]' -syslog.streamFields.udp='[\"hostname\",\"env\", \"app_name\"]'\
+    \n-syslog.listenAddr.udp=:5140 -syslog.extraFields.udp='{\"env\":\"docker\"}' -syslog.ignoreFields.udp='[\"facility_keyword\", \"priority\", \"facility\", \"severity\"]' -syslog.streamFields.udp='[\"hostname\",\"env\", \"app_name\"]'" comment="Victoria logging UI and storage" dns=192.168.80.1 hosts=victoria-logs:192.168.80.160 interface=veth-victoria-logs layer-dir=/usb-docker/layers logging=yes mountlists=VICTORIA_MOUNTS name=victoria-logs remote-image=docker.io/victoriametrics/victoria-logs:latest root-dir=/usb-docker/rootfs/victoria-s start-on-boot=yes stop-time=30s workdir=/
 /container add check-certificate=no comment="Netronome SpeedTest monitor with history" dns=192.168.80.1 envlists=NETRONOM_ENVS hostname=netronome interface=veth-netronome layer-dir=/usb-docker/layers logging=yes mountlists=NETRONOME_MOUNTS name=netronome remote-image=ghcr.io/autobrr/netronome:latest root-dir=/usb-docker/rootfs/netronome-s start-on-boot=yes
 /container add check-certificate=no cmd="-debug -K u -a 5 --auto=none -Kt,h -d1 -s0+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -An -Ku -a1 -An" comment="YouTube freedom" dns=192.168.80.1 envlists=BYEDPI_QUIC_REJECT interface=byedpi-tunnel layer-dir=/usb-docker/layers logging=yes name=byedpi remote-image=registry-1.docker.io/wiktorbgu/byedpi-hev-socks5-tunnel:redirect root-dir=/usb-docker/rootfs/byedpi-s start-on-boot=yes workdir=/
 /disk add comment=Ramdisk slot=RAM tmpfs-max-size=40000000 type=tmpfs
@@ -6775,6 +6805,7 @@
 /app set speedketchup container-command-lines="speedketchup:none:docker.io/antonsmt/speedketchup:-a 0.0.0.0 -f /results/speedketchup-results.csv" use-https=no
 /app set uptime-kuma container-command-lines=uptime-kuma:none:docker.io/louislam/uptime-kuma:1
 /app set victoria-metrics network=docker-infrastructure-br use-https=no
+/app settings set disk=usb-docker download-path=usb-docker/appstore/downloads lan-bridge=main-infrastructure-br media-path=usb-docker/appstore registry-mirrors=https://dh-mirror.gitverse.ru:https://hub.docker.com router-ip=192.168.90.1
 /interface l2tp-client add allow=mschap2 connect-to=185.13.148.14 disabled=no max-mru=1360 max-mtu=1360 name=chr-tunnel profile=l2tp-no-encrypt-site2site user=vpn-remote-anna
 /interface list member add comment="neighbors lookup" interface=chr-tunnel list=list-neighbors-lookup
 /interface list member add comment=OSPF interface=chr-tunnel list=list-ospf-bearing
@@ -6786,7 +6817,6 @@
 /routing ospf interface-template add area=backbone-vpn disabled=no interfaces=chr-tunnel type=ptp
 /routing ospf interface-template add area=anna-space-vpn disabled=no networks=192.168.90.0/24,192.168.98.0/24 passive
 /routing ospf interface-template add area=anna-space-main comment="empty announcement" disabled=no interfaces=ospf-loopback-br passive
-/app settings set disk=*E download-path=usb-docker/appstore/downloads lan-bridge=main-infrastructure-br media-path=usb-docker/appstore registry-mirrors=https://dh-mirror.gitverse.ru:https://hub.docker.com router-ip=192.168.90.1
 /interface bridge port add bridge=main-infrastructure-br comment="To Capxl" interface="lan D" internal-path-cost=10 path-cost=10 trusted=yes
 /interface bridge port add bridge=main-infrastructure-br interface="lan A" internal-path-cost=10 path-cost=10 trusted=yes
 /interface bridge port add bridge=main-infrastructure-br interface="lan B" internal-path-cost=10 path-cost=10 trusted=yes

@@ -1,4 +1,4 @@
-# 2026-11-11 21:13:06 by RouterOS 7.25.1
+# 2026-11-16 21:13:06 by RouterOS 7.25.1
 # software id = 59DY-JI10
 #
 # model = RBcAPGi-5acD2nD
@@ -12,9 +12,9 @@
 /interface wireless security-profiles set [ find default=yes ] supplicant-identity=MikroTik
 /ip cloud set ddns-enabled=yes ddns-update-interval=10m
 /ip dhcp-client option add code=60 name=classid value="'mikrotik-cap'"
-/ip dns static add address=46.39.51.223 name=ftpserver.org type=A
+/ip dns static add address=46.39.51.219 name=ftpserver.org type=A
 /ip firewall address-list add address=109.252.162.10 list=external-ip
-/ip firewall address-list add address=46.39.51.223 list=alist-nat-external-ip
+/ip firewall address-list add address=46.39.51.219 list=alist-nat-external-ip
 /ip firewall service-port set tftp disabled=yes
 /ip firewall service-port set h323 disabled=yes
 /ip firewall service-port set sip disabled=yes
@@ -74,12 +74,12 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     192.168.90.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        6d02:23:00  \
-    \nTime:        2026-11-11 21:13:05  \
+    \nUptime:        1w4d02:23:00  \
+    \nTime:        2026-11-16 21:13:04  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
-    \nAnna:        46.39.51.223  \
+    \nAnna:        46.39.51.219  \
     \nClock:        synchronized  \
     \n * routeros  \
     \n * wireless  \
