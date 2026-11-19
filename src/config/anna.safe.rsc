@@ -1,4 +1,4 @@
-# 2026-11-16 21:13:10 by RouterOS 7.25.1
+# 2026-11-19 16:02:17 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -13,8 +13,11 @@
 /certificate settings set builtin-trust-store=all
 /container config set layer-dir=/usb-docker/layers memory-high=768.0MiB registry-url=https://registry-1.docker.io tmpdir=/usb-docker/pulls
 /container envs add key=QUIC list=BYEDPI_QUIC_REJECT value=REJECT
+/container envs add key=NETRONOME__AUTH_WHITELIST list=NETRONOM_ENVS value=0.0.0.0/0
 /container envs add key=NETRONOME__HOST list=NETRONOM_ENVS value=0.0.0.0
+/container envs add key=NETRONOME__LOG_LEVEL list=NETRONOM_ENVS value=warn
 /container mounts add dst=/data/librespeed-servers.json list=NETRONOME_MOUNTS mode=ro src=/usb-reserved/container-data/netronome-s/librespeed-servers.json
+/container mounts add dst=/data/netro-config.toml list=NETRONOME_MOUNTS src=/usb-reserved/container-data/netronome-s/netro-config.toml
 /container mounts add dst=/victoria-logs-data list=VICTORIA_MOUNTS src=/usb-reserved/container-data/victoria-s
 /interface list add comment="Trusted networks" name=list-trusted
 /interface list add comment="Semi-Trusted networks" name=list-semi-trusted
@@ -612,8 +615,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        1w4d02:39:27  \
-    \nTime:        2026-11-16 21:10:11  \
+    \nUptime:        1w6d21:29:27  \
+    \nTime:        2026-11-19 16:00:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -653,7 +656,6 @@
 /system scheduler add !days interval=10m name=doIPSECPunch on-event="/system script run doIPSECPunch" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=08:00:00
 /system scheduler add !days interval=10m name=doCoolConsole on-event="/system script run doCoolConsole" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=07:00:00
 /system scheduler add !days interval=1d name=doFlushLogs on-event="/system script run doFlushLogs" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2023-05-02 start-time=02:00:00
-/system scheduler add !days interval=1h30m name=doStaleTSLConnectionsTrack on-event="/system script run doStaleTSLConnectionsTrack" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=08:00:00
 /system scheduler add !days name=doStartupScript on-event="/system script run doStartupScript;" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-time=startup
 /system script add comment="Creates static DNS entres for DHCP clients in the named DHCP server. Hostnames passed to DHCP are appended with the zone" dont-require-permissions=yes name=doUpdateStaticDNSviaDHCP owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
     \n:local scriptname \"doUpdateStaticDNSviaDHCP\"\r\
@@ -5444,115 +5446,6 @@
     \n}\
     \n\r\
     \n"
-/system script add comment="Track stale TLS connections and add dst to address list" dont-require-permissions=yes name=doStaleTSLConnectionsTrack owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
-    \n:local scriptname \"doStaleTSLConnectionsTrack\"\
-    \n:global globalScriptBeforeRun\
-    \n\$globalScriptBeforeRun \$scriptname\
-    \n\
-    \n:global globalNoteMe\
-    \n:global globalTgMessage\
-    \n:local itsOk true\
-    \n:local state \"\"\
-    \n\
-    \n# address list name\
-    \n:local listName \"alist-TLS-rejected-autodetect\"\
-    \n\
-    \n# test frequency: 5s, 10s, 1m etc.\
-    \n:local interval 1s\
-    \n# heartbeat every N intervals\
-    \n:local heartbeatEvery 300\
-    \n\
-    \n# address list timeout - \"permanent\", \"reboot\" or \"30m\", \"1h\", \"1d\", \"1w\" etc.\
-    \n:local listTimeout \"reboot\"\
-    \n\
-    \n# Example call\
-    \n# \$detectSilentTLSBlock listName=\$listName listTimeout=\$listTimeout\
-    \n:local detectSilentTLSBlock do={\
-    \n\
-    \n    :global globalNoteMe\
-    \n    :local state \"\"\
-    \n\
-    \n    :foreach conn in=[/ip firewall connection find where (protocol=\"udp\" or protocol=\"tcp\") and orig-packets>6 and repl-packets<3] do={\
-    \n\
-    \n        :if ([:len [/ip firewall connection get \$conn]] > 0) do={\
-    \n\
-    \n            :onerror errorDescr in={\
-    \n\
-    \n                :local dstIp [/ip firewall connection get \$conn dst-address]\
-    \n                :local retr ([/ip firewall connection get \$conn orig-packets] - 3)\
-    \n\
-    \n                :local ipOnly [:pick \$dstIp 0 [:find \$dstIp \":\"]]\
-    \n                :local portOnly [:pick \$dstIp ([:find \$dstIp \":\"] + 1) [:len \$dstIp]]\
-    \n                :local protoOnly [/ip firewall connection get \$conn protocol]\
-    \n\
-    \n                # not a TLS target or a local address - next connection\
-    \n                :if (\$portOnly != \"443\" or ([:len \$ipOnly] = 0) or [/ip address find where address~\"\$ipOnly\"]) do={ :error \"skip-continue\" }\
-    \n\
-    \n                # Looking for existing entry\
-    \n                :if ([:len [/ip firewall address-list find list=\$listName address=\$ipOnly]] = 0) do={\
-    \n\
-    \n                    # Add\
-    \n                    :set state \"TLS: \$dstIp (Retransmissions: \$retr) added to address list \\\"\$listName\\\"\"\
-    \n                    \$globalNoteMe value=\$state\
-    \n\
-    \n                    # Timeout logic\
-    \n                    :if (\$listTimeout = \"permanent\") do={\
-    \n                        /ip firewall address-list add list=\$listName address=\$ipOnly comment=\"Added by TLS Block Detection Script\"\
-    \n                    } else={\
-    \n                        :if (\$listTimeout = \"reboot\") do={\
-    \n                            /ip firewall address-list add list=\$listName address=\$ipOnly dynamic=yes comment=\"Added by TLS Block Detection Script\"\
-    \n                        } else={\
-    \n                            /ip firewall address-list add list=\$listName address=\$ipOnly dynamic=yes timeout=\$listTimeout comment=\"Added by TLS Block Detection Script\"\
-    \n                        }\
-    \n                    }\
-    \n                } else={\
-    \n                    :set state \"\$protoOnly timeout: \$ipOnly\"\
-    \n                    \$globalNoteMe value=\$state verbose=true\
-    \n                }\
-    \n\
-    \n                :if (\$protoOnly = \"tcp\") do={\
-    \n                    /ip firewall connection remove \$conn\
-    \n\
-    \n                    :set state \"drop TCP session to \$dstIp\"\
-    \n                    \$globalNoteMe value=\$state\
-    \n                }\
-    \n\
-    \n            } do={\
-    \n                :if (!(\$errorDescr ~ \"^skip-continue\")) do={\
-    \n                    :set state \"connection loop error: \$errorDescr\"\
-    \n                    \$globalNoteMe value=\$state\
-    \n                }\
-    \n            }\
-    \n        }\
-    \n    }\
-    \n}\
-    \n\
-    \n# long-living monitor: footer is unreachable, heartbeat instead\
-    \n:set state \"tracking..\"\
-    \n\$globalNoteMe value=\$state verbose=true\
-    \n:local beats 0\
-    \n\
-    \n:do {\
-    \n\
-    \n    :onerror errorDescr in={\
-    \n        \$detectSilentTLSBlock listName=\$listName listTimeout=\$listTimeout\
-    \n    } do={\
-    \n        :set state \"main loop error: \$errorDescr\"\
-    \n        \$globalNoteMe value=\$state\
-    \n    }\
-    \n\
-    \n    :delay \$interval\
-    \n\
-    \n    :set beats (\$beats + 1)\
-    \n    :if (\$beats = \$heartbeatEvery) do={\
-    \n        :set state \"tracking..\"\
-    \n        \$globalNoteMe value=\$state verbose=true\
-    \n        :set beats 0\
-    \n    }\
-    \n\
-    \n} while=(true)\
-    \n\r\
-    \n"
 /system script add comment="Loads domains DNS static entries using iplist.opencck.org" dont-require-permissions=yes name=doFreshDNSAddressLists owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\
     \n:local scriptname \"doFreshDNSAddressLists\"\
     \n:global globalScriptBeforeRun\
@@ -6176,7 +6069,7 @@
 /caps-man manager interface add comment="Do CapsMan on guest" disabled=no interface=guest-infrastructure-br
 /container add check-certificate=no cmd="-syslog.timezone=\"Europe/Moscow\" -syslog.listenAddr.udp=:514 -syslog.useRemoteIP.udp=true -defaultMsgValue=\"CEF stub\" -syslog.extraFields.udp='{\"env\": \"routeros\", \"app_name\":\"routeros\"}' -syslog.ignoreFields.udp='[\"cef.device_event_class_id\", \"cef.device_product\", \"cef.device_version\", \"cef.device_vendor\", \"cef.version\", \"cef.extension.dvchost\", \"cef.extension.dvc\", \"cef.severity\"]' -syslog.streamFields.udp='[\"hostname\",\"env\", \"app_name\"]'\
     \n-syslog.listenAddr.udp=:5140 -syslog.extraFields.udp='{\"env\":\"docker\"}' -syslog.ignoreFields.udp='[\"facility_keyword\", \"priority\", \"facility\", \"severity\"]' -syslog.streamFields.udp='[\"hostname\",\"env\", \"app_name\"]'" comment="Victoria logging UI and storage" dns=192.168.80.1 hosts=victoria-logs:192.168.80.160 interface=veth-victoria-logs layer-dir=/usb-docker/layers logging=yes mountlists=VICTORIA_MOUNTS name=victoria-logs remote-image=docker.io/victoriametrics/victoria-logs:latest root-dir=/usb-docker/rootfs/victoria-s start-on-boot=yes stop-time=30s workdir=/
-/container add check-certificate=no comment="Netronome SpeedTest monitor with history" dns=192.168.80.1 envlists=NETRONOM_ENVS hostname=netronome interface=veth-netronome layer-dir=/usb-docker/layers logging=yes mountlists=NETRONOME_MOUNTS name=netronome remote-image=ghcr.io/autobrr/netronome:latest root-dir=/usb-docker/rootfs/netronome-s start-on-boot=yes
+/container add check-certificate=no cmd="serve --config /data/netro-config.toml" comment="Netronome SpeedTest monitor with history" dns=192.168.80.1 envlists=NETRONOM_ENVS hostname=netronome interface=veth-netronome layer-dir=/usb-docker/layers logging=yes mountlists=NETRONOME_MOUNTS name=netronome remote-image=ghcr.io/autobrr/netronome:latest root-dir=/usb-docker/rootfs/netronome-s start-on-boot=yes
 /container add check-certificate=no cmd="-debug -K u -a 5 --auto=none -Kt,h -d1 -s0+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -An -Ku -a1 -An" comment="YouTube freedom" dns=192.168.80.1 envlists=BYEDPI_QUIC_REJECT interface=byedpi-tunnel layer-dir=/usb-docker/layers logging=yes name=byedpi remote-image=registry-1.docker.io/wiktorbgu/byedpi-hev-socks5-tunnel:redirect root-dir=/usb-docker/rootfs/byedpi-s start-on-boot=yes workdir=/
 /disk add comment=Ramdisk slot=RAM tmpfs-max-size=40000000 type=tmpfs
 /disk add disabled=yes slot=sshfs sshfs-address=185.13.148.14 sshfs-path=/REPO sshfs-port=2223 sshfs-user=automation type=sshfs
