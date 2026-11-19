@@ -1,4 +1,4 @@
-# 2026-11-19 16:39:30 by RouterOS 7.25.1
+# 2026-11-19 17:13:30 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -409,7 +409,7 @@
 /ip dns static add address-list=alist-mangle-byedpi-TORR comment=alist-mangle-byedpi-TORR-20260128-214538 forward-to=DOH-Google match-subdomain=yes name=torrindex.net type=FWD
 /ip dns static add address-list=alist-mangle-byedpi-TORR comment=alist-mangle-byedpi-TORR-20260128-214538 forward-to=DOH-Google match-subdomain=yes name=torrent.by type=FWD
 /ip dns static add address=192.168.90.85 comment=<AUTO:DHCP:main-dhcp-server> name=MbpAlxm.home ttl=5m type=A
-/ip dns static add address-list=alist-mangle-vpn comment="Chrome web ext" forward-to=DOH_Google match-subdomain=yes name=softblade.de type=FWD
+/ip dns static add address-list=alist-mangle-vpn comment="Chrome web ext" forward-to=DOH-Google match-subdomain=yes name=softblade.de type=FWD
 /ip dns static add address=192.168.90.200 comment=<AUTO:DHCP:main-dhcp-server> name=AlxATV.home ttl=5m type=A
 /ip dns static add address=192.168.90.130 comment=<AUTO:DHCP:main-dhcp-server> name=iPad.home ttl=5m type=A
 /ip dns static add address=192.168.90.150 comment=<AUTO:DHCP:main-dhcp-server> name=iPhoneAlxr.home ttl=5m type=A
@@ -418,13 +418,13 @@
 /ip dns static add address=192.168.90.205 comment=<AUTO:DHCP:main-dhcp-server> name=localhost.home ttl=5m type=A
 /ip dns static add address=192.168.90.134 comment=<AUTO:DHCP:main-dhcp-server> name=A55-pol-zovatela-Sergej.home ttl=5m type=A
 /ip dns static add address=192.168.90.133 comment=<AUTO:DHCP:main-dhcp-server> name=Redmi-Note-13-Pro.home ttl=5m type=A
-/ip dns static add address-list=alist-mangle-vpn comment="Chrome web ext" forward-to=DOH_Google match-subdomain=yes name=123.com type=FWD
+/ip dns static add address-list=alist-mangle-vpn comment="Chrome web ext" forward-to=DOH-Google match-subdomain=yes name=123.com type=FWD
 /ip dns static add address=192.168.90.77 comment=<AUTO:DHCP:main-dhcp-server> name=DESKTOP-G3RE47G.home ttl=5m type=A
 /ip dns static add address-list=alist-mangle-byedpi-TORR comment=alist-mangle-byedpi-TORR-20260416-164500 forward-to=DOH-Google match-subdomain=yes name=rutracker.cc type=FWD
 /ip dns static add address-list=alist-mangle-byedpi-TORR comment=alist-mangle-byedpi-TORR-20260416-164500 forward-to=DOH-Google match-subdomain=yes name=rutracker.org type=FWD
 /ip dns static add address=192.168.90.194 comment=<AUTO:DHCP:main-dhcp-server> name=Yandex-Station-Midi-PE0Y.home ttl=5m type=A
 /ip dns static add address=192.168.90.203 comment=<AUTO:DHCP:main-dhcp-server> name=ast25b.home ttl=5m type=A
-/ip dns static add address-list=alist-mangle-vpn comment="Chrome web ext" forward-to=DOH_Google match-subdomain=yes name=keybr.com type=FWD
+/ip dns static add address-list=alist-mangle-vpn comment="Chrome web ext" forward-to=DOH-Google match-subdomain=yes name=keybr.com type=FWD
 /ip dns static add address-list=alist-mangle-byedpi-YTB comment=alist-mangle-byedpi-YTB-20260702-034500 forward-to=DOH-Google match-subdomain=yes name=r2---sn--n5pbvoj5caxu8-nboz.google type=FWD
 /ip dns static add address-list=alist-mangle-byedpi-YTB comment=alist-mangle-byedpi-YTB-20260702-034500 forward-to=DOH-Google match-subdomain=yes name=r3---sn--h557snl6.googlevideo type=FWD
 /ip dns static add address-list=alist-mangle-byedpi-YTB comment=alist-mangle-byedpi-YTB-20260912-034500 forward-to=DOH-Google match-subdomain=yes name=revanced.app type=FWD
@@ -541,7 +541,7 @@
 /ip smb users set [ find default=yes ] read-only=no
 /ip smb shares set [ find default=yes ] directory=/usb-sftp/public disabled=no
 /ip socksify add disabled=no name=byedpi socks5-server=192.168.80.2
-/ip ssh set ciphers=aes-gcm,aes-ctr host-key-type=rsa known-hosts-validation=no strong-crypto=yes
+/ip ssh set ciphers=aes-gcm,aes-ctr known-hosts-validation=no strong-crypto=yes
 /ip tftp add real-filename=NAS/ req-filename=.*
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://victoria.anna.home ip-address=192.168.80.160 port=9428 sni=victoria.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://wiren.anna.home ip-address=192.168.90.3 port=80 sni=wiren.anna.home
@@ -615,8 +615,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        1w6d21:59:27  \
-    \nTime:        2026-11-19 16:30:13  \
+    \nUptime:        1w6d22:39:27  \
+    \nTime:        2026-11-19 17:10:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -5976,7 +5976,7 @@
 /disk add comment="FTP storage 100GB" parent=transcend partition-number=3 partition-offset=101000085504 partition-size=100000000000 slot=usb-sftp type=partition
 /disk add comment="Addtitional storage" parent=transcend partition-number=4 partition-offset=201000091648 partition-size=55060332544 slot=usb-reserved type=partition
 /disk settings set auto-media-interface=main-infrastructure-br
-/ip smb set domain=HNW enabled=yes interfaces=main-infrastructure-br,guest-infrastructure-br
+/ip smb set domain=HNW enabled=yes interfaces=main-infrastructure-br
 /interface l2tp-server server set keepalive-timeout=disabled
 /interface list member add comment="MGTS, GPON via Huavei" interface="wan A" list=list-untrusted
 /interface list member add comment="GUEST WLAN" interface=guest-infrastructure-br list=list-guest-wireless
@@ -6030,8 +6030,8 @@
 /interface wifi access-list add action=accept allow-signal-out-of-range=10s client-isolation=yes comment="Allow any other on guest wireless" disabled=no ssid-regexp=FREE
 /interface wifi access-list add action=reject allow-signal-out-of-range=10s comment="Drop any other on private wireless" disabled=no ssid-regexp=PRIVATE
 /interface wifi capsman set interfaces=list-capsman upgrade-policy=none
-/interface wifi datapath add bridge=main-infrastructure-br comment=private disabled=no interface-list=list-2ghz-caps-guest name=via-CAP-itself-private traffic-processing=on-cap
-/interface wifi datapath add bridge=guest-infrastructure-br client-isolation=yes comment=guest disabled=no interface-list=list-2ghz-caps-private name=via-CAP-itself-guest traffic-processing=on-cap
+/interface wifi datapath add bridge=main-infrastructure-br comment=private disabled=no interface-list=list-2ghz-caps-private name=via-CAP-itself-private traffic-processing=on-cap
+/interface wifi datapath add bridge=guest-infrastructure-br client-isolation=yes comment=guest disabled=no interface-list=list-2ghz-caps-guest name=via-CAP-itself-guest traffic-processing=on-cap
 /ip address add address=192.168.90.1/24 comment="local ip" interface=main-infrastructure-br network=192.168.90.0
 /ip address add address=192.168.98.1/24 comment="local guest" interface=guest-infrastructure-br network=192.168.98.0
 /ip address add address=10.255.255.3 comment="ospf router-id binding" interface=ospf-loopback-br network=10.255.255.3
