@@ -1,4 +1,4 @@
-# 2026-11-19 16:02:17 by RouterOS 7.25.1
+# 2026-11-19 16:39:30 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -43,7 +43,7 @@
 /interface bridge settings set use-ip-firewall=yes
 /ip firewall connection tracking set enabled=yes tcp-established-timeout=1h udp-timeout=10s
 /ip neighbor discovery-settings set discover-interface-list=list-neighbors-lookup lldp-mac-phy-config=yes
-/ip settings set accept-source-route=yes rp-filter=loose tcp-syncookies=yes
+/ip settings set tcp-syncookies=yes
 /ipv6 settings set accept-redirects=no accept-router-advertisements=no accept-router-advertisements-on=none disable-ipv6=yes disable-link-local-address=yes
 /interface detect-internet set internet-interface-list=list-autodetect-INTERNET lan-interface-list=list-autodetect-LAN wan-interface-list=list-autodetect-WAN
 /interface wifi channel add band=2ghz-n disabled=no frequency=2412,2437,2462 name=2CH-N-1-6-11 reselect-interval=2h..4h width=20mhz
@@ -97,7 +97,7 @@
 /ip dns forwarders add doh-servers=https://dns.google/dns-query name=DOH-Google
 /ip dns forwarders add doh-servers=https://cloudflare-dns.com/dns-query name=DOH-CloudFlare
 /ip dns forwarders add doh-servers=https://dns.quad9.net/dns-query name=DOH-Quad9
-/ip dns forwarders add dns-servers=8.8.8.8 name=DNS-Google8 verify-doh-cert=no
+/ip dns forwarders add dns-servers=8.8.8.8 name=DNS-Google8
 /ip dns forwarders add doh-servers=https://dns.comss.one/dns-query name=DOH-Comss
 /ip dns forwarders add dns-servers=172.16.0.16 name=Blackhole
 /ip dns static add name=special-remote-CHR-ipsec-policy-comment text=ANNA-OUTER-IP-REMOTE-CONTROLLABLE type=TXT
@@ -541,7 +541,7 @@
 /ip smb users set [ find default=yes ] read-only=no
 /ip smb shares set [ find default=yes ] directory=/usb-sftp/public disabled=no
 /ip socksify add disabled=no name=byedpi socks5-server=192.168.80.2
-/ip ssh set ciphers=aes-gcm,aes-ctr,aes-cbc,3des-cbc,null forwarding-enabled=remote host-key-type=rsa known-hosts-validation=no password-authentication=yes
+/ip ssh set ciphers=aes-gcm,aes-ctr host-key-type=rsa known-hosts-validation=no strong-crypto=yes
 /ip tftp add real-filename=NAS/ req-filename=.*
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://victoria.anna.home ip-address=192.168.80.160 port=9428 sni=victoria.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://wiren.anna.home ip-address=192.168.90.3 port=80 sni=wiren.anna.home
@@ -608,15 +608,15 @@
 /routing ospf area add area-id=0.0.0.3 default-cost=10 disabled=no instance=routes-inject-into-vpn name=anna-space-vpn no-summaries type=stub
 /routing ospf area add area-id=0.0.0.3 default-cost=10 disabled=no instance=routes-inject-into-main name=anna-space-main no-summaries type=stub
 /routing ospf area add area-id=0.0.0.0 disabled=no instance=routes-inject-into-main name=backbone-main type=default
-/snmp community set [ find default=yes ] authentication-protocol=SHA1 encryption-protocol=AES name=globus
+/snmp community set [ find default=yes ] addresses=192.168.90.0/24 authentication-protocol=SHA256 encryption-protocol=AES name=globus
 /snmp community add addresses=::/0 disabled=yes name=public
 /system clock set time-zone-name=Europe/Moscow
 /system identity set name=anna
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        1w6d21:29:27  \
-    \nTime:        2026-11-19 16:00:13  \
+    \nUptime:        1w6d21:59:27  \
+    \nTime:        2026-11-19 16:30:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -652,7 +652,6 @@
 /system scheduler add !days interval=1d name=doLEDoff on-event="/system script run doLEDoff" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=23:30:00
 /system scheduler add !days interval=1d name=doLEDon on-event="/system script run doLEDon" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=07:00:00
 /system scheduler add !days interval=1d name=doCreateTrafficAccountingQueues on-event="/system script run doCreateTrafficAccountingQueues" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=08:00:00
-/system scheduler add !days interval=15m name=doCPUHighLoadReboot on-event="/system script run doCPUHighLoadReboot" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2019-02-07 start-time=06:05:00
 /system scheduler add !days interval=10m name=doIPSECPunch on-event="/system script run doIPSECPunch" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=08:00:00
 /system scheduler add !days interval=10m name=doCoolConsole on-event="/system script run doCoolConsole" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=07:00:00
 /system scheduler add !days interval=1d name=doFlushLogs on-event="/system script run doFlushLogs" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2023-05-02 start-time=02:00:00
@@ -4718,108 +4717,6 @@
     \n}\
     \n\r\
     \n"
-/system script add comment="This will check for free CPU/RAM resources over \$ticks times to be more than \$CpuWarnLimit%/\$RamWarnLimit% each time. Will reboot the router when overload" dont-require-permissions=yes name=doCPUHighLoadReboot owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
-    \n:local scriptname \"doCPUHighLoadReboot\"\r\
-    \n:global globalScriptBeforeRun\r\
-    \n\$globalScriptBeforeRun \$scriptname\r\
-    \n\r\
-    \n:global globalNoteMe\r\
-    \n:global globalTgMessage\r\
-    \n:local itsOk true\r\
-    \n:local state \"\"\r\
-    \n:local doReboot false\r\
-    \n\r\
-    \n# available (free) resource (percent), set it to 90 for testing\r\
-    \n:local ramWarnLimit 15\r\
-    \n:local cpuWarnLimit 15\r\
-    \n\r\
-    \n:local ticks 7\r\
-    \n:local delayTime 7\r\
-    \n:local useProgressiveDelay true\r\
-    \n\r\
-    \n:onerror errorDescr in={\r\
-    \n\r\
-    \n    :local usedCpu [/system resource get cpu-load]\r\
-    \n    :local freeCpu (100 - \$usedCpu)\r\
-    \n    :local freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])\r\
-    \n\r\
-    \n    :set state \"Checking for free CPU/RAM resources over \$ticks times to be more than \$cpuWarnLimit%/\$ramWarnLimit% each time\"\r\
-    \n    \$globalNoteMe value=\$state verbose=true\r\
-    \n\r\
-    \n    :set state \"Step 0: free CPU/RAM \$freeCpu%/\$freeRam%, going deeper..\"\r\
-    \n    \$globalNoteMe value=\$state verbose=true\r\
-    \n\r\
-    \n    :if (\$freeRam < \$ramWarnLimit or \$freeCpu < \$cpuWarnLimit) do={\r\
-    \n        # this tick is high-HighLoad\r\
-    \n        :set itsOk false\r\
-    \n        :delay \$delayTime\r\
-    \n    }\r\
-    \n\r\
-    \n    :for i from=1 to=\$ticks do={\r\
-    \n\r\
-    \n        :if (!\$itsOk) do={\r\
-    \n            :set usedCpu [/system resource get cpu-load]\r\
-    \n            :set freeCpu (100 - \$usedCpu)\r\
-    \n            :set freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])\r\
-    \n\r\
-    \n            :set state \"Recalc stats\"\r\
-    \n            \$globalNoteMe value=\$state verbose=true\r\
-    \n        }\r\
-    \n\r\
-    \n        :if (!\$itsOk and (\$freeRam < \$ramWarnLimit or \$freeCpu < \$cpuWarnLimit)) do={\r\
-    \n\r\
-    \n            # keep \$itsOk = false\r\
-    \n            :local delaySec \$delayTime\r\
-    \n            :if (\$useProgressiveDelay) do={\r\
-    \n                :set delaySec (\$delayTime + \$i)\r\
-    \n            }\r\
-    \n\r\
-    \n            :set state \"Step \$i: free CPU/RAM \$freeCpu%/\$freeRam%, its too low, sleep \$delaySec and recheck..\"\r\
-    \n            \$globalNoteMe value=\$state\r\
-    \n\r\
-    \n            :delay \$delaySec\r\
-    \n\r\
-    \n        } else={\r\
-    \n            # if one step is non-HighLoad, then the whole result is non-HighLoad\r\
-    \n            :set itsOk true\r\
-    \n        }\r\
-    \n    }\r\
-    \n\r\
-    \n    :if (!\$itsOk) do={\r\
-    \n        :set doReboot true\r\
-    \n    }\r\
-    \n\r\
-    \n} do={\r\
-    \n    :set state \"Error When \$state: \$errorDescr\"\r\
-    \n    \$globalNoteMe value=\$state\r\
-    \n    :set itsOk false\r\
-    \n}\r\
-    \n\r\
-    \n:local inf \"\"\r\
-    \n:if (\$itsOk) do={\r\
-    \n    :set inf \"\E2\9C\93 SUCCESS \$scriptname on \$sysname: cpu load ok\"\r\
-    \n}\r\
-    \n\r\
-    \n:if (!\$itsOk) do={\r\
-    \n    :if (\$doReboot) do={\r\
-    \n        :set inf \"\E2\9C\97 FAILED \$scriptname on \$sysname: CPU load too high, I'm going reboot\"\r\
-    \n    } else={\r\
-    \n        :set inf \"\E2\9C\97 FAILED \$scriptname on \$sysname: \$state\"\r\
-    \n    }\r\
-    \n}\r\
-    \n\r\
-    \n\$globalNoteMe value=\$inf\r\
-    \n\r\
-    \n:if (!\$itsOk) do={\r\
-    \n    \$globalTgMessage value=\$inf\r\
-    \n    :if (\$doReboot) do={\r\
-    \n        /system reboot\r\
-    \n    } else={\r\
-    \n        :error \$inf\r\
-    \n    }\r\
-    \n}\r\
-    \n\r\
-    \n"
 /system script add comment="A very special script for CFG restore from *.rsc files (not from backup). This one should be placed at flash/perfectrestore.rsc, your config should be at flash/backup.rsc. Run 'Reset confuguration' with 'no default config', choose 'flash/perfectrestore.rsc' as 'run after reset. Pretty logs will be at flash/import.log and flash/perfectrestore.log" dont-require-permissions=yes name=doPerfectRestore owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="{\r\r\
     \n:global targetfile \"backup.rsc\"\r\r\
     \n:global importlog \"import.log\"\r\r\
@@ -6650,8 +6547,8 @@
 /queue tree add name=ZIP packet-mark=zip-mark parent="Total Bandwidth" queue=default
 /routing bgp connection add afi=ip as=65001 comment=ds connect=yes disabled=yes hold-time=3m input.filter=bgp_in instance=inject-into-vpn keepalive-time=1m listen=yes local.address=46.39.51.221 .role=ebgp multihop=yes name=antifilter-peer output.filter-chain=bgp-out-filter-reject-all .network=alist-antifilter-bgp .no-client-to-client-reflection=yes remote.address=51.75.66.20/32 .as=65444 .port=179 routing-table=rmark-vpn-redirect templates=antifilter-template
 /routing bgp connection add as=64555 connect=yes disabled=yes hold-time=4m instance=bgp-instance-1 keepalive-time=1m listen=yes local.role=ebgp multihop=yes name=antifilter remote.address=45.154.73.71/32 .as=65432 routing-table=main
-/routing rule add action=unreachable comment="LAN/GUEST isolation" disabled=yes dst-address=192.168.98.0/24 !realm src-address=192.168.90.0/24
-/routing rule add action=unreachable comment="LAN/GUEST isolation" disabled=yes dst-address=192.168.90.0/24 !realm src-address=192.168.98.0/24
+/routing rule add action=unreachable comment="LAN/GUEST isolation" disabled=no dst-address=192.168.98.0/24 !realm src-address=192.168.90.0/24
+/routing rule add action=unreachable comment="LAN/GUEST isolation" disabled=no dst-address=192.168.90.0/24 !realm src-address=192.168.98.0/24
 /snmp set contact=defm.kopcap@gmail.com enabled=yes location=RU trap-generators=interfaces trap-interfaces=main-infrastructure-br trap-version=2
 /tool graphing interface add
 /tool netinstall add disabled=yes extra-packages=wireless interface=adm-netinstall-br ip-range=192.168.168.100-192.168.168.110 keep-old-configuration=no remove-branding=yes wait=yes
