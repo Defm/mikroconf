@@ -1,4 +1,4 @@
-# 2026-11-19 17:13:30 by RouterOS 7.25.1
+# 2026-11-21 21:13:10 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -80,9 +80,9 @@
 /ip cloud set ddns-enabled=yes ddns-update-interval=10m
 /ip dhcp-server option add code=15 force=yes name=DomainName_Windows value="s'home'"
 /ip dhcp-server option add code=119 force=yes name=DomainName_LinuxMac value="s'home'"
-/ip dhcp-server option add code=6 name=DNSServer_Static_DHCP value="'192.168.90.1'"
+/ip dhcp-server option add code=6 comment="Custom DNS - Alice smart box hack " force=yes name=CustomDNSServer_Alice2Hack value="'179.254.167.126'"
 /ip dhcp-server option add code=121 comment="Static classless route to 192.168.90.0/24 via 192.168.168.161" name=Explicit_Static_Route value=0x18C0A858C0A8A8A1
-/ip dhcp-server option sets add name=ReconfigureOpts options=DNSServer_Static_DHCP
+/ip dhcp-server option sets add name=ReconfigureOpts options=CustomDNSServer_Alice2Hack
 /ip dhcp-server network add address=192.168.80.160/28 caps-manager=192.168.80.1 comment=Containers dhcp-option=DomainName_Windows,DomainName_LinuxMac dns-server=192.168.80.1 gateway=192.168.80.1 netmask=24 ntp-server=192.168.80.1
 /ip dhcp-server network add address=192.168.90.0/27 caps-manager=192.168.90.1 comment="Network devices, CCTV" dhcp-option=DomainName_Windows,DomainName_LinuxMac dns-server=192.168.90.1 gateway=192.168.90.1 netmask=24 ntp-server=192.168.90.1
 /ip dhcp-server network add address=192.168.90.32/27 caps-manager=192.168.90.1 comment="Virtual machines" dhcp-option=DomainName_Windows,DomainName_LinuxMac dns-server=192.168.90.1 gateway=192.168.90.1 netmask=24 ntp-server=192.168.90.1
@@ -518,8 +518,8 @@
 /ip firewall service-port set sip disabled=yes
 /ip firewall service-port set pptp disabled=yes
 /ip hotspot service-port set ftp disabled=yes
-/ip ipsec profile set [ find default=yes ] dh-group=modp1024 dpd-interval=2m dpd-maximum-failures=5
-/ip ipsec profile add dh-group=modp1024 dpd-interval=2m dpd-maximum-failures=5 enc-algorithm=aes-256 hash-algorithm=sha256 name=ROUTEROS
+/ip ipsec profile set [ find default=yes ] dh-group=ecp256 dpd-interval=2m dpd-maximum-failures=5
+/ip ipsec profile add dh-group=ecp256 dpd-interval=2m dpd-maximum-failures=5 enc-algorithm=aes-256 hash-algorithm=sha256 name=ROUTEROS
 /ip ipsec peer add address=185.13.148.14/32 comment="IPSEC IKEv2 VPN PHASE1 (MIS, outer-tunnel encryption, RSA)" disabled=yes exchange-mode=ike2 local-address=10.20.225.166 name=CHR-external profile=ROUTEROS
 /ip ipsec peer add address=10.0.0.1/32 comment="IPSEC IKEv2 VPN PHASE1 (MIS, traffic-only encryption)" disabled=yes local-address=10.0.0.3 name=CHR-internal profile=ROUTEROS
 /ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 disabled=yes enc-algorithms=aes-256-cbc,aes-192-cbc,aes-128-cbc,3des lifetime=1h
@@ -615,8 +615,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        1w6d22:39:27  \
-    \nTime:        2026-11-19 17:10:13  \
+    \nUptime:        2w2d02:39:27  \
+    \nTime:        2026-11-21 21:10:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -630,7 +630,7 @@
     \n * routeros  \
     \n" show-at-cli-login=yes
 /system ntp client set enabled=yes
-/system ntp server set broadcast=yes enabled=yes multicast=yes
+/system ntp server set enabled=yes
 /system ntp client servers add address=85.21.78.91
 /system ntp client servers add address=ru.pool.ntp.org
 /system ntp client servers add address=ntp.msk-ix.ru
@@ -6124,7 +6124,7 @@
 /ip dhcp-server lease add address=192.168.98.201 block-access=yes comment="AlxATV(wire)(blocked)" mac-address=90:DD:5D:CA:8F:B0 server=guest-dhcp-server
 /ip dhcp-server lease add address=192.168.90.140 comment="Hare's Honor9x(wireless)" mac-address=04:F1:69:8E:12:B6 server=main-dhcp-server
 /ip dhcp-server lease add address=192.168.98.140 block-access=yes comment="Hare's Honor9x(wireless)(blocked)" mac-address=04:F1:69:8E:12:B6 server=guest-dhcp-server
-/ip dhcp-server lease add address=192.168.90.196 comment="Alice2(wireless)" dhcp-option=DNSServer_Static_DHCP mac-address=B8:87:6E:19:90:33 server=main-dhcp-server
+/ip dhcp-server lease add address=192.168.90.196 comment="Alice2(wireless)" mac-address=B8:87:6E:19:90:33 server=main-dhcp-server
 /ip dhcp-server lease add address=192.168.98.196 block-access=yes comment="Alice2(wireless)(blocked)" mac-address=B8:87:6E:19:90:33 server=guest-dhcp-server
 /ip dhcp-server lease add address=192.168.90.180 comment="Tuya(wireless)" mac-address=D4:A6:51:C9:54:A7 server=main-dhcp-server
 /ip dhcp-server lease add address=192.168.98.180 block-access=yes comment="Tuya(wireless)(blocked)" mac-address=D4:A6:51:C9:54:A7 server=guest-dhcp-server
@@ -6169,10 +6169,10 @@
 /ip dhcp-server lease add address=192.168.80.162 client-id=1:22:79:70:3f:13:5f comment="victoria-metrics(docker)" mac-address=22:79:70:3F:13:5F server=docker-dhcp-server
 /ip dhcp-server matcher add address-pool=pool-vendor code=60 matching-type=exact name=vendor-mikrotik-caps server=main-dhcp-server value=mikrotik-cap
 /ip dns set address-list-extra-time=30s allow-remote-requests=yes cache-max-ttl=1d cache-size=40000KiB doh-max-concurrent-queries=100 doh-max-server-connections=20 max-concurrent-queries=200 max-concurrent-tcp-sessions=30 mdns-repeat-ifaces=main-infrastructure-br query-server-timeout=3s servers=217.10.36.5 use-doh-server=https://8.8.8.8/dns-query verify-doh-cert=yes
-/ip firewall filter add action=drop chain=input comment=ECH_block dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(input)" protocol=udp
 /ip firewall filter add action=accept chain=input comment=SYSL dst-port=514,5140 layer7-protocol=ECH log=yes log-prefix="#CATCH SYSL(input)" protocol=udp
-/ip firewall filter add action=drop chain=forward comment=ECH_block dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(forward)" protocol=udp
-/ip firewall filter add action=drop chain=output comment=ECH_block dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(output)" protocol=udp
+/ip firewall filter add action=drop chain=input comment=ECH_block disabled=yes dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(input)" protocol=udp
+/ip firewall filter add action=drop chain=forward comment=ECH_block disabled=yes dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(forward)" protocol=udp
+/ip firewall filter add action=drop chain=output comment=ECH_block disabled=yes dst-port=53 layer7-protocol=ECH log-prefix="#DROP ECH(output)" protocol=udp
 /ip firewall filter add action=drop chain=input comment="Drop Invalid Connections (HIGH PRIORIRY RULE)" connection-state=invalid in-interface-list=list-drop-invalid-connections log=yes log-prefix="#DROP INVLD(input)"
 /ip firewall filter add action=drop chain=forward comment="Drop Invalid Connections (HIGH PRIORIRY RULE)" connection-state=invalid dst-address-list=!alist-fw-vpn-subnets log=yes log-prefix="#DROP INVLD(forward)"
 /ip firewall filter add action=accept chain=forward comment="Accept Related or Established Connections (HIGH PRIORIRY RULE)" connection-state=established,related
@@ -6429,8 +6429,10 @@
 /ip firewall mangle add action=add-src-to-address-list address-list=alist-mangle-routers-detection address-list-timeout=none-dynamic chain=prerouting comment="LAN Routers detection" ttl=equal:127
 /ip firewall nat add action=dst-nat chain=dstnat comment=netro dst-address=192.168.90.1 dst-port=7575 protocol=tcp to-addresses=192.168.80.166 to-ports=7575
 /ip firewall nat add action=masquerade chain=srcnat out-interface="wan A" src-address=192.168.80.0/24
-/ip firewall nat add action=redirect chain=dstnat comment="Redirect DNS requests to router (prevent local DNS assignment)" dst-address-list=!alist-nat-192.168.90.1 dst-port=53 protocol=udp
-/ip firewall nat add action=redirect chain=dstnat comment="Redirect DNS requests to router (prevent local DNS assignment)" dst-address-list=!alist-nat-192.168.90.1 dst-port=53 protocol=tcp
+/ip firewall nat add action=dst-nat chain=dstnat comment=ALICE dst-port=53 log=yes protocol=udp src-address=192.168.90.196 to-addresses=179.254.167.126 to-ports=53
+/ip firewall nat add action=dst-nat chain=dstnat comment=ALICE dst-port=53 protocol=tcp src-address=192.168.90.196 to-addresses=179.254.167.126 to-ports=53
+/ip firewall nat add action=redirect chain=dstnat comment="Redirect DNS requests to router (prevent local DNS assignment)" disabled=yes dst-address-list=!alist-nat-192.168.90.1 dst-port=53 protocol=udp
+/ip firewall nat add action=redirect chain=dstnat comment="Redirect DNS requests to router (prevent local DNS assignment)" disabled=yes dst-address-list=!alist-nat-192.168.90.1 dst-port=53 protocol=tcp
 /ip firewall nat add action=jump chain=srcnat comment=masq-docker-chain jump-target=masq-docker-chain
 /ip firewall nat add action=masquerade chain=masq-docker-chain comment=masq-docker-chain-YT-TV dst-address-list=alist-mangle-byedpi-YT-TV
 /ip firewall nat add action=masquerade chain=masq-docker-chain comment=masq-docker-chain-YT dst-address-list=alist-mangle-byedpi-YT
@@ -6540,6 +6542,8 @@
 /queue simple add comment=dtq,B0:34:95:50:A1:6A, name="AudioATV(wireless)(blocked)@guest-dhcp-server (B0:34:95:50:A1:6A)" queue=default/default target=192.168.98.210/32 total-queue=default
 /queue simple add comment=dtq,22:79:70:3F:13:5F,anna-veth-app-victoria-metrics name="victoria-metrics(docker)@docker-dhcp-server (22:79:70:3F:13:5F)" queue=default/default target=192.168.80.162/32 total-queue=default
 /queue simple add comment=dtq,6C:1F:F7:60:69:71,NWS-046 name="TABLE(wire)(GUEST)@guest-dhcp-server (6C:1F:F7:60:69:71)" queue=default/default target=192.168.98.240/32 total-queue=default
+/queue simple add comment=dtq,4C:5F:70:97:DD:99,NWS-046 name="NWS-046@guest-dhcp-server (4C:5F:70:97:DD:99)" queue=default/default target=192.168.98.237/32 total-queue=default
+/queue simple add comment=dtq,96:8B:B3:96:36:89,Alisa-Galaxy-A52 name="Alisa-Galaxy-A52@guest-dhcp-server (96:8B:B3:96:36:89)" queue=default/default target=192.168.98.234/32 total-queue=default
 /queue tree add comment="FILE download control" name="Total Bandwidth" parent=global queue=default
 /queue tree add name=RAR packet-mark=rar-mark parent="Total Bandwidth" queue=default
 /queue tree add name=EXE packet-mark=exe-mark parent="Total Bandwidth" queue=default
