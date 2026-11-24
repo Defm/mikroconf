@@ -1,0 +1,31 @@
+SOAK_RUNNER start end='2026-11-24 22:23:00' end_epoch=1795548180 now=1795463103
+SOAK_SAMPLE ok ts=2026-11-23T22:45:03+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261123-224503.md
+SOAK_RUNNER sleep 3600s (remain 85071s)
+SOAK_RUNNER start end='2026-11-24 22:23:00' end_epoch=1795548180 now=1795463124
+SOAK_SAMPLE ok ts=2026-11-23T22:45:24+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261123-224524.md
+SOAK_RUNNER sleep 3600s (remain 85053s)
+SOAK_SAMPLE ok ts=2026-11-23T23:45:27+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261123-234527.md
+SOAK_RUNNER sleep 3600s (remain 81447s)
+SOAK_SAMPLE ok ts=2026-11-24T00:45:33+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-004533.md
+SOAK_RUNNER sleep 3600s (remain 77843s)
+SOAK_SAMPLE ok ts=2026-11-24T01:45:37+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-014537.md
+SOAK_RUNNER sleep 3600s (remain 74237s)
+SOAK_SAMPLE ok ts=2026-11-24T02:45:43+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-024543.md
+SOAK_RUNNER sleep 3600s (remain 70633s)
+SOAK_SAMPLE ok ts=2026-11-24T03:45:47+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-034547.md
+SOAK_RUNNER sleep 3600s (remain 67029s)
+SOAK_SAMPLE ok ts=2026-11-24T04:45:51+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-044551.md
+SOAK_RUNNER sleep 3600s (remain 63424s)
+SOAK_SAMPLE ok ts=2026-11-24T05:45:57+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-054557.md
+SOAK_RUNNER sleep 3600s (remain 59819s)
+SOAK_SAMPLE ok ts=2026-11-24T06:46:01+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-064601.md
+SOAK_RUNNER sleep 3600s (remain 56213s)
+SOAK_SAMPLE ok ts=2026-11-24T07:46:07+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-074607.md
+SOAK_RUNNER sleep 3600s (remain 52609s)
+SOAK_SAMPLE ok ts=2026-11-24T08:46:11+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-084611.md
+SOAK_RUNNER sleep 3600s (remain 49004s)
+SOAK_SAMPLE ok ts=2026-11-24T09:46:16+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-094616.md
+SOAK_RUNNER sleep 3600s (remain 45400s)
+SOAK_SAMPLE ok ts=2026-11-24T10:46:20+0300 pass=pass file=/Users/Defm/repos/mikroconf/spec/changes/002-remove-common-ports/soak/samples/20261124-104620.md
+SOAK_RUNNER sleep 3600s (remain 41795s)
+SOAK_RUNNER stopped-by-operator 2026-11-24T11:07:12+0300
