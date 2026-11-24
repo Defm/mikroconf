@@ -1,4 +1,4 @@
-# 2026-11-24 11:50:58 by RouterOS 7.25.1
+# 2026-11-24 16:07:14 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -617,8 +617,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        2w4d17:19:27  \
-    \nTime:        2026-11-24 11:50:13  \
+    \nUptime:        2w4d21:29:27  \
+    \nTime:        2026-11-24 16:00:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6203,12 +6203,6 @@
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-rdp-stage2 address-list-timeout=1m chain=chain-rdp-staged-control connection-state=new dst-port=3389 protocol=tcp src-address-list=alist-fw-rdp-stage1
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-rdp-stage1 address-list-timeout=1m chain=chain-rdp-staged-control connection-state=new dst-port=3389 protocol=tcp src-address-list=!alist-fw-rdp-allow
 /ip firewall filter add action=return chain=chain-rdp-staged-control comment="Return From chain-rdp-staged-control"
-/ip firewall filter add action=jump chain=forward comment="jump to chain-smb-staged-control" jump-target=chain-smb-staged-control src-address-list=!alist-fw-smb-allow
-/ip firewall filter add action=add-src-to-address-list address-list=alist-smb-shares-track address-list-timeout=10h chain=chain-smb-staged-control comment="TCP/UDP ports necessary for SMB DROP" dst-port=137-139,445 protocol=udp
-/ip firewall filter add action=add-src-to-address-list address-list=alist-smb-shares-track address-list-timeout=10h chain=chain-smb-staged-control comment="TCP/UDP ports necessary for SMB DROP" dst-port=137-139,445 protocol=tcp
-/ip firewall filter add action=drop chain=chain-smb-staged-control comment="TCP/UDP ports necessary for SMB DROP" dst-port=137-139,445 log=yes log-prefix="#DROP SMB" protocol=tcp src-address-list=alist-smb-shares-track
-/ip firewall filter add action=drop chain=chain-smb-staged-control comment="TCP/UDP ports necessary for SMB DROP" dst-port=137-139,445 log=yes log-prefix="#DROP SMB" protocol=udp src-address-list=alist-smb-shares-track
-/ip firewall filter add action=return chain=chain-smb-staged-control comment="Return from chain-smb-staged-control"
 /ip firewall filter add action=drop chain=input comment="drop ftp brute forcers" dst-port=21 protocol=tcp src-address-list=alist-fw-ftp-block
 /ip firewall filter add action=accept chain=output comment="drop ftp brute forcers" content="530 Login incorrect" dst-limit=1/1m,9,dst-address/1m protocol=tcp
 /ip firewall filter add action=add-dst-to-address-list address-list=alist-fw-ftp-block address-list-timeout=3h chain=output comment="drop ftp brute forcers" content="530 Login incorrect" protocol=tcp
@@ -6279,33 +6273,6 @@
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY6 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-highload address-list-timeout=1h chain=input comment=alist-fw-highload connection-limit=100,32 protocol=tcp
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-highload address-list-timeout=10h chain=forward comment=alist-fw-highload connection-limit=100,32 protocol=tcp
-/ip firewall filter add action=jump chain=input comment="Jump to Virus Chain" jump-target=chain-worms-detector
-/ip firewall filter add action=drop chain=chain-worms-detector comment=Conficker dst-port=593 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment=Worm dst-port=1024-1030 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="ndm requester" dst-port=1363 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="ndm server" dst-port=1364 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="screen cast" dst-port=1368 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment=hromgrafx dst-port=1373 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop MyDoom" dst-port=1080 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment=cichlid dst-port=1377 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment=Worm dst-port=1433-1434 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Dumaru.Y" dst-port=2283 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Beagle" dst-port=2535 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Beagle.C-K" dst-port=2745 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop MyDoom" dst-port=3127-3128 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Backdoor OptixPro" dst-port=3410 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Sasser" dst-port=5554 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment=Worm dst-port=4444 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment=Worm dst-port=4444 protocol=udp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Beagle.B" dst-port=8866 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Dabber.A-B" dst-port=9898 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Dumaru.Y" dst-port=10000 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop MyDoom.B" dst-port=10080 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop NetBus" dst-port=12345 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop Kuang2" dst-port=17300 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop SubSeven" dst-port=27374 protocol=tcp
-/ip firewall filter add action=drop chain=chain-worms-detector comment="Drop PhatBot, Agobot, Gaobot" dst-port=65506 protocol=tcp
-/ip firewall filter add action=return chain=chain-worms-detector comment="Return From Virus Chain"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY7 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="jump dhcp-server" dst-port=67,68 jump-target=chain-dhcp-server protocol=udp
 /ip firewall filter add action=accept chain=chain-dhcp-server comment="DHCP clients to server" dst-port=67,68 in-interface-list=list-router-input-services protocol=udp
@@ -6316,8 +6283,9 @@
 /ip firewall filter add action=jump chain=input comment="jump reverse-proxy" dst-port=443 jump-target=chain-reverse-proxy protocol=tcp
 /ip firewall filter add action=accept chain=chain-reverse-proxy comment="clients to reverse-proxy" dst-port=443 protocol=tcp src-address=192.168.90.0/24
 /ip firewall filter add action=return chain=chain-reverse-proxy comment="return reverse-proxy"
-/ip firewall filter add action=accept chain=input comment="TCP/UDP ports necessary for SMB" dst-port=137-138 protocol=udp src-address-list=alist-fw-smb-allow
-/ip firewall filter add action=accept chain=input comment="TCP/UDP ports necessary for SMB" dst-port=137,139 protocol=tcp src-address-list=alist-fw-smb-allow
+/ip firewall filter add action=jump chain=input comment="jump smb" dst-port=445 jump-target=chain-smb-control protocol=tcp
+/ip firewall filter add action=accept chain=chain-smb-control comment="clients to smb" dst-port=445 protocol=tcp src-address-list=alist-fw-smb-allow
+/ip firewall filter add action=return chain=chain-smb-control comment="return smb"
 /ip firewall filter add action=accept chain=input comment="Accept Related or Established Connections" connection-state=established,related
 /ip firewall filter add action=accept chain=forward comment="Accept New Connections" connection-state=new
 /ip firewall filter add action=accept chain=input comment="Allow proxy on 8888" dst-port=8888 in-interface=main-infrastructure-br protocol=tcp
