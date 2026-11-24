@@ -95,8 +95,8 @@ read-only подключение к реальному устройству тр
 - `.cursor/commands/` — повторяемые команды поиска, проверки и управления
   локальным поведением;
 - `.cursor/rules/` — правила RouterOS, безопасности и vendor;
-- `.cursor/hooks/` и `.cursor/hooks.json` — блокировка удалённых shell- и
-  write-capable MCP-операций;
+- `.cursor/hooks/` и `.cursor/hooks.json` — блокировка удалённых shell-,
+  write-capable MCP-операций и записи в `src/config/*.safe.rsc`;
 - `spec/` — требования и решения SDD-изменений;
 - `tools/sync-routeros-skills.sh` — сборка и проверка skills;
 - `tools/rosetta-db.sh` — работа с проектовой БД rosetta;

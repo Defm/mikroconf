@@ -13,6 +13,19 @@
         "command": ".cursor/hooks/block-remote-shell.py",
         "timeout": 5,
         "failClosed": true
+      },
+      {
+        "command": ".cursor/hooks/block-sensitive-config-write.py",
+        "timeout": 5,
+        "failClosed": true
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": ".cursor/hooks/block-sensitive-config-write.py",
+        "timeout": 5,
+        "failClosed": true,
+        "matcher": "Write|Delete|StrReplace|Edit|TabWrite|ApplyPatch"
       }
     ]
   }
