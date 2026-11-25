@@ -1,4 +1,4 @@
-# 2026-11-25 15:14:52 by RouterOS 7.25.1
+# 2026-11-25 17:18:45 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -100,18 +100,11 @@
 /ip dns forwarders add doh-servers=https://dns.quad9.net/dns-query name=DOH-Quad9
 /ip dns forwarders add dns-servers=8.8.8.8 name=DNS-Google8
 /ip dns forwarders add doh-servers=https://dns.comss.one/dns-query name=DOH-Comss
-/ip dns forwarders add dns-servers=172.16.0.16 name=Blackhole
 /ip dns static add name=special-remote-CHR-ipsec-policy-comment text=ANNA-OUTER-IP-REMOTE-CONTROLLABLE type=TXT
 /ip dns static add cname=anna.home name=anna type=CNAME
 /ip dns static add address=192.168.90.1 match-subdomain=yes name=anna.home type=A
 /ip dns static add cname=wb.home name=wb type=CNAME
 /ip dns static add address=192.168.90.3 comment="Netwatch checkup at 18:51:04" name=wb.home type=A
-/ip dns static add cname=influxdb.home name=influxdb type=CNAME
-/ip dns static add address=172.16.0.17 name=influxdb.home type=A
-/ip dns static add cname=minialx.home name=influxdbsvc.home type=CNAME
-/ip dns static add cname=grafana.home name=grafana type=CNAME
-/ip dns static add address=172.16.0.16 name=grafana.home type=A
-/ip dns static add cname=minialx.home name=grafanasvc.home type=CNAME
 /ip dns static add cname=chr.home name=chr type=CNAME
 /ip dns static add address=192.168.97.1 name=chr.home type=A
 /ip dns static add cname=mikrouter.home name=mikrouter type=CNAME
@@ -463,14 +456,8 @@
 /ip firewall address-list add address=10.0.0.0/29 list=alist-fw-vpn-subnets
 /ip firewall address-list add address=10.0.0.0/24 list=alist-fw-local-subnets
 /ip firewall address-list add address=10.0.0.0/24 list=alist-nat-local-subnets
-/ip firewall address-list add address=172.16.0.16/30 list=alist-fw-local-subnets
-/ip firewall address-list add address=172.16.0.16/30 list=alist-nat-local-subnets
 /ip firewall address-list add address=192.168.98.0/24 comment="Add DNS Server to this List" list=alist-fw-dns-allow
 /ip firewall address-list add address=telegram.org list=alist-fw-telegram-servers
-/ip firewall address-list add address=grafana.home list=alist-nat-grafana-server
-/ip firewall address-list add address=grafanasvc.home list=alist-nat-grafana-service
-/ip firewall address-list add address=influxdb.home list=alist-nat-influxdb-server
-/ip firewall address-list add address=influxdbsvc.home list=alist-nat-influxdb-service
 /ip firewall address-list add address=lostfilm.tv disabled=yes list=alist-mangle-vpn-tunneled-sites
 /ip firewall address-list add address=10.0.0.1 comment="Add DNS Server to this List" list=alist-fw-dns-allow
 /ip firewall address-list add address=185.13.148.14 comment="Add DNS Server to this List" list=alist-fw-dns-allow
@@ -541,8 +528,6 @@
 /ip pool add name=pool-netinstall ranges=192.168.168.160/28
 /ip ipsec mode-config set [ find default=yes ] connection-mark=cmark-tunnel-connection src-address-list=alist-mangle-vpn-tunneled-sites
 /ip proxy set cache-administrator=defm.kopcap@gmail.com max-client-connections=10 max-fresh-time=20m max-server-connections=10 parent-proxy=0.0.0.0 port=8888 serialize-connections=yes
-/ip proxy access add action=redirect action-data=grafana:3000 dst-host=grafana
-/ip proxy access add action=redirect action-data=influxdb:8000 dst-host=influxdb
 /ip smb users set [ find default=yes ] read-only=no
 /ip smb shares set [ find default=yes ] directory=/usb-sftp/public disabled=no
 /ip socksify add disabled=no name=byedpi socks5-server=192.168.80.2
@@ -553,7 +538,7 @@
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://sprut.anna.home ip-address=192.168.90.3 port=7777 sni=sprut.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://metrics.anna.home ip-address=192.168.80.162 port=8428 sni=metrics.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://netro.anna.home ip-address=192.168.80.166 port=7575 sni=netro.anna.home
-/ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://webfig.anna.home ip-address=192.168.90.1 port=4443 sni=webfig.anna.home
+/ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://webfig.anna.home ip-address=192.168.90.1 port=80 sni=webfig.anna.home
 /ip service set telnet disabled=yes
 /ip service set reverse-proxy available-from=192.168.90.0/24 certificate=C.anna.proxy@CHR tls-version=only-1.2
 /ip service set ssh port=2223
@@ -621,8 +606,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        2w5d20:39:27  \
-    \nTime:        2026-11-25 15:10:12  \
+    \nUptime:        2w5d22:39:27  \
+    \nTime:        2026-11-25 17:10:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -5955,7 +5940,6 @@
 /interface bridge add igmp-snooping=yes name=adm-netinstall-br port-cost-mode=short protocol-mode=none
 /interface bridge add name=docker-infrastructure-br port-cost-mode=short protocol-mode=none
 /interface bridge add igmp-snooping=yes name=guest-infrastructure-br port-cost-mode=short
-/interface bridge add arp=proxy-arp fast-forward=no name=ip-mapping-br port-cost-mode=short
 /interface bridge add admin-mac=48:8F:5A:D4:5F:69 arp=reply-only auto-mac=no igmp-snooping=yes name=main-infrastructure-br port-cost-mode=short
 /interface bridge add arp=proxy-arp fast-forward=no name=ospf-loopback-br
 /interface ethernet set [ find default-name=ether2 ] arp=disabled l2mtu=1514 loop-protect=on name="lan A"
@@ -5999,7 +5983,6 @@
 /interface list member add comment="redirect to byedpi" interface=main-infrastructure-br list=list-mangle-redirect-byedpi
 /interface list member add comment="LAN, WLAN" interface=ospf-loopback-br list=list-trusted
 /interface list member add comment="LAN, WLAN" interface=docker-infrastructure-br list=list-trusted
-/interface list member add comment="LAN, WLAN" interface=ip-mapping-br list=list-trusted
 /interface list member add comment="redirect to vpn" interface=main-infrastructure-br list=list-mangle-redirect-vpn
 /interface list member add comment="neighbors lookup" interface=adm-netinstall-br list=list-neighbors-lookup
 /interface list member add interface=guest-infrastructure-br list=list-capsman
@@ -6049,8 +6032,6 @@
 /ip address add address=192.168.90.1/24 comment="local ip" interface=main-infrastructure-br network=192.168.90.0
 /ip address add address=192.168.98.1/24 comment="local guest" interface=guest-infrastructure-br network=192.168.98.0
 /ip address add address=10.255.255.3 comment="ospf router-id binding" interface=ospf-loopback-br network=10.255.255.3
-/ip address add address=172.16.0.16/30 comment="GRAFANA IP redirect" interface=ip-mapping-br network=172.16.0.16
-/ip address add address=172.16.0.17/30 comment="INFLUXDB IP redirect" interface=ip-mapping-br network=172.16.0.16
 /ip address add address=192.168.80.1/24 comment="docker network" interface=docker-infrastructure-br network=192.168.80.0
 /ip address add address=10.255.0.3 comment="ospf router-id binding for vpn routing table" interface=ospf-loopback-br network=10.255.0.3
 /ip address add address=192.168.168.1/24 comment="netinstall static" interface=adm-netinstall-br network=192.168.168.0
@@ -6282,12 +6263,13 @@
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY7 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=accept chain=input comment="Accept Related or Established Connections" connection-state=established,related
 /ip firewall filter add action=accept chain=forward comment="Accept New Connections" connection-state=new
-/ip firewall filter add action=accept chain=input comment="Allow proxy on 8888" dst-port=8888 in-interface=main-infrastructure-br protocol=tcp
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY8 src-address-list=alist-fw-empty-dummy
-/ip firewall filter add action=drop chain=input comment="Open proxy block" dst-port=8888 in-interface="wan A" protocol=tcp
 /ip firewall filter add action=drop chain=forward comment="WAN static-routes intruders not DSTNATed drop" connection-nat-state=dstnat connection-state=new in-interface="wan A" log=yes log-prefix="#DROP UNKNOWN (FWD/no DSTN)"
 /ip firewall filter add action=drop chain=forward comment="Drop all other LAN Traffic" log=yes log-prefix="#DROP UNKNOWN (FWD)"
+/ip firewall filter add action=jump chain=input comment="Jump to router local services" in-interface=lo jump-target=chain-router-services-local
 /ip firewall filter add action=drop chain=input comment="Drop all other WAN Traffic" log=yes log-prefix="#DROP UNKNOWN (INPUT)"
+/ip firewall filter add action=accept chain=chain-router-services-local comment="www for reverse-proxy" dst-port=80 in-interface=lo protocol=tcp
+/ip firewall filter add action=return chain=chain-router-services-local comment="Return from chain-router-services-local"
 /ip firewall mangle add action=change-mss chain=forward comment="DPI Hack: specific  for TVs to fix mss" dst-address-list=alist-mangle-byedpi-YT-TV new-mss=88 protocol=tcp src-address-list=alist-mangle-byedpi-container tcp-flags=syn
 /ip firewall mangle add action=jump chain=prerouting comment=dpi-hack-chain-set-cmark connection-mark=no-mark in-interface-list=list-mangle-redirect-byedpi jump-target=dpi-hack-chain-set-cmark
 /ip firewall mangle add action=mark-connection chain=dpi-hack-chain-set-cmark comment=dpi-hack-chain-set-cmark-YT-TV dst-address-list=alist-mangle-byedpi-YT-TV new-connection-mark=cmark-docker-connection-YT-TV
