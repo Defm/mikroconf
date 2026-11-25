@@ -1,4 +1,4 @@
-# 2026-11-21 21:13:06 by RouterOS 7.25.1
+# 2026-11-25 15:13:47 by RouterOS 7.25.1
 # software id = 59DY-JI10
 #
 # model = RBcAPGi-5acD2nD
@@ -74,8 +74,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     192.168.90.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        2w2d02:23:01  \
-    \nTime:        2026-11-21 21:13:05  \
+    \nUptime:        2w5d20:23:00  \
+    \nTime:        2026-11-25 15:13:04  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -92,7 +92,6 @@ set [ find default=yes ] advertise-dns=yes
 /system scheduler add !days interval=5d name=doBackup on-event="/system script run doBackup" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-06-26 start-time=21:13:00
 /system scheduler add !days interval=1d name=doLEDoff on-event="/system script run doLEDoff" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=23:30:00
 /system scheduler add !days interval=1d name=doLEDon on-event="/system script run doLEDon" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-09-09 start-time=07:00:00
-/system scheduler add !days interval=15m name=doCPUHighLoadReboot on-event="/system script run doCPUHighLoadReboot" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2019-02-07 start-time=06:05:00
 /system scheduler add !days interval=1h name=doUpdateExternalDNS on-event="/system script run doUpdateExternalDNS" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2017-01-30 start-time=18:57:09
 /system scheduler add !days interval=1d name=doFreshTheScripts on-event="/system script run doFreshTheScripts" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-date=2018-03-01 start-time=08:00:00
 /system scheduler add !days name=doStartupScript on-event="/system script run doStartupScript;" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-time=startup
@@ -1945,108 +1944,6 @@ set [ find default=yes ] advertise-dns=yes
     \n}\
     \n\
     \n"
-/system script add comment="This will check for free CPU/RAM resources over \$ticks times to be more than \$CpuWarnLimit%/\$RamWarnLimit% each time. Will reboot the router when overload" dont-require-permissions=yes name=doCPUHighLoadReboot owner=automation policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":local sysname [/system identity get name]\r\
-    \n:local scriptname \"doCPUHighLoadReboot\"\r\
-    \n:global globalScriptBeforeRun\r\
-    \n\$globalScriptBeforeRun \$scriptname\r\
-    \n\r\
-    \n:global globalNoteMe\r\
-    \n:global globalTgMessage\r\
-    \n:local itsOk true\r\
-    \n:local state \"\"\r\
-    \n:local doReboot false\r\
-    \n\r\
-    \n# available (free) resource (percent), set it to 90 for testing\r\
-    \n:local ramWarnLimit 15\r\
-    \n:local cpuWarnLimit 15\r\
-    \n\r\
-    \n:local ticks 7\r\
-    \n:local delayTime 7\r\
-    \n:local useProgressiveDelay true\r\
-    \n\r\
-    \n:onerror errorDescr in={\r\
-    \n\r\
-    \n    :local usedCpu [/system resource get cpu-load]\r\
-    \n    :local freeCpu (100 - \$usedCpu)\r\
-    \n    :local freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])\r\
-    \n\r\
-    \n    :set state \"Checking for free CPU/RAM resources over \$ticks times to be more than \$cpuWarnLimit%/\$ramWarnLimit% each time\"\r\
-    \n    \$globalNoteMe value=\$state verbose=true\r\
-    \n\r\
-    \n    :set state \"Step 0: free CPU/RAM \$freeCpu%/\$freeRam%, going deeper..\"\r\
-    \n    \$globalNoteMe value=\$state verbose=true\r\
-    \n\r\
-    \n    :if (\$freeRam < \$ramWarnLimit or \$freeCpu < \$cpuWarnLimit) do={\r\
-    \n        # this tick is high-HighLoad\r\
-    \n        :set itsOk false\r\
-    \n        :delay \$delayTime\r\
-    \n    }\r\
-    \n\r\
-    \n    :for i from=1 to=\$ticks do={\r\
-    \n\r\
-    \n        :if (!\$itsOk) do={\r\
-    \n            :set usedCpu [/system resource get cpu-load]\r\
-    \n            :set freeCpu (100 - \$usedCpu)\r\
-    \n            :set freeRam ((100 * [/system resource get free-memory]) / [/system resource get total-memory])\r\
-    \n\r\
-    \n            :set state \"Recalc stats\"\r\
-    \n            \$globalNoteMe value=\$state verbose=true\r\
-    \n        }\r\
-    \n\r\
-    \n        :if (!\$itsOk and (\$freeRam < \$ramWarnLimit or \$freeCpu < \$cpuWarnLimit)) do={\r\
-    \n\r\
-    \n            # keep \$itsOk = false\r\
-    \n            :local delaySec \$delayTime\r\
-    \n            :if (\$useProgressiveDelay) do={\r\
-    \n                :set delaySec (\$delayTime + \$i)\r\
-    \n            }\r\
-    \n\r\
-    \n            :set state \"Step \$i: free CPU/RAM \$freeCpu%/\$freeRam%, its too low, sleep \$delaySec and recheck..\"\r\
-    \n            \$globalNoteMe value=\$state\r\
-    \n\r\
-    \n            :delay \$delaySec\r\
-    \n\r\
-    \n        } else={\r\
-    \n            # if one step is non-HighLoad, then the whole result is non-HighLoad\r\
-    \n            :set itsOk true\r\
-    \n        }\r\
-    \n    }\r\
-    \n\r\
-    \n    :if (!\$itsOk) do={\r\
-    \n        :set doReboot true\r\
-    \n    }\r\
-    \n\r\
-    \n} do={\r\
-    \n    :set state \"Error When \$state: \$errorDescr\"\r\
-    \n    \$globalNoteMe value=\$state\r\
-    \n    :set itsOk false\r\
-    \n}\r\
-    \n\r\
-    \n:local inf \"\"\r\
-    \n:if (\$itsOk) do={\r\
-    \n    :set inf \"\E2\9C\93 SUCCESS \$scriptname on \$sysname: cpu load ok\"\r\
-    \n}\r\
-    \n\r\
-    \n:if (!\$itsOk) do={\r\
-    \n    :if (\$doReboot) do={\r\
-    \n        :set inf \"\E2\9C\97 FAILED \$scriptname on \$sysname: CPU load too high, I'm going reboot\"\r\
-    \n    } else={\r\
-    \n        :set inf \"\E2\9C\97 FAILED \$scriptname on \$sysname: \$state\"\r\
-    \n    }\r\
-    \n}\r\
-    \n\r\
-    \n\$globalNoteMe value=\$inf\r\
-    \n\r\
-    \n:if (!\$itsOk) do={\r\
-    \n    \$globalTgMessage value=\$inf\r\
-    \n    :if (\$doReboot) do={\r\
-    \n        /system reboot\r\
-    \n    } else={\r\
-    \n        :error \$inf\r\
-    \n    }\r\
-    \n}\r\
-    \n\r\
-    \n"
 /system script add comment="A very special script for CFG restore from *.rsc files (not from backup). This one should be placed at flash/perfectrestore.rsc, your config should be at flash/backup.rsc. Run 'Reset confuguration' with 'no default config', choose 'flash/perfectrestore.rsc' as 'run after reset. Pretty logs will be at flash/import.log and flash/perfectrestore.log" dont-require-permissions=yes name=doPerfectRestore owner=owner policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="\r\
     \n\r\
     \n{\r\
@@ -2244,7 +2141,7 @@ set [ find default=yes ] advertise-dns=yes
 /system logging action add disk-file-count=5 disk-file-name=ScriptsDiskLog disk-lines-per-file=300 name=ScriptsDiskLog target=disk
 /system logging action add disk-file-count=20 disk-file-name=ErrorDiskLog disk-lines-per-file=300 name=ErrorDiskLog target=disk
 /system logging action add name=TerminalConsoleLog remember=no target=echo
-/system logging action add name=OnScreenLog target=memory
+/system logging action add memory-lines=3000 name=OnScreenLog target=memory
 /system logging action add name=DHCPOnScreenLog target=memory
 /system logging action add name=DNSOnScreenLog target=memory
 /system logging action add name=RouterControlLog target=memory
@@ -2264,7 +2161,7 @@ set [ find default=yes ] advertise-dns=yes
 /system logging action add disk-file-count=1 disk-file-name=REBOOTLog disk-lines-per-file=100 name=REBOOTDiskLog target=disk
 /system logging action add name=DockerOnscreenLog target=memory
 /system logging action add name=NetinstallOnscreenLog target=memory
-/system logging set 0 action=OnScreenLog topics=info,!ipsec,!script,!dns
+/system logging set 0 action=OnScreenLog topics=info,!ipsec,!script,!dns,!debug
 /system logging set 1 action=OnScreenLog
 /system logging set 2 action=OnScreenLog
 /system logging set 3 action=TerminalConsoleLog

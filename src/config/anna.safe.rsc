@@ -1,4 +1,4 @@
-# 2026-11-24 16:07:14 by RouterOS 7.25.1
+# 2026-11-25 15:14:52 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -513,6 +513,9 @@
 /ip firewall address-list add address=10.104.0.0/16 list=alist-office-ovpn
 /ip firewall address-list add address=192.168.90.0/24 list=alist-fw-ssh-allow
 /ip firewall address-list add address=46.39.51.219 list=alist-nat-external-ip
+/ip firewall address-list add address=192.168.90.0/24 list=alist-fw-winbox-allow
+/ip firewall address-list add address=192.168.80.0/24 list=alist-fw-winbox-allow
+/ip firewall address-list add address=192.168.168.0/24 list=alist-fw-winbox-allow
 /ip firewall layer7-protocol add name="resolve local" regexp=".home|[0-9]+.[0-9]+.168.192.in-addr.arpa"
 /ip firewall layer7-protocol add name=ECH regexp="A\\x01\$"
 /ip firewall service-port set tftp disabled=yes
@@ -550,10 +553,11 @@
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://sprut.anna.home ip-address=192.168.90.3 port=7777 sni=sprut.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://metrics.anna.home ip-address=192.168.80.162 port=8428 sni=metrics.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://netro.anna.home ip-address=192.168.80.166 port=7575 sni=netro.anna.home
+/ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://webfig.anna.home ip-address=192.168.90.1 port=4443 sni=webfig.anna.home
 /ip service set telnet disabled=yes
 /ip service set reverse-proxy available-from=192.168.90.0/24 certificate=C.anna.proxy@CHR tls-version=only-1.2
 /ip service set ssh port=2223
-/ip service set www-ssl available-from=192.168.90.0/24 port=4443
+/ip service set www-ssl available-from=192.168.90.0/24 certificate=C.anna.proxy@CHR disabled=no port=4443
 /ip service set api disabled=yes
 /ip service set api-ssl disabled=yes
 /routing filter rule add chain=ospf-in comment="drop DEFAULT ROUTE" disabled=no rule="if ( protocol ospf && dst-len==0 ) { set comment DISCARDED-GLOBAL ; set pref-src 10.0.0.3 ; reject; }"
@@ -617,8 +621,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        2w4d21:29:27  \
-    \nTime:        2026-11-24 16:00:12  \
+    \nUptime:        2w5d20:39:27  \
+    \nTime:        2026-11-25 15:10:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -5837,7 +5841,7 @@
 /system logging action set 3 add-topics-string=yes remote=victoria.home remote-log-format=syslog
 /system logging action add name=IpsecOnScreenLog target=memory
 /system logging action add disk-file-count=5 disk-file-name=ScriptsDiskLog disk-lines-per-file=300 name=ScriptsDiskLog target=disk
-/system logging action add disk-file-count=5 disk-file-name=ErrorDiskLog disk-lines-per-file=300 name=ErrorDiskLog target=disk
+/system logging action add disk-file-count=20 disk-file-name=ErrorDiskLog disk-lines-per-file=300 name=ErrorDiskLog target=disk
 /system logging action add name=TerminalConsoleLog remember=no target=echo
 /system logging action add memory-lines=3000 name=OnScreenLog target=memory
 /system logging action add name=DHCPOnScreenLog target=memory
@@ -5845,7 +5849,7 @@
 /system logging action add name=RouterControlLog target=memory
 /system logging action add name=OSPFOnscreenLog target=memory
 /system logging action add name=L2TPOnScreenLog target=memory
-/system logging action add disk-file-count=5 disk-file-name=AuthDiskLog disk-lines-per-file=300 name=AuthDiskLog target=disk
+/system logging action add disk-file-count=20 disk-file-name=AuthDiskLog disk-lines-per-file=300 name=AuthDiskLog target=disk
 /system logging action add name=CertificatesOnScreenLog target=memory
 /system logging action add name=ParseMemoryLog target=memory
 /system logging action add name=CAPSOnScreenLog target=memory
@@ -5860,6 +5864,10 @@
 /system logging action add name=DockerOnscreenLog target=memory
 /system logging action add name=NetinstallOnscreenLog target=memory
 /system logging action add name=VictoriaRemoteSyslog remote=victoria.home remote-log-format=syslog remote-port=5140 target=remote
+/system logging set 0 action=OnScreenLog topics=info,!ipsec,!script,!dns,!debug
+/system logging set 1 action=OnScreenLog
+/system logging set 2 action=OnScreenLog
+/system logging set 3 action=TerminalConsoleLog
 /system logging add action=IpsecOnScreenLog topics=ipsec,!debug
 /system logging add action=ErrorDiskLog topics=critical
 /system logging add action=ErrorDiskLog topics=error
@@ -6212,15 +6220,13 @@
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-dns-amp-ban address-list-timeout=10h chain=chain-dns-amp-attack comment="Add DNS Amplification to Blacklist" port=53,5353 protocol=udp src-address-list=!alist-fw-dns-allow
 /ip firewall filter add action=drop chain=chain-dns-amp-attack comment="Drop DNS Amplification" log=yes log-prefix="#PROP DNS FLOOD(input)" src-address-list=alist-fw-dns-amp-ban
 /ip firewall filter add action=return chain=chain-dns-amp-attack comment="Return from DNS Amplification"
-/ip firewall filter add action=accept chain=input comment="Self fetch requests" port=80 protocol=tcp
-/ip firewall filter add action=jump chain=input comment="Allow router services on the lan" in-interface=main-infrastructure-br jump-target=chain-router-services-lan
-/ip firewall filter add action=accept chain=chain-router-services-lan comment="Winbox (8291/TCP)" dst-port=8291 protocol=tcp
-/ip firewall filter add action=accept chain=chain-router-services-lan comment=SNMP port=161 protocol=udp
-/ip firewall filter add action=accept chain=chain-router-services-lan comment=WEB port=80 protocol=tcp
+/ip firewall filter add action=jump chain=input comment="Allow router services on the lan" in-interface-list=list-router-input-services jump-target=chain-router-services-lan
+/ip firewall filter add action=accept chain=chain-router-services-lan comment=SNMP in-interface=main-infrastructure-br port=161 protocol=udp
+/ip firewall filter add action=accept chain=chain-router-services-lan comment="DHCP clients to server" dst-port=67,68 in-interface-list=list-router-input-services protocol=udp
+/ip firewall filter add action=accept chain=chain-router-services-lan comment="NTP clients to server" dst-port=123 in-interface-list=list-router-input-services protocol=udp
+/ip firewall filter add action=accept chain=chain-router-services-lan comment="clients to reverse-proxy" dst-port=443 protocol=tcp src-address=192.168.90.0/24
+/ip firewall filter add action=accept chain=chain-router-services-lan comment="clients to smb" dst-port=445 protocol=tcp src-address-list=alist-fw-smb-allow
 /ip firewall filter add action=return chain=chain-router-services-lan comment="Return from chain-router-services-lan Chain"
-/ip firewall filter add action=jump chain=input comment="Allow router services on the wan" in-interface="wan A" jump-target=chain-router-services-wan
-/ip firewall filter add action=drop chain=chain-router-services-wan comment="Winbox (8291/TCP)" dst-port=8291 protocol=tcp
-/ip firewall filter add action=return chain=chain-router-services-wan comment="Return from chain-router-services-wan Chain"
 /ip firewall filter add action=jump chain=input comment="Check for ping flooding" jump-target=chain-detect-icmp-flood protocol=icmp
 /ip firewall filter add action=accept chain=chain-detect-icmp-flood comment="0:0 and limit for 5 pac/s Allow Ping" icmp-options=0:0-255 limit=5,5:packet protocol=icmp
 /ip firewall filter add action=accept chain=chain-detect-icmp-flood comment="3:3 and limit for 5 pac/s Allow Traceroute" icmp-options=3:3 limit=5,5:packet protocol=icmp
@@ -6236,8 +6242,6 @@
 /ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (Manually Added)" src-address-list=alist-fw-manual-block
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Telnet)" src-address-list=alist-fw-telnet-ban
 /ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (Telnet)" src-address-list=alist-fw-telnet-ban
-/ip firewall filter add action=drop chain=input comment="Drop anyone in the Black List (Winbox)" src-address-list=alist-fw-winbox-ban
-/ip firewall filter add action=drop chain=forward comment="Drop anyone in the Black List (Winbox)" src-address-list=alist-fw-winbox-ban
 /ip firewall filter add action=drop chain=input comment="Drop anyone in the WAN Port Scanner List" src-address-list=alist-fw-port-scanner-ban
 /ip firewall filter add action=drop chain=forward comment="Drop anyone in the WAN Port Scanner List" src-address-list=alist-fw-port-scanner-ban
 /ip firewall filter add action=passthrough chain=input comment="Drop anyone in the LAN Port Scanner List" src-address-list=alist-fw-port-scanner-ban
@@ -6261,12 +6265,14 @@
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-telnet-stage1 address-list-timeout=1m chain=chain-telnet-staged-control comment="Add Intial attempt to Telnet Stage 1" connection-state=new dst-port=23 protocol=tcp
 /ip firewall filter add action=return chain=chain-telnet-staged-control comment="Return From RFC Telnet Chain"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY4 src-address-list=alist-fw-empty-dummy
-/ip firewall filter add action=jump chain=input comment="Jump to RFC Winbox Chain" jump-target=chain-winbox-staged-control
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-ban address-list-timeout=1w3d chain=chain-winbox-staged-control comment="Transfer repeated attempts from Winbox Stage 3 to Black-List" connection-state=new dst-port=8291 protocol=tcp src-address-list=alist-fw-winbox-stage3
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-stage3 address-list-timeout=1m chain=chain-winbox-staged-control comment="Add succesive attempts to Winbox Stage 3" connection-state=new dst-port=8291 protocol=tcp src-address-list=alist-fw-winbox-stage2
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-stage2 address-list-timeout=1m chain=chain-winbox-staged-control comment="Add succesive attempts to Winbox Stage 2" connection-state=new dst-port=8291 protocol=tcp src-address-list=alist-fw-winbox-stage1
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-stage1 address-list-timeout=1m chain=chain-winbox-staged-control comment="Add Intial attempt to Winbox Stage 1" connection-state=new dst-port=8291 protocol=tcp src-address-list=!alist-fw-vpn-subnets
-/ip firewall filter add action=return chain=chain-winbox-staged-control comment="Return From RFC Winbox Chain"
+/ip firewall filter add action=jump chain=input comment="Jump to RFC Winbox Chain" dst-port=8291 jump-target=chain-winbox-staged-control protocol=tcp
+/ip firewall filter add action=accept chain=chain-winbox-staged-control comment="Accept Winbox allow-list" src-address-list=alist-fw-winbox-allow
+/ip firewall filter add action=drop chain=chain-winbox-staged-control comment="Drop Winbox ban-list" src-address-list=alist-fw-winbox-ban
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-ban address-list-timeout=1w3d chain=chain-winbox-staged-control comment="Transfer repeated attempts from Winbox Stage 3 to Black-List" connection-state=new protocol=tcp src-address-list=alist-fw-winbox-stage3
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-stage3 address-list-timeout=3m chain=chain-winbox-staged-control comment="Add succesive attempts to Winbox Stage 3" connection-state=new protocol=tcp src-address-list=alist-fw-winbox-stage2
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-stage2 address-list-timeout=40s chain=chain-winbox-staged-control comment="Add succesive attempts to Winbox Stage 2" connection-state=new protocol=tcp src-address-list=alist-fw-winbox-stage1
+/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-winbox-stage1 address-list-timeout=5s chain=chain-winbox-staged-control comment="Add Intial attempt to Winbox Stage 1" connection-state=new protocol=tcp src-address-list=!alist-fw-winbox-allow
+/ip firewall filter add action=accept chain=chain-winbox-staged-control comment="Accept remaining Winbox"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY5 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-port-scanner-ban address-list-timeout=10h chain=input comment="Add TCP Port Scanners to Address List" protocol=tcp psd=40,3s,2,1 src-address-list=!alist-fw-port-scanner-allow
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-port-scanner-ban address-list-timeout=10h chain=forward comment="Add TCP Port Scanners to Address List" protocol=tcp psd=40,3s,2,1 src-address-list=!alist-fw-port-scanner-allow
@@ -6274,18 +6280,6 @@
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-highload address-list-timeout=1h chain=input comment=alist-fw-highload connection-limit=100,32 protocol=tcp
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-highload address-list-timeout=10h chain=forward comment=alist-fw-highload connection-limit=100,32 protocol=tcp
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY7 src-address-list=alist-fw-empty-dummy
-/ip firewall filter add action=jump chain=input comment="jump dhcp-server" dst-port=67,68 jump-target=chain-dhcp-server protocol=udp
-/ip firewall filter add action=accept chain=chain-dhcp-server comment="DHCP clients to server" dst-port=67,68 in-interface-list=list-router-input-services protocol=udp
-/ip firewall filter add action=return chain=chain-dhcp-server comment="return dhcp-server"
-/ip firewall filter add action=jump chain=input comment="jump ntp-server" dst-port=123 jump-target=chain-ntp-server protocol=udp
-/ip firewall filter add action=accept chain=chain-ntp-server comment="NTP clients to server" dst-port=123 in-interface-list=list-router-input-services protocol=udp
-/ip firewall filter add action=return chain=chain-ntp-server comment="return ntp-server"
-/ip firewall filter add action=jump chain=input comment="jump reverse-proxy" dst-port=443 jump-target=chain-reverse-proxy protocol=tcp
-/ip firewall filter add action=accept chain=chain-reverse-proxy comment="clients to reverse-proxy" dst-port=443 protocol=tcp src-address=192.168.90.0/24
-/ip firewall filter add action=return chain=chain-reverse-proxy comment="return reverse-proxy"
-/ip firewall filter add action=jump chain=input comment="jump smb" dst-port=445 jump-target=chain-smb-control protocol=tcp
-/ip firewall filter add action=accept chain=chain-smb-control comment="clients to smb" dst-port=445 protocol=tcp src-address-list=alist-fw-smb-allow
-/ip firewall filter add action=return chain=chain-smb-control comment="return smb"
 /ip firewall filter add action=accept chain=input comment="Accept Related or Established Connections" connection-state=established,related
 /ip firewall filter add action=accept chain=forward comment="Accept New Connections" connection-state=new
 /ip firewall filter add action=accept chain=input comment="Allow proxy on 8888" dst-port=8888 in-interface=main-infrastructure-br protocol=tcp
@@ -6446,12 +6440,12 @@
 /tool netinstall add disabled=yes extra-packages=wireless interface=adm-netinstall-br ip-range=192.168.168.100-192.168.168.110 keep-old-configuration=no remove-branding=yes wait=yes
 /tool netwatch add comment="miniAlx(wire) status check" disabled=no down-script=":global globalNetwatchHostName \"minialx\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.70 ignore-initial-down=yes ignore-initial-up=yes name=miniAlx startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"minialx\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
 /tool netwatch add comment="victoria(docker) status check" disabled=no down-script=":global globalNetwatchHostName \"victoria\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.80.160 http-codes="" ignore-initial-down=yes ignore-initial-up=yes interval=1m name=victoria port=9428 src-address=192.168.90.1 startup-delay=1m test-script="" type=http-get up-script=":global globalNetwatchHostName \"victoria\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
-/tool netwatch add comment="CHR(remote) status check" disabled=no down-script=":global globalNetwatchHostName \"chr-tunnel\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.97.1 ignore-initial-down=yes ignore-initial-up=yes name=CHR startup-delay=20s test-script="" type=icmp up-script=":global globalNetwatchHostName \"chr-tunnel\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
+/tool netwatch add comment="CHR(remote) status check" disabled=no down-script=":global globalNetwatchHostName \"chr-tunnel\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" early-failure-detection=no early-success-detection=no host=192.168.97.1 ignore-initial-down=yes ignore-initial-up=yes interval=35s name=CHR packet-count=30 packet-interval=1s startup-delay=20s test-script="" thr-avg=1s thr-jitter=1s thr-loss-count=29 thr-loss-percent=100% thr-max=1s thr-stdev=1s timeout=1s type=icmp up-script=":global globalNetwatchHostName \"chr-tunnel\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
 /tool netwatch add comment="WB(wireless) status check" disabled=no down-script=":global globalNetwatchHostName \"WB\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.3 ignore-initial-down=yes ignore-initial-up=yes interval=1m name="WB(wireless)" startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"WB\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
 /tool netwatch add comment="WB(wireless) DNS fix" disabled=no down-script="/system/script/run doNetwatchDNS" host=192.168.90.3 ignore-initial-down=yes ignore-initial-up=yes interval=1m name="WB(wireless)" startup-delay=20s test-script="" type=simple up-script="/system/script/run doNetwatchDNS"
 /tool netwatch add comment="AliceMidi(wireless) status check" disabled=no down-script=":global globalNetwatchHostName \"aliceMidi\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.194 ignore-initial-down=yes ignore-initial-up=yes name=AliceMidi startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"aliceMidi\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
 /tool netwatch add comment="NSPanel(wireless) status check" disabled=no down-script=":global globalNetwatchHostName \"nspanel\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.165 ignore-initial-down=yes ignore-initial-up=yes name=NSPanel startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"nspanel\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
-/tool netwatch add comment="capxl(wire) status check" disabled=no down-script=":global globalNetwatchHostName \"capxl\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.10 ignore-initial-down=yes ignore-initial-up=yes startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"capxl\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
+/tool netwatch add comment="capxl(wire) status check" disabled=no down-script=":global globalNetwatchHostName \"capxl\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.10 ignore-initial-down=yes ignore-initial-up=yes name="Capxl(wire)" startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"capxl\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
 /tool netwatch add comment="Alice2(wireless) status check" disabled=no down-script=":global globalNetwatchHostName \"alice2\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.196 ignore-initial-down=yes ignore-initial-up=yes name=Alice2 startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"alice2\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
 /tool netwatch add comment="Alice3(wireless) status check" disabled=no down-script=":global globalNetwatchHostName \"alice3\"; :global globalNetwatchHostState \"DOWN\"; /system script run doNetwatchHost;" host=192.168.90.195 ignore-initial-down=yes ignore-initial-up=yes name=Alice3 startup-delay=20s test-script="" type=simple up-script=":global globalNetwatchHostName \"alice3\"; :global globalNetwatchHostState \"UP\"; /system script run doNetwatchHost;"
 /tool netwatch add disabled=no down-script="" host=hcy086pz6xz.sn.mynetname.net test-script="" type=dns up-script=""
