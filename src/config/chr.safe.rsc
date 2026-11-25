@@ -1,4 +1,4 @@
-# 2026-11-21 21:13:05 by RouterOS 7.25.1
+# 2026-11-25 13:17:13 by RouterOS 7.25.1
 # system id = pEDSXaHXN3J
 #
 # custom default configuration script installed
@@ -199,8 +199,8 @@
 /interface veth add address=172.17.0.7/28 container-mac-address=36:5D:EA:5F:7B:3A dhcp=no gateway=172.17.0.1 gateway6="" mac-address=36:5D:EA:5F:7B:39 name=veth-hermes
 /interface veth add address=172.17.0.2/28 container-mac-address=26:8A:0C:A0:3E:3B dhcp=no gateway=172.17.0.1 gateway6="" mac-address=26:8A:0C:A0:3E:3A name=veth-telemt
 /interface veth add address=172.17.0.3/28 container-mac-address=30:A6:92:7E:80:32 dhcp=no gateway=172.17.0.1 gateway6="" mac-address=30:A6:92:7E:80:31 name=veth-telemt-webui
-/interface wireguard add listen-port=65114 mtu=1420 name=wg-to-capax
-/container add check-certificate=no cmd=/etc/telemt/config.toml comment="MTProto telegram proxy" dns=192.168.97.1 envlists=TELEMT_ENVS healthcheck-cmd=CMD,/app/telemt,healthcheck,/etc/telemt/config.toml,--mode,liveness healthcheck-status="failed with exit code 1, tries 35714/3, output: [telemt] healthcheck failed: invalid HTTP response headers\
+/interface wireguard add disabled=yes listen-port=65114 mtu=1420 name=wg-to-capax
+/container add check-certificate=no cmd=/etc/telemt/config.toml comment="MTProto telegram proxy" dns=192.168.97.1 envlists=TELEMT_ENVS healthcheck-cmd=CMD,/app/telemt,healthcheck,/etc/telemt/config.toml,--mode,liveness healthcheck-status="failed with exit code 1, tries 46278/3, output: [telemt] healthcheck failed: invalid HTTP response headers\
     \n" hostname=telemt interface=veth-telemt layer-dir=/docker/layers logging=yes memory-high=256.0MiB mountlists=TELEMT_VOLUMES name=telemt remote-image=ghcr.io/telemt/telemt:latest root-dir=/docker/runs/telemt start-on-boot=yes user=0:0 workdir=/tmp
 /container add check-certificate=no comment="MTProto telegram proxy web panel" dns=192.168.97.1 hostname=telemt-webui interface=veth-telemt-webui layer-dir=/docker/layers logging=yes memory-high=256.0MiB mountlists=TELEMT_WEBUI_VOLUMES name=telemt-webui remote-image=ghcr.io/amirotin/telemt_panel:latest root-dir=/docker/runs/telemt-webui start-on-boot=yes
 /container add check-certificate=no comment="Caddy web server and reverse proxy" dns=192.168.97.1 envlists=CADDY_ENVS hostname=caddy interface=veth-caddy layer-dir=/docker/layers logging=yes memory-high=200.0MiB mountlists=CADDY_VOLUMES name=caddy remote-image=caddy:latest root-dir=/docker/runs/caddy start-on-boot=yes user=0:0 workdir=/srv
@@ -259,7 +259,7 @@
 /interface list member add comment="FW: listen to Portknocking" interface=wan list=list-FW-portknocking
 /interface list member add comment="FW: allow router cerfices from LAN" interface=docker-infrastructure-br list=list-FW-allow-router-services-LAN
 /interface ovpn-server server add mac-address=FE:65:0F:57:76:B9 name=ovpn-server1
-/interface wireguard peers add allowed-address=172.30.30.0/24,10.0.0.5/32 client-allowed-address=::/0 endpoint-port=12000 interface=wg-to-capax name=capax persistent-keepalive=10s public-key="rUDu2JBEFFtsgr3uZTGFBvWXTXolY2hYMUQo0/lTiBI="
+/interface wireguard peers add allowed-address=172.30.30.0/24,10.0.0.5/32 client-allowed-address=::/0 !client-listen-port disabled=yes endpoint-port=12000 interface=wg-to-capax name=capax persistent-keepalive=10s public-key="rUDu2JBEFFtsgr3uZTGFBvWXTXolY2hYMUQo0/lTiBI="
 /ip address add address=192.168.97.1/29 comment="local IP" interface=main-infrastructure-br network=192.168.97.0
 /ip address add address=10.255.255.1 comment="router id" interface=ospf-lo network=10.255.255.1
 /ip address add address=172.17.0.1/28 comment="docker network" interface=docker-infrastructure-br network=172.17.0.0
@@ -600,8 +600,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     185.13.148.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        1w5d09:39:36  \
-    \nTime:        2026-11-21 21:10:12  \
+    \nUptime:        2w2d01:39:36  \
+    \nTime:        2026-11-25 13:10:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -3339,19 +3339,19 @@ set [ find default=yes ] advertise-dns=yes
     \n\r\
     \n"
 /system logging action set 0 memory-lines=3000
-/system logging action set 1 disk-file-name=journal disk-lines-per-file=500
+/system logging action set 1 disk-file-name=journal
 /system logging action set 3 add-topics-string=yes remote=victoria.home remote-log-format=syslog
 /system logging action add name=IpsecOnScreenLog target=memory
 /system logging action add disk-file-count=5 disk-file-name=ScriptsDiskLog disk-lines-per-file=300 name=ScriptsDiskLog target=disk
-/system logging action add disk-file-count=5 disk-file-name=ErrorDiskLog disk-lines-per-file=300 name=ErrorDiskLog target=disk
+/system logging action add disk-file-count=20 disk-file-name=ErrorDiskLog disk-lines-per-file=300 name=ErrorDiskLog target=disk
 /system logging action add name=TerminalConsoleLog remember=no target=echo
-/system logging action add name=OnScreenLog target=memory
+/system logging action add memory-lines=3000 name=OnScreenLog target=memory
 /system logging action add name=DHCPOnScreenLog target=memory
 /system logging action add name=DNSOnScreenLog target=memory
 /system logging action add name=RouterControlLog target=memory
 /system logging action add name=OSPFOnscreenLog target=memory
 /system logging action add name=L2TPOnScreenLog target=memory
-/system logging action add disk-file-count=5 disk-file-name=AuthDiskLog disk-lines-per-file=300 name=AuthDiskLog target=disk
+/system logging action add disk-file-count=20 disk-file-name=AuthDiskLog disk-lines-per-file=300 name=AuthDiskLog target=disk
 /system logging action add name=CertificatesOnScreenLog target=memory
 /system logging action add name=ParseMemoryLog target=memory
 /system logging action add name=CAPSOnScreenLog target=memory
@@ -3362,9 +3362,10 @@ set [ find default=yes ] advertise-dns=yes
 /system logging action add cef-event-delimiter="" name=VictoriaRemoteLog remote=victoria.home remote-log-format=cef target=remote
 /system logging action add name=TransfersOnscreenLog target=memory
 /system logging action add disk-file-count=1 disk-file-name=PKGInstallationLog disk-lines-per-file=100 name=PKGInstallationLog target=disk
-/system logging action add disk-file-count=1 disk-file-name=REBOOTLog disk-lines-per-file=100 name=REBOOTDoskLog target=disk
+/system logging action add disk-file-count=1 disk-file-name=REBOOTLog disk-lines-per-file=100 name=REBOOTDiskLog target=disk
 /system logging action add name=DockerOnscreenLog target=memory
 /system logging action add name=NetinstallOnscreenLog target=memory
+/system logging action add name=VictoriaRemoteSyslog remote=victoria.home remote-log-format=syslog remote-port=5140 target=remote
 /system logging set 0 action=OnScreenLog topics=info,!ipsec,!script,!dns,!debug
 /system logging set 1 action=OnScreenLog
 /system logging set 2 action=OnScreenLog
@@ -3405,6 +3406,13 @@ set [ find default=yes ] advertise-dns=yes
 /system logging add action=VictoriaRemoteLog topics=l2tp,!packet,!debug,!raw,!info
 /system logging add action=NetinstallOnscreenLog topics=netinstall
 /system logging add action=VictoriaRemoteLog topics=caps
+/system logging add action=VictoriaRemoteSyslog prefix=caddy regex="^.*caddy.*\$" topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=haproxy regex="^.*haproxy.*\$" topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=hermes regex="^.*hermes.*\$" topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=glider regex="^.*glider.*\$" topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=gitwatch regex="^.*gitwatch.*\$" topics=container
+/system logging add action=VictoriaRemoteSyslog prefix=telemt regex="^.*telemt.*\$" topics=container
+/system logging add action=REBOOTDiskLog regex="^.*reboot.*\$"
 /tool bandwidth-server set authenticate=no enabled=no
 /tool e-mail set from=defm.kopcap@gmail.com port=587 server=smtp.gmail.com tls=starttls user=defm.kopcap@gmail.com
 /tool netwatch add disabled=no down-script=":global NetwatchHostName \"mikrouter.home\";\
