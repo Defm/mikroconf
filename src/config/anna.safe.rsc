@@ -1,4 +1,4 @@
-# 2026-11-26 21:02:36 by RouterOS 7.25.1
+# 2026-11-26 21:13:08 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -592,8 +592,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w02:29:27  \
-    \nTime:        2026-11-26 21:00:13  \
+    \nUptime:        3w02:39:27  \
+    \nTime:        2026-11-26 21:10:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
