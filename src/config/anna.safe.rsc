@@ -1,4 +1,4 @@
-# 2026-11-26 17:23:06 by RouterOS 7.25.1
+# 2026-11-26 21:02:36 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -424,6 +424,7 @@
 /ip dns static add address-list=alist-mangle-byedpi-YTB comment=alist-mangle-byedpi-YTB-20260912-034500 forward-to=DOH-Google match-subdomain=yes name=revanced.app type=FWD
 /ip dns static add address=46.39.51.219 name=ftpserver.org type=A
 /ip dns static add address=192.168.90.196 comment=<AUTO:DHCP:main-dhcp-server> name=yandex-mini2.home ttl=5m type=A
+/ip dns static add address=192.168.90.90 comment=<AUTO:DHCP:main-dhcp-server> name=El-WorkePlace.home ttl=5m type=A
 /ip firewall address-list add address=192.168.90.0/24 list=alist-fw-local-subnets
 /ip firewall address-list add address=192.168.90.0/24 list=alist-nat-local-subnets
 /ip firewall address-list add address=100.64.0.0/10 comment="RFC 6598 (Shared Address Space)" list=alist-fw-rfc-special
@@ -441,11 +442,6 @@
 /ip firewall address-list add address=192.88.99.0/24 comment="RFC 7526 (Deprecated (6to4 Relay Anycast))" list=alist-fw-rfc-special
 /ip firewall address-list add address=192.175.48.0/24 comment="RFC 7534 (Direct Delegation AS112 Service)" list=alist-fw-rfc-special
 /ip firewall address-list add address=255.255.255.255 comment="RFC 919 (Limited Broadcast)" list=alist-fw-rfc-special
-/ip firewall address-list add address=192.168.90.0/24 comment="Add DNS Server to this List" list=alist-fw-dns-allow
-/ip firewall address-list add address=8.8.8.8 comment="Add DNS Server to this List" list=alist-fw-dns-allow
-/ip firewall address-list add address=8.8.4.4 comment="Add DNS Server to this List" list=alist-fw-dns-allow
-/ip firewall address-list add address=192.168.100.1 comment="Add DNS Server to this List" list=alist-fw-dns-allow
-/ip firewall address-list add address=4.2.2.2 comment="Add DNS Server to this List" list=alist-fw-dns-allow
 /ip firewall address-list add address=185.6.175.49 comment="Manual Black List" list=alist-fw-manual-block
 /ip firewall address-list add address=185.13.148.14 list=alist-fw-vpn-server-addr
 /ip firewall address-list add address=rutracker.org list=alist-mangle-vpn-tunneled-sites
@@ -454,16 +450,10 @@
 /ip firewall address-list add address=10.0.0.0/29 list=alist-fw-vpn-subnets
 /ip firewall address-list add address=10.0.0.0/24 list=alist-fw-local-subnets
 /ip firewall address-list add address=10.0.0.0/24 list=alist-nat-local-subnets
-/ip firewall address-list add address=192.168.98.0/24 comment="Add DNS Server to this List" list=alist-fw-dns-allow
 /ip firewall address-list add address=telegram.org list=alist-fw-telegram-servers
 /ip firewall address-list add address=lostfilm.tv disabled=yes list=alist-mangle-vpn-tunneled-sites
-/ip firewall address-list add address=10.0.0.1 comment="Add DNS Server to this List" list=alist-fw-dns-allow
-/ip firewall address-list add address=185.13.148.14 comment="Add DNS Server to this List" list=alist-fw-dns-allow
 /ip firewall address-list add address=192.168.168.160/28 comment="Port scan entire LAN allow" list=alist-fw-port-scanner-allow
 /ip firewall address-list add address=2ip.ru list=alist-mangle-vpn-tunneled-sites
-/ip firewall address-list add address=192.168.100.7 comment="Add DNS Server to this List" list=alist-fw-dns-allow
-/ip firewall address-list add address=217.10.36.5 comment="AKADO official DNS server" list=alist-fw-dns-allow
-/ip firewall address-list add address=217.10.34.2 comment="AKADO official DNS server" list=alist-fw-dns-allow
 /ip firewall address-list add address=192.168.99.0/24 list=alist-fw-vpn-subnets
 /ip firewall address-list add address=192.168.168.160/28 list=alist-fw-vpn-subnets
 /ip firewall address-list add address=tmdb.org disabled=yes list=alist-mangle-vpn-tunneled-sites
@@ -472,7 +462,6 @@
 /ip firewall address-list add address=accounts.autodesk.com disabled=yes list=alist-mangle-vpn-tunneled-sites
 /ip firewall address-list add address=binaryronin.io disabled=yes list=alist-mangle-vpn-tunneled-sites
 /ip firewall address-list add address=192.168.80.2 list=alist-mangle-docker-space
-/ip firewall address-list add address=192.168.80.0/24 comment="Add DNS Server to this List" list=alist-fw-dns-allow
 /ip firewall address-list add address=92.204.208.0/20 comment=alist-mangle-TG-20260416-164500 list=alist-mangle-TG
 /ip firewall address-list add address=95.161.64.0/20 comment=alist-mangle-TG-20260416-164500 list=alist-mangle-TG
 /ip firewall address-list add address=149.154.164.0/22 comment=alist-mangle-TG-20260416-180000 list=alist-mangle-TG
@@ -489,7 +478,6 @@
 /ip firewall address-list add address=5.28.128.0/17 comment=alist-mangle-TG-20260416-180000 list=alist-mangle-TG
 /ip firewall address-list add address=192.168.168.160/28 list=alist-fw-local-subnets
 /ip firewall address-list add address=192.168.168.160/28 list=alist-nat-local-subnets
-/ip firewall address-list add address=192.168.168.160/28 comment="Add DNS Server to this List" list=alist-fw-dns-allow
 /ip firewall address-list add address=192.168.90.1 list=alist-nat-192.168.90.1
 /ip firewall address-list add address=10.100.0.0/16 list=alist-office-ovpn
 /ip firewall address-list add address=10.101.0.0/16 list=alist-office-ovpn
@@ -604,8 +592,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        2w6d22:49:27  \
-    \nTime:        2026-11-26 17:20:13  \
+    \nUptime:        3w02:29:27  \
+    \nTime:        2026-11-26 21:00:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6189,12 +6177,6 @@
 /ip firewall filter add action=drop chain=input comment="drop ftp brute forcers" dst-port=21 protocol=tcp src-address-list=alist-fw-ftp-block
 /ip firewall filter add action=accept chain=output comment="drop ftp brute forcers" content="530 Login incorrect" dst-limit=1/1m,9,dst-address/1m protocol=tcp
 /ip firewall filter add action=add-dst-to-address-list address-list=alist-fw-ftp-block address-list-timeout=3h chain=output comment="drop ftp brute forcers" content="530 Login incorrect" protocol=tcp
-/ip firewall filter add action=jump chain=input comment="Jump to DNS Amplification" jump-target=chain-dns-amp-attack
-/ip firewall filter add action=accept chain=chain-dns-amp-attack comment="Make exceptions for DNS" port=53,5353 protocol=udp src-address-list=alist-fw-dns-allow
-/ip firewall filter add action=accept chain=chain-dns-amp-attack comment="Make exceptions for DNS" dst-address-list=alist-fw-dns-allow port=53,5353 protocol=udp
-/ip firewall filter add action=add-src-to-address-list address-list=alist-fw-dns-amp-ban address-list-timeout=10h chain=chain-dns-amp-attack comment="Add DNS Amplification to Blacklist" port=53,5353 protocol=udp src-address-list=!alist-fw-dns-allow
-/ip firewall filter add action=drop chain=chain-dns-amp-attack comment="Drop DNS Amplification" log=yes log-prefix="#PROP DNS FLOOD(input)" src-address-list=alist-fw-dns-amp-ban
-/ip firewall filter add action=return chain=chain-dns-amp-attack comment="Return from DNS Amplification"
 /ip firewall filter add action=jump chain=input comment="Allow router services on the lan" in-interface-list=list-router-input-services jump-target=chain-router-services-lan
 /ip firewall filter add action=accept chain=chain-router-services-lan comment="SNMP clients to server (w/o guest)" dst-port=161 in-interface=!guest-infrastructure-br protocol=udp
 /ip firewall filter add action=accept chain=chain-router-services-lan comment="DHCP clients to server" dst-port=67,68 protocol=udp
@@ -6202,6 +6184,9 @@
 /ip firewall filter add action=accept chain=chain-router-services-lan comment="reverse-proxy clients to server (w/o guest)" dst-port=443 in-interface=!guest-infrastructure-br protocol=tcp
 /ip firewall filter add action=accept chain=chain-router-services-lan comment="smb clients to server (w/o guest)" dst-port=445 in-interface=!guest-infrastructure-br protocol=tcp
 /ip firewall filter add action=accept chain=chain-router-services-lan comment="www-ssl clients to server (w/o guest)" dst-port=4443 in-interface=!guest-infrastructure-br protocol=tcp
+/ip firewall filter add action=accept chain=chain-router-services-lan comment="DNS clients to server" dst-port=53 protocol=udp
+/ip firewall filter add action=accept chain=chain-router-services-lan comment="DNS clients to server" dst-port=53 protocol=tcp
+/ip firewall filter add action=accept chain=chain-router-services-lan comment="mDNS clients to server" dst-port=5353 protocol=udp
 /ip firewall filter add action=return chain=chain-router-services-lan comment="Return from chain-router-services-lan Chain"
 /ip firewall filter add action=jump chain=input comment="Check for ping flooding" jump-target=chain-detect-icmp-flood protocol=icmp
 /ip firewall filter add action=accept chain=chain-detect-icmp-flood comment="0:0 and limit for 5 pac/s Allow Ping" icmp-options=0:0-255 limit=5,5:packet protocol=icmp
@@ -6287,8 +6272,10 @@
 /ip firewall nat add action=masquerade chain=srcnat out-interface="wan A" src-address=192.168.80.0/24
 /ip firewall nat add action=dst-nat chain=dstnat comment=ALICE dst-port=53 log=yes protocol=udp src-address=192.168.90.196 to-addresses=179.254.167.126 to-ports=53
 /ip firewall nat add action=dst-nat chain=dstnat comment=ALICE dst-port=53 protocol=tcp src-address=192.168.90.196 to-addresses=179.254.167.126 to-ports=53
-/ip firewall nat add action=redirect chain=dstnat comment="Redirect DNS requests to router (prevent local DNS assignment)" disabled=yes dst-address-list=!alist-nat-192.168.90.1 dst-port=53 protocol=udp
-/ip firewall nat add action=redirect chain=dstnat comment="Redirect DNS requests to router (prevent local DNS assignment)" disabled=yes dst-address-list=!alist-nat-192.168.90.1 dst-port=53 protocol=tcp
+/ip firewall nat add action=jump chain=dstnat comment="Jump to DNS redirect" in-interface-list=list-router-input-services jump-target=chain-dns-redirect
+/ip firewall nat add action=redirect chain=chain-dns-redirect comment="Redirect UDP DNS to router" dst-port=53 protocol=udp
+/ip firewall nat add action=redirect chain=chain-dns-redirect comment="Redirect TCP DNS to router" dst-port=53 protocol=tcp
+/ip firewall nat add action=return chain=chain-dns-redirect comment="Return from chain-dns-redirect"
 /ip firewall nat add action=jump chain=srcnat comment=masq-docker-chain jump-target=masq-docker-chain
 /ip firewall nat add action=masquerade chain=masq-docker-chain comment=masq-docker-chain-YT-TV dst-address-list=alist-mangle-byedpi-YT-TV
 /ip firewall nat add action=masquerade chain=masq-docker-chain comment=masq-docker-chain-YT dst-address-list=alist-mangle-byedpi-YT
