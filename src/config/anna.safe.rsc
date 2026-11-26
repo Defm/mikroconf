@@ -1,4 +1,4 @@
-# 2026-11-26 12:25:05 by RouterOS 7.25.1
+# 2026-11-26 17:23:06 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -604,8 +604,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        2w6d17:49:27  \
-    \nTime:        2026-11-26 12:20:13  \
+    \nUptime:        2w6d22:49:27  \
+    \nTime:        2026-11-26 17:20:13  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -5902,6 +5902,7 @@
 /user group add name=mikrodash policy=read,test,api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!winbox,!password,!web,!sniff,!sensitive,!romon,!rest-api
 /user ssh-keys add info=automation@workstation key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF6lqaeSpKSDJC8QqKps+/mJoXVZdffcuVWtzCFFU++w" user=automation
 /caps-man access-list add action=reject allow-signal-out-of-range=10s comment="Drop any when poor signal rate, https://support.apple.com/en-us/HT203068" disabled=no signal-range=-120..-80 ssid-regexp=WiFi
+/caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment="ElviraAsus(wireless)" disabled=no mac-address=C8:CB:9E:B1:2E:E3 ssid-regexp="WiFi 5"
 /caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment="AliceMidi(wireless) 2Ghz" disabled=no mac-address=AC:BA:C0:78:80:C6 ssid-regexp="WiFi 2Ghz PRIV"
 /caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment="AlxATV(wireless)" disabled=no mac-address=90:DD:5D:C8:46:AB ssid-regexp="WiFi 2Ghz PRIV"
 /caps-man access-list add action=accept allow-signal-out-of-range=10s client-to-client-forwarding=yes comment="Froloff(wireless)" disabled=no mac-address=B8:94:E7:61:3F:08 ssid-regexp="WiFi 5"
@@ -6033,7 +6034,6 @@
 /ip address add address=192.168.80.1/24 comment="docker network" interface=docker-infrastructure-br network=192.168.80.0
 /ip address add address=10.255.0.3 comment="ospf router-id binding for vpn routing table" interface=ospf-loopback-br network=10.255.0.3
 /ip address add address=192.168.168.1/24 comment="netinstall static" interface=adm-netinstall-br network=192.168.168.0
-/ip arp add address=192.168.90.90 comment="MbpAlx (wire)" interface=main-infrastructure-br mac-address=38:C9:86:51:D2:B3
 /ip arp add address=192.168.90.40 comment=NAS interface=main-infrastructure-br mac-address=00:11:32:2C:A7:85
 /ip arp add address=192.168.90.10 comment="capxl(wire)" interface=main-infrastructure-br mac-address=18:FD:74:94:FD:70
 /ip arp add address=192.168.90.70 comment="miniAlx (wire)" interface=main-infrastructure-br mac-address=10:DD:B1:9E:19:5E
@@ -6072,6 +6072,7 @@
 /ip arp add address=192.168.90.194 comment="AliceMidi(wireless)" interface=main-infrastructure-br mac-address=AC:BA:C0:78:80:C6
 /ip arp add address=192.168.90.200 comment="AlxATV(wireless)" interface=main-infrastructure-br mac-address=90:DD:5D:C8:46:AB
 /ip arp add address=192.168.80.162 comment="victoria-metrics(docker)" interface=docker-infrastructure-br mac-address=22:79:70:3F:13:5F
+/ip arp add address=192.168.90.90 comment=ElviraAsus interface=main-infrastructure-br mac-address=C8:CB:9E:B1:2E:E3
 /ip dhcp-client add allow-reconfigure=yes comment="wan via akado edge router" dhcp-options=clientid_duid,clientid,hostname interface="wan A" name=akado use-peer-dns=no use-peer-ntp=no
 /ip dhcp-server add authoritative=after-2sec-delay interface=main-infrastructure-br lease-time=1d name=main-dhcp-server use-reconfigure=yes
 /ip dhcp-server add add-arp=yes address-pool=pool-guest authoritative=after-2sec-delay interface=guest-infrastructure-br lease-script=":global globalLeaseBound;\r\
@@ -6160,6 +6161,8 @@
 /ip dhcp-server lease add address=192.168.98.200 block-access=yes comment="AlxATV(wireless)(blocked)" mac-address=90:DD:5D:C8:46:AB server=guest-dhcp-server
 /ip dhcp-server lease add address=192.168.168.174 comment="MbpAlxm (wire) - STATIC!" mac-address=6C:1F:F7:60:69:71 server=netinstall-dhcp-server
 /ip dhcp-server lease add address=192.168.80.162 client-id=1:22:79:70:3f:13:5f comment="victoria-metrics(docker)" mac-address=22:79:70:3F:13:5F server=docker-dhcp-server
+/ip dhcp-server lease add address=192.168.90.90 comment=ElviraAsus mac-address=C8:CB:9E:B1:2E:E3 server=main-dhcp-server
+/ip dhcp-server lease add address=192.168.98.90 block-access=yes comment="ElviraAsus(blocked)" mac-address=C8:CB:9E:B1:2E:E3 server=guest-dhcp-server
 /ip dhcp-server matcher add address-pool=pool-vendor code=60 matching-type=exact name=vendor-mikrotik-caps server=main-dhcp-server value=mikrotik-cap
 /ip dns set address-list-extra-time=30s allow-remote-requests=yes cache-max-ttl=1d cache-size=40000KiB doh-max-concurrent-queries=100 doh-max-server-connections=20 max-concurrent-queries=200 max-concurrent-tcp-sessions=30 mdns-repeat-ifaces=main-infrastructure-br query-server-timeout=3s servers=217.10.36.5 use-doh-server=https://8.8.8.8/dns-query verify-doh-cert=yes
 /ip firewall filter add action=accept chain=input comment=SYSL dst-port=514,5140 layer7-protocol=ECH log=yes log-prefix="#CATCH SYSL(input)" protocol=udp
@@ -6229,6 +6232,9 @@
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-ssh-stage1 address-list-timeout=5s chain=chain-ssh-staged-control comment="Add intial attempt to SSH Stage 1 List" connection-state=new protocol=tcp src-address-list=!alist-fw-ssh-allow
 /ip firewall filter add action=accept chain=chain-ssh-staged-control comment="Accept remaining SSH"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY3 src-address-list=alist-fw-empty-dummy
+/ip firewall filter add action=jump chain=input comment="Jump to router loop services" in-interface=lo jump-target=chain-router-services-loop
+/ip firewall filter add action=accept chain=chain-router-services-loop comment="Self-services over SNI via reverse-proxy" dst-port=80 in-interface=lo protocol=tcp
+/ip firewall filter add action=return chain=chain-router-services-loop comment="Return from chain-router-services-loop"
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY4 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=jump chain=input comment="Jump to RFC Winbox Chain" dst-port=8291 jump-target=chain-winbox-staged-control protocol=tcp
 /ip firewall filter add action=accept chain=chain-winbox-staged-control comment="Accept Winbox allow-list" src-address-list=alist-fw-winbox-allow
@@ -6246,14 +6252,15 @@
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-highload address-list-timeout=10h chain=forward comment=alist-fw-highload connection-limit=100,32 protocol=tcp
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY7 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=accept chain=input comment="Accept Related or Established Connections" connection-state=established,related
+/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface=main-infrastructure-br
+/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface=guest-infrastructure-br
+/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface=adm-netinstall-br
+/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface="wan A"
 /ip firewall filter add action=accept chain=forward comment="Accept New Connections" connection-state=new
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY8 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=drop chain=forward comment="WAN static-routes intruders not DSTNATed drop" connection-nat-state=dstnat connection-state=new in-interface="wan A" log=yes log-prefix="#DROP UNKNOWN (FWD/no DSTN)"
 /ip firewall filter add action=drop chain=forward comment="Drop all other LAN Traffic" log=yes log-prefix="#DROP UNKNOWN (FWD)"
-/ip firewall filter add action=jump chain=input comment="Jump to router local services" in-interface=lo jump-target=chain-router-services-local
 /ip firewall filter add action=drop chain=input comment="Drop all other WAN Traffic" log=yes log-prefix="#DROP UNKNOWN (INPUT)"
-/ip firewall filter add action=accept chain=chain-router-services-local comment="www for reverse-proxy" dst-port=80 in-interface=lo protocol=tcp
-/ip firewall filter add action=return chain=chain-router-services-local comment="Return from chain-router-services-local"
 /ip firewall mangle add action=change-mss chain=forward comment="DPI Hack: specific  for TVs to fix mss" dst-address-list=alist-mangle-byedpi-YT-TV new-mss=88 protocol=tcp src-address-list=alist-mangle-byedpi-container tcp-flags=syn
 /ip firewall mangle add action=jump chain=prerouting comment=dpi-hack-chain-set-cmark connection-mark=no-mark in-interface-list=list-mangle-redirect-byedpi jump-target=dpi-hack-chain-set-cmark
 /ip firewall mangle add action=mark-connection chain=dpi-hack-chain-set-cmark comment=dpi-hack-chain-set-cmark-YT-TV dst-address-list=alist-mangle-byedpi-YT-TV new-connection-mark=cmark-docker-connection-YT-TV
@@ -6277,7 +6284,6 @@
 /ip firewall mangle add action=return chain=vpn-hack-chain-set-rmark comment=vpn-hack-chain-set-rmark
 /ip firewall mangle add action=add-src-to-address-list address-list=alist-mangle-routers-detection address-list-timeout=none-dynamic chain=prerouting comment="LAN Routers detection" ttl=equal:63
 /ip firewall mangle add action=add-src-to-address-list address-list=alist-mangle-routers-detection address-list-timeout=none-dynamic chain=prerouting comment="LAN Routers detection" ttl=equal:127
-/ip firewall nat add action=dst-nat chain=dstnat comment=netro dst-address=192.168.90.1 dst-port=7575 protocol=tcp to-addresses=192.168.80.166 to-ports=7575
 /ip firewall nat add action=masquerade chain=srcnat out-interface="wan A" src-address=192.168.80.0/24
 /ip firewall nat add action=dst-nat chain=dstnat comment=ALICE dst-port=53 log=yes protocol=udp src-address=192.168.90.196 to-addresses=179.254.167.126 to-ports=53
 /ip firewall nat add action=dst-nat chain=dstnat comment=ALICE dst-port=53 protocol=tcp src-address=192.168.90.196 to-addresses=179.254.167.126 to-ports=53
@@ -6290,9 +6296,7 @@
 /ip firewall nat add action=masquerade chain=masq-docker-chain comment=masq-docker-chain-ANY dst-address-list=alist-mangle-byedpi
 /ip firewall nat add action=return chain=masq-docker-chain comment=masq-docker-chain
 /ip firewall nat add action=jump chain=dstnat comment=port-rdr-docker-chain dst-address-list=alist-nat-192.168.90.1 jump-target=port-rdr-docker-chain
-/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-web dst-port=9428 protocol=tcp to-addresses=192.168.80.160 to-ports=9428
-/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victoriametrics-web dst-port=8428 protocol=tcp to-addresses=192.168.80.162 to-ports=8428
-/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-syslog dst-port=514,5140 protocol=udp to-addresses=192.168.80.160
+/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-syslog dst-port=514,5140 in-interface=main-infrastructure-br protocol=udp to-addresses=192.168.80.160
 /ip firewall nat add action=return chain=port-rdr-docker-chain comment=port-rdr-docker-chain
 /ip firewall nat add action=accept chain=srcnat comment="accept tunnel traffic" dst-address-list=alist-fw-vpn-subnets src-address-list=alist-nat-local-subnets
 /ip firewall nat add action=masquerade chain=srcnat comment="LAN 192.168.90.0/24 -> OVPN 10.100.0.0/24" dst-address-list=alist-office-ovpn out-interface=main-infrastructure-br src-address=192.168.90.0/24
