@@ -1,4 +1,4 @@
-# 2026-11-26 21:13:05 by RouterOS 7.25.1
+# 2026-11-27 14:10:52 by RouterOS 7.25.1
 # software id = 59DY-JI10
 #
 # model = RBcAPGi-5acD2nD
@@ -13,6 +13,7 @@
 /ip cloud set ddns-enabled=yes ddns-update-interval=10m
 /ip dhcp-client option add code=60 name=classid value="'mikrotik-cap'"
 /ip dns static add address=46.39.51.219 name=ftpserver.org type=A
+/ip dns static add address=192.168.90.1 name=victoria.home type=A
 /ip firewall address-list add address=109.252.162.10 list=external-ip
 /ip firewall address-list add address=46.39.51.219 list=alist-nat-external-ip
 /ip firewall service-port set tftp disabled=yes
@@ -74,8 +75,8 @@ set [ find default=yes ] advertise-dns=yes
 /system note set note="Ipsec:         okay \
     \nRoute:     192.168.90.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w02:23:00  \
-    \nTime:        2026-11-26 21:13:05  \
+    \nUptime:        3w19:13:00  \
+    \nTime:        2026-11-27 14:03:04  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -2161,6 +2162,7 @@ set [ find default=yes ] advertise-dns=yes
 /system logging action add disk-file-count=1 disk-file-name=REBOOTLog disk-lines-per-file=100 name=REBOOTDiskLog target=disk
 /system logging action add name=DockerOnscreenLog target=memory
 /system logging action add name=NetinstallOnscreenLog target=memory
+/system logging action add name=VictoriaRemoteSyslog remote=victoria.home remote-log-format=syslog remote-port=5140 target=remote
 /system logging set 0 action=OnScreenLog topics=info,!ipsec,!script,!dns,!debug
 /system logging set 1 action=OnScreenLog
 /system logging set 2 action=OnScreenLog

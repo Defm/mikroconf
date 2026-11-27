@@ -1,4 +1,4 @@
-# 2026-11-27 10:17:30 by RouterOS 7.25.1
+# 2026-11-27 14:09:11 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -489,6 +489,7 @@
 /ip firewall address-list add address=192.168.90.0/24 list=alist-fw-winbox-allow
 /ip firewall address-list add address=192.168.80.0/24 list=alist-fw-winbox-allow
 /ip firewall address-list add address=192.168.168.0/24 list=alist-fw-winbox-allow
+/ip firewall address-list add address=192.168.80.0/24 comment=chain-containers-access list=alist-fw-containers
 /ip firewall layer7-protocol add name="resolve local" regexp=".home|[0-9]+.[0-9]+.168.192.in-addr.arpa"
 /ip firewall layer7-protocol add name=ECH regexp="A\\x01\$"
 /ip firewall service-port set tftp disabled=yes
@@ -522,7 +523,6 @@
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://victoria.anna.home ip-address=192.168.80.160 port=9428 sni=victoria.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://wiren.anna.home ip-address=192.168.90.3 port=80 sni=wiren.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://sprut.anna.home ip-address=192.168.90.3 port=7777 sni=sprut.anna.home
-/ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://metrics.anna.home ip-address=192.168.80.162 port=8428 sni=metrics.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://netro.anna.home ip-address=192.168.80.166 port=7575 sni=netro.anna.home
 /ip reverse-proxy add certificate=C.anna.proxy@CHR comment=https://webfig.anna.home ip-address=192.168.90.1 port=80 sni=webfig.anna.home
 /ip service set telnet disabled=yes
@@ -592,8 +592,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w15:39:26  \
-    \nTime:        2026-11-27 10:10:12  \
+    \nUptime:        3w19:29:26  \
+    \nTime:        2026-11-27 14:00:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6059,7 +6059,6 @@
 /ip arp add address=192.168.90.195 comment="Alice3(wireless)" interface=main-infrastructure-br mac-address=60:3D:61:6B:B7:B4
 /ip arp add address=192.168.90.194 comment="AliceMidi(wireless)" interface=main-infrastructure-br mac-address=AC:BA:C0:78:80:C6
 /ip arp add address=192.168.90.200 comment="AlxATV(wireless)" interface=main-infrastructure-br mac-address=90:DD:5D:C8:46:AB
-/ip arp add address=192.168.80.162 comment="victoria-metrics(docker)" interface=docker-infrastructure-br mac-address=22:79:70:3F:13:5F
 /ip arp add address=192.168.90.90 comment=ElviraAsus interface=main-infrastructure-br mac-address=C8:CB:9E:B1:2E:E3
 /ip dhcp-client add allow-reconfigure=yes comment="wan via akado edge router" dhcp-options=clientid_duid,clientid,hostname interface="wan A" name=akado use-peer-dns=no use-peer-ntp=no
 /ip dhcp-server add authoritative=after-2sec-delay interface=main-infrastructure-br lease-time=1d name=main-dhcp-server use-reconfigure=yes
@@ -6148,7 +6147,6 @@
 /ip dhcp-server lease add address=192.168.90.200 comment="AlxATV(wireless)" mac-address=90:DD:5D:C8:46:AB server=main-dhcp-server
 /ip dhcp-server lease add address=192.168.98.200 block-access=yes comment="AlxATV(wireless)(blocked)" mac-address=90:DD:5D:C8:46:AB server=guest-dhcp-server
 /ip dhcp-server lease add address=192.168.168.174 comment="MbpAlxm (wire) - STATIC!" mac-address=6C:1F:F7:60:69:71 server=netinstall-dhcp-server
-/ip dhcp-server lease add address=192.168.80.162 client-id=1:22:79:70:3f:13:5f comment="victoria-metrics(docker)" mac-address=22:79:70:3F:13:5F server=docker-dhcp-server
 /ip dhcp-server lease add address=192.168.90.90 comment=ElviraAsus mac-address=C8:CB:9E:B1:2E:E3 server=main-dhcp-server
 /ip dhcp-server lease add address=192.168.98.90 block-access=yes comment="ElviraAsus(blocked)" mac-address=C8:CB:9E:B1:2E:E3 server=guest-dhcp-server
 /ip dhcp-server matcher add address-pool=pool-vendor code=60 matching-type=exact name=vendor-mikrotik-caps server=main-dhcp-server value=mikrotik-cap
@@ -6208,6 +6206,11 @@
 /ip firewall filter add action=drop chain=input comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 src-address-list=alist-fw-empty-dummy
+/ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new dst-address-list=alist-fw-containers jump-target=chain-containers-access
+/ip firewall filter add action=accept chain=chain-containers-access comment="Accept dstnat syslog to containers" connection-nat-state=dstnat dst-port=514,5140 protocol=udp
+/ip firewall filter add action=accept chain=chain-containers-access comment="Accept containers to containers" dst-address-list=alist-fw-containers src-address-list=alist-fw-containers
+/ip firewall filter add action=reject chain=chain-containers-access comment="Prevent outer containers access" in-interface-list=all reject-with=icmp-admin-prohibited
+/ip firewall filter add action=return chain=chain-containers-access comment=chain-containers-access
 /ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" dst-port=22,2223 jump-target=chain-ssh-staged-control protocol=tcp
 /ip firewall filter add action=accept chain=chain-ssh-staged-control comment="Accept SSH allow-list" src-address-list=alist-fw-ssh-allow
 /ip firewall filter add action=drop chain=chain-ssh-staged-control comment="Drop SSH ban-list" src-address-list=alist-fw-ssh-ban
@@ -6237,10 +6240,6 @@
 /ip firewall filter add action=add-src-to-address-list address-list=alist-fw-highload address-list-timeout=10h chain=forward comment=alist-fw-highload connection-limit=100,32 protocol=tcp
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY7 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=accept chain=input comment="Accept Related or Established Connections" connection-state=established,related
-/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface=main-infrastructure-br
-/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface=guest-infrastructure-br
-/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface=adm-netinstall-br
-/ip firewall filter add action=drop chain=forward comment="drop new forward to 192.168.80.0/24" connection-state=new dst-address=192.168.80.0/24 in-interface="wan A"
 /ip firewall filter add action=accept chain=forward comment="Accept New Connections" connection-state=new
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY8 src-address-list=alist-fw-empty-dummy
 /ip firewall filter add action=drop chain=forward comment="WAN static-routes intruders not DSTNATed drop" connection-nat-state=dstnat connection-state=new in-interface="wan A" log=yes log-prefix="#DROP UNKNOWN (FWD/no DSTN)"
@@ -6282,8 +6281,8 @@
 /ip firewall nat add action=masquerade chain=masq-docker-chain comment=masq-docker-chain-IG dst-address-list=alist-mangle-byedpi-IG
 /ip firewall nat add action=masquerade chain=masq-docker-chain comment=masq-docker-chain-ANY dst-address-list=alist-mangle-byedpi
 /ip firewall nat add action=return chain=masq-docker-chain comment=masq-docker-chain
-/ip firewall nat add action=jump chain=dstnat comment=port-rdr-docker-chain dst-address-list=alist-nat-192.168.90.1 jump-target=port-rdr-docker-chain
-/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-syslog dst-port=514,5140 in-interface=main-infrastructure-br protocol=udp to-addresses=192.168.80.160
+/ip firewall nat add action=jump chain=dstnat comment=port-rdr-docker-chain dst-address-list=alist-nat-192.168.90.1 in-interface-list=list-router-input-services jump-target=port-rdr-docker-chain
+/ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment="port-rdr-docker-chain-victorialogs-syslog (w/o guest)" dst-port=514,5140 in-interface=!guest-infrastructure-br protocol=udp to-addresses=192.168.80.160
 /ip firewall nat add action=return chain=port-rdr-docker-chain comment=port-rdr-docker-chain
 /ip firewall nat add action=accept chain=srcnat comment="accept tunnel traffic" dst-address-list=alist-fw-vpn-subnets src-address-list=alist-nat-local-subnets
 /ip firewall nat add action=accept chain=srcnat comment="accept tunnel traffic (sites)" dst-address-list=alist-mangle-vpn
@@ -6378,7 +6377,6 @@
 /queue simple add comment=dtq,60:3D:61:6B:B7:B4, name="Alice3(wireless)@main-dhcp-server (60:3D:61:6B:B7:B4)" queue=default/default target=192.168.90.195/32 total-queue=default
 /queue simple add comment=dtq,60:3D:61:6B:B7:B4, name="Alice3(wireless)(blocked)@guest-dhcp-server (60:3D:61:6B:B7:B4)" queue=default/default target=192.168.98.195/32 total-queue=default
 /queue simple add comment=dtq,B0:34:95:50:A1:6A, name="AudioATV(wireless)(blocked)@guest-dhcp-server (B0:34:95:50:A1:6A)" queue=default/default target=192.168.98.210/32 total-queue=default
-/queue simple add comment=dtq,22:79:70:3F:13:5F,anna-veth-app-victoria-metrics name="victoria-metrics(docker)@docker-dhcp-server (22:79:70:3F:13:5F)" queue=default/default target=192.168.80.162/32 total-queue=default
 /queue simple add comment=dtq,6C:1F:F7:60:69:71,NWS-046 name="TABLE(wire)(GUEST)@guest-dhcp-server (6C:1F:F7:60:69:71)" queue=default/default target=192.168.98.240/32 total-queue=default
 /queue simple add comment=dtq,C8:CB:9E:B1:2E:E3,El-WorkePlace name="ElviraAsus@main-dhcp-server (C8:CB:9E:B1:2E:E3)" queue=default/default target=192.168.90.90/32 total-queue=default
 /queue simple add comment=dtq,C8:CB:9E:B1:2E:E3, name="ElviraAsus(blocked)@guest-dhcp-server (C8:CB:9E:B1:2E:E3)" queue=default/default target=192.168.98.90/32 total-queue=default
