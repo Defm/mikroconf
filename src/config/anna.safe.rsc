@@ -1,4 +1,4 @@
-# 2026-11-27 17:53:13 by RouterOS 7.25.1
+# 2026-11-27 18:38:42 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -593,8 +593,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w23:19:27  \
-    \nTime:        2026-11-27 17:50:12  \
+    \nUptime:        3w23:59:27  \
+    \nTime:        2026-11-27 18:30:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -5983,6 +5983,7 @@
 /interface list member add comment=guest interface=guest-infrastructure-br list=list-containers-outer
 /interface list member add comment=netinstall interface=adm-netinstall-br list=list-containers-outer
 /interface list member add comment=wan interface="wan A" list=list-containers-outer
+/interface list member add comment=docker interface=docker-infrastructure-br list=list-containers-outer
 /interface wifi access-list add action=reject allow-signal-out-of-range=10s comment="Drop any when poor signal rate, https://support.apple.com/en-us/HT203068" disabled=no signal-range=-120..-80 ssid-regexp=WiFi
 /interface wifi access-list add action=accept allow-signal-out-of-range=10s comment="AliceMidi(wireless)" disabled=no mac-address=4C:5F:70:97:DD:99 ssid-regexp="WiFi 2Ghz PRIV"
 /interface wifi access-list add action=accept allow-signal-out-of-range=10s comment="AliceMidi(wireless)" disabled=no mac-address=AC:BA:C0:78:80:C6 ssid-regexp="WiFi 2Ghz PRIV"
