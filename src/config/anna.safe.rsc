@@ -1,4 +1,4 @@
-# 2026-11-26 21:13:08 by RouterOS 7.25.1
+# 2026-11-27 10:17:30 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -592,8 +592,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w02:39:27  \
-    \nTime:        2026-11-26 21:10:13  \
+    \nUptime:        3w15:39:26  \
+    \nTime:        2026-11-27 10:10:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6286,8 +6286,6 @@
 /ip firewall nat add action=dst-nat chain=port-rdr-docker-chain comment=port-rdr-docker-chain-victorialogs-syslog dst-port=514,5140 in-interface=main-infrastructure-br protocol=udp to-addresses=192.168.80.160
 /ip firewall nat add action=return chain=port-rdr-docker-chain comment=port-rdr-docker-chain
 /ip firewall nat add action=accept chain=srcnat comment="accept tunnel traffic" dst-address-list=alist-fw-vpn-subnets src-address-list=alist-nat-local-subnets
-/ip firewall nat add action=masquerade chain=srcnat comment="LAN 192.168.90.0/24 -> OVPN 10.100.0.0/24" dst-address-list=alist-office-ovpn out-interface=main-infrastructure-br src-address=192.168.90.0/24
-/ip firewall nat add action=masquerade chain=srcnat comment="LAN 192.168.98.0/24 -> OVPN 10.100.0.0/24" dst-address-list=alist-office-ovpn out-interface=main-infrastructure-br src-address=192.168.98.0/24
 /ip firewall nat add action=accept chain=srcnat comment="accept tunnel traffic (sites)" dst-address-list=alist-mangle-vpn
 /ip firewall nat add action=accept chain=dstnat comment="accept tunnel traffic" dst-address-list=alist-nat-local-subnets src-address-list=alist-fw-vpn-subnets
 /ip firewall nat add action=masquerade chain=srcnat comment="VPN masq (pure L2TP, w/o IPSEC)" out-interface-list=list-l2tp-tunnels
@@ -6382,6 +6380,8 @@
 /queue simple add comment=dtq,B0:34:95:50:A1:6A, name="AudioATV(wireless)(blocked)@guest-dhcp-server (B0:34:95:50:A1:6A)" queue=default/default target=192.168.98.210/32 total-queue=default
 /queue simple add comment=dtq,22:79:70:3F:13:5F,anna-veth-app-victoria-metrics name="victoria-metrics(docker)@docker-dhcp-server (22:79:70:3F:13:5F)" queue=default/default target=192.168.80.162/32 total-queue=default
 /queue simple add comment=dtq,6C:1F:F7:60:69:71,NWS-046 name="TABLE(wire)(GUEST)@guest-dhcp-server (6C:1F:F7:60:69:71)" queue=default/default target=192.168.98.240/32 total-queue=default
+/queue simple add comment=dtq,C8:CB:9E:B1:2E:E3,El-WorkePlace name="ElviraAsus@main-dhcp-server (C8:CB:9E:B1:2E:E3)" queue=default/default target=192.168.90.90/32 total-queue=default
+/queue simple add comment=dtq,C8:CB:9E:B1:2E:E3, name="ElviraAsus(blocked)@guest-dhcp-server (C8:CB:9E:B1:2E:E3)" queue=default/default target=192.168.98.90/32 total-queue=default
 /queue tree add comment="FILE download control" name="Total Bandwidth" parent=global queue=default
 /queue tree add name=RAR packet-mark=rar-mark parent="Total Bandwidth" queue=default
 /queue tree add name=EXE packet-mark=exe-mark parent="Total Bandwidth" queue=default
