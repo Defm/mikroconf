@@ -1,4 +1,4 @@
-# 2026-11-27 17:42:47 by RouterOS 7.25.1
+# 2026-11-27 17:53:13 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -41,7 +41,6 @@
 /interface list add comment="CAPsMAN service" name=list-capsman
 /interface list add comment="DHCP/NTP router input services" name=list-router-input-services
 /interface list add comment="outer ingress for chain-containers-access" name=list-containers-outer
-/interface list add comment="container veth egress for chain-containers-access" name=list-containers-veth
 /caps-man configuration add mode=ap name=empty
 /interface bridge settings set use-ip-firewall=yes
 /ip firewall connection tracking set enabled=yes tcp-established-timeout=1h udp-timeout=10s
@@ -594,8 +593,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w23:09:26  \
-    \nTime:        2026-11-27 17:40:12  \
+    \nUptime:        3w23:19:27  \
+    \nTime:        2026-11-27 17:50:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -5984,9 +5983,6 @@
 /interface list member add comment=guest interface=guest-infrastructure-br list=list-containers-outer
 /interface list member add comment=netinstall interface=adm-netinstall-br list=list-containers-outer
 /interface list member add comment=wan interface="wan A" list=list-containers-outer
-/interface list member add comment=byedpi interface=byedpi-tunnel list=list-containers-veth
-/interface list member add comment=netronome interface=veth-netronome list=list-containers-veth
-/interface list member add comment=victoria-logs interface=veth-victoria-logs list=list-containers-veth
 /interface wifi access-list add action=reject allow-signal-out-of-range=10s comment="Drop any when poor signal rate, https://support.apple.com/en-us/HT203068" disabled=no signal-range=-120..-80 ssid-regexp=WiFi
 /interface wifi access-list add action=accept allow-signal-out-of-range=10s comment="AliceMidi(wireless)" disabled=no mac-address=4C:5F:70:97:DD:99 ssid-regexp="WiFi 2Ghz PRIV"
 /interface wifi access-list add action=accept allow-signal-out-of-range=10s comment="AliceMidi(wireless)" disabled=no mac-address=AC:BA:C0:78:80:C6 ssid-regexp="WiFi 2Ghz PRIV"
@@ -6218,7 +6214,7 @@
 /ip firewall filter add action=jump chain=forward comment=chain-docker-gw-transit connection-state=new dst-address-list=!alist-fw-containers jump-target=chain-docker-gw-transit out-interface=docker-infrastructure-br
 /ip firewall filter add action=accept chain=chain-docker-gw-transit comment=byedpi-tunnel routing-mark=rmark-docker-redirect
 /ip firewall filter add action=return chain=chain-docker-gw-transit comment=chain-docker-gw-transit
-/ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new in-interface-list=list-containers-outer jump-target=chain-containers-access out-interface-list=list-containers-veth
+/ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new in-interface-list=list-containers-outer jump-target=chain-containers-access out-interface=docker-infrastructure-br
 /ip firewall filter add action=accept chain=chain-containers-access comment="Accept dstnat syslog to containers" connection-nat-state=dstnat dst-port=514,5140 protocol=udp
 /ip firewall filter add action=reject chain=chain-containers-access comment="Prevent outer containers access" in-interface-list=all reject-with=icmp-admin-prohibited
 /ip firewall filter add action=return chain=chain-containers-access comment=chain-containers-access
