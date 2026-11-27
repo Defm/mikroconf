@@ -1,4 +1,4 @@
-# 2026-11-27 14:09:11 by RouterOS 7.25.1
+# 2026-11-27 14:59:15 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -40,6 +40,7 @@
 /interface list add comment="mangle rule: redirect to vpn" name=list-mangle-redirect-vpn
 /interface list add comment="CAPsMAN service" name=list-capsman
 /interface list add comment="DHCP/NTP router input services" name=list-router-input-services
+/interface list add comment="outer ingress for chain-containers-access" name=list-containers-outer
 /caps-man configuration add mode=ap name=empty
 /interface bridge settings set use-ip-firewall=yes
 /ip firewall connection tracking set enabled=yes tcp-established-timeout=1h udp-timeout=10s
@@ -592,8 +593,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w19:29:26  \
-    \nTime:        2026-11-27 14:00:12  \
+    \nUptime:        3w20:19:26  \
+    \nTime:        2026-11-27 14:50:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -5978,6 +5979,10 @@
 /interface list member add comment=guest interface=guest-infrastructure-br list=list-router-input-services
 /interface list member add comment=docker interface=docker-infrastructure-br list=list-router-input-services
 /interface list member add comment=netinstall interface=adm-netinstall-br list=list-router-input-services
+/interface list member add comment=main interface=main-infrastructure-br list=list-containers-outer
+/interface list member add comment=guest interface=guest-infrastructure-br list=list-containers-outer
+/interface list member add comment=netinstall interface=adm-netinstall-br list=list-containers-outer
+/interface list member add comment=wan interface="wan A" list=list-containers-outer
 /interface wifi access-list add action=reject allow-signal-out-of-range=10s comment="Drop any when poor signal rate, https://support.apple.com/en-us/HT203068" disabled=no signal-range=-120..-80 ssid-regexp=WiFi
 /interface wifi access-list add action=accept allow-signal-out-of-range=10s comment="AliceMidi(wireless)" disabled=no mac-address=4C:5F:70:97:DD:99 ssid-regexp="WiFi 2Ghz PRIV"
 /interface wifi access-list add action=accept allow-signal-out-of-range=10s comment="AliceMidi(wireless)" disabled=no mac-address=AC:BA:C0:78:80:C6 ssid-regexp="WiFi 2Ghz PRIV"
@@ -6206,9 +6211,8 @@
 /ip firewall filter add action=drop chain=input comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 src-address-list=alist-fw-empty-dummy
-/ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new dst-address-list=alist-fw-containers jump-target=chain-containers-access
+/ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new dst-address-list=alist-fw-containers in-interface-list=list-containers-outer jump-target=chain-containers-access
 /ip firewall filter add action=accept chain=chain-containers-access comment="Accept dstnat syslog to containers" connection-nat-state=dstnat dst-port=514,5140 protocol=udp
-/ip firewall filter add action=accept chain=chain-containers-access comment="Accept containers to containers" dst-address-list=alist-fw-containers src-address-list=alist-fw-containers
 /ip firewall filter add action=reject chain=chain-containers-access comment="Prevent outer containers access" in-interface-list=all reject-with=icmp-admin-prohibited
 /ip firewall filter add action=return chain=chain-containers-access comment=chain-containers-access
 /ip firewall filter add action=jump chain=input comment="Jump to RFC SSH Chain" dst-port=22,2223 jump-target=chain-ssh-staged-control protocol=tcp
