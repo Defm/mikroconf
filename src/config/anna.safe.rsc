@@ -1,4 +1,4 @@
-# 2026-11-27 15:10:35 by RouterOS 7.25.1
+# 2026-11-27 17:42:47 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -491,6 +491,7 @@
 /ip firewall address-list add address=192.168.90.0/24 list=alist-fw-winbox-allow
 /ip firewall address-list add address=192.168.80.0/24 list=alist-fw-winbox-allow
 /ip firewall address-list add address=192.168.168.0/24 list=alist-fw-winbox-allow
+/ip firewall address-list add address=192.168.80.0/24 comment=chain-docker-gw-transit list=alist-fw-containers
 /ip firewall layer7-protocol add name="resolve local" regexp=".home|[0-9]+.[0-9]+.168.192.in-addr.arpa"
 /ip firewall layer7-protocol add name=ECH regexp="A\\x01\$"
 /ip firewall service-port set tftp disabled=yes
@@ -593,8 +594,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w20:39:26  \
-    \nTime:        2026-11-27 15:10:12  \
+    \nUptime:        3w23:09:26  \
+    \nTime:        2026-11-27 17:40:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6214,6 +6215,9 @@
 /ip firewall filter add action=drop chain=input comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 src-address-list=alist-fw-empty-dummy
+/ip firewall filter add action=jump chain=forward comment=chain-docker-gw-transit connection-state=new dst-address-list=!alist-fw-containers jump-target=chain-docker-gw-transit out-interface=docker-infrastructure-br
+/ip firewall filter add action=accept chain=chain-docker-gw-transit comment=byedpi-tunnel routing-mark=rmark-docker-redirect
+/ip firewall filter add action=return chain=chain-docker-gw-transit comment=chain-docker-gw-transit
 /ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new in-interface-list=list-containers-outer jump-target=chain-containers-access out-interface-list=list-containers-veth
 /ip firewall filter add action=accept chain=chain-containers-access comment="Accept dstnat syslog to containers" connection-nat-state=dstnat dst-port=514,5140 protocol=udp
 /ip firewall filter add action=reject chain=chain-containers-access comment="Prevent outer containers access" in-interface-list=all reject-with=icmp-admin-prohibited
