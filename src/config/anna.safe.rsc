@@ -1,4 +1,4 @@
-# 2026-11-27 15:08:31 by RouterOS 7.25.1
+# 2026-11-27 15:10:35 by RouterOS 7.25.1
 # software id = IA5H-12KT
 #
 # model = RB5009UPr+S+
@@ -593,8 +593,8 @@
 /system note set note="Ipsec:         okay \
     \nRoute:     10.20.225.1 \
     \nVersion:         7.25.1 \
-    \nUptime:        3w20:29:26  \
-    \nTime:        2026-11-27 15:00:10  \
+    \nUptime:        3w20:39:26  \
+    \nTime:        2026-11-27 15:10:12  \
     \nPing:    0 ms  \
     \nChr:        185.13.148.14  \
     \nMik:        178.65.91.156  \
@@ -6214,7 +6214,7 @@
 /ip firewall filter add action=drop chain=input comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=drop chain=forward comment="Drop all Bogons" src-address-list=alist-fw-rfc-special
 /ip firewall filter add action=passthrough chain=forward comment=DUMMY2 src-address-list=alist-fw-empty-dummy
-/ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new dst-address-list="" in-interface-list=list-containers-outer jump-target=chain-containers-access out-interface-list=list-containers-veth
+/ip firewall filter add action=jump chain=forward comment=chain-containers-access connection-state=new in-interface-list=list-containers-outer jump-target=chain-containers-access out-interface-list=list-containers-veth
 /ip firewall filter add action=accept chain=chain-containers-access comment="Accept dstnat syslog to containers" connection-nat-state=dstnat dst-port=514,5140 protocol=udp
 /ip firewall filter add action=reject chain=chain-containers-access comment="Prevent outer containers access" in-interface-list=all reject-with=icmp-admin-prohibited
 /ip firewall filter add action=return chain=chain-containers-access comment=chain-containers-access
